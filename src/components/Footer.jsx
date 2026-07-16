@@ -91,7 +91,7 @@ export default function Footer() {
 
         <div className="mt-12 pt-6 border-t border-lineSoft flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-2xs text-ink-faint">© {year} Campinity. All rights reserved.</p>
-          <p className="text-2xs text-ink-faint font-mono">Built for students, by students.</p>
+          <p className="text-2xs text-ink-faint font-mono">Built for students, by student.</p>
         </div>
       </Container>
     </footer>
