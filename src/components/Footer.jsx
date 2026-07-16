@@ -3,7 +3,7 @@ import Logo from './Logo.jsx'
 import Icon from './Icon.jsx'
 
 const socials = [
-  { name: 'Instagram', icon: 'instagram', href: 'https://instagram.com/campinity' },
+  { name: 'Instagram', icon: 'instagram', href: 'https://instagram.com/campinity.xyz' },
   { name: 'LinkedIn', icon: 'linkedin', href: 'https://linkedin.com/company/campinity' },
   { name: 'X', icon: 'x', href: 'https://x.com/campinity' }
 ]
