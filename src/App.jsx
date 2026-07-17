@@ -1,12 +1,12 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import LandingPage from './pages/LandingPage.jsx'
-import HomePage from "./pages/HomePage";
 import Loader from './auth/components/Loader.jsx'
 
 const LoginPage = lazy(() => import('./auth/pages/LoginPage.jsx'))
 const SignupPage = lazy(() => import('./auth/pages/SignupPage.jsx'))
 const ForgotPasswordPage = lazy(() => import('./auth/pages/ForgotPasswordPage.jsx'))
+const HomePage = lazy(() => import('./pages/HomePage.jsx'))
 
 function RouteFallback() {
   return (
@@ -24,10 +24,9 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="*" element={<LandingPage />} />
         <Route path="/home" element={<HomePage />} />
+        <Route path="*" element={<LandingPage />} />
       </Routes>
     </Suspense>
   )
 }
-
