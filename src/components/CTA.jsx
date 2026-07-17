@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import Container from './Container.jsx'
 import Icon from './Icon.jsx'
 
@@ -31,13 +32,13 @@ export default function CTA() {
           </p>
 
           <div className="relative mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a
-              href="#"
+            <Link
+              to="/login"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-white text-ink text-[15px] font-semibold px-7 py-3.5 hover:bg-accent-tint active:scale-[0.98] transition-all duration-200"
             >
               Join your campus
               <Icon name="arrow" className="w-4 h-4" />
-            </a>
+            </Link>
           </div>
         </motion.div>
       </Container>

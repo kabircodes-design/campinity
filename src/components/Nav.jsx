@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import Logo from './Logo.jsx'
 import Container from './Container.jsx'
 import Icon from './Icon.jsx'
@@ -67,17 +68,13 @@ export default function Nav() {
         </nav>
 
         <div className="hidden md:block">
-          <a
-            href="#cta"
-            onClick={(e) => {
-              e.preventDefault()
-              handleLinkClick('#cta')
-            }}
+          <Link
+            to="/login"
             className="inline-flex items-center gap-1.5 rounded-full bg-ink text-white text-sm font-semibold px-5 py-2.5 hover:bg-accent-deep transition-colors duration-200"
           >
             Join your campus
             <Icon name="arrow" className="w-4 h-4" />
-          </a>
+          </Link>
         </div>
 
         <button
@@ -125,17 +122,14 @@ export default function Nav() {
                   {link.label}
                 </button>
               ))}
-              <a
-                href="#cta"
-                onClick={(e) => {
-                  e.preventDefault()
-                  handleLinkClick('#cta')
-                }}
+              <Link
+                to="/login"
+                onClick={() => setOpen(false)}
                 className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-full bg-ink text-white text-sm font-semibold px-5 py-3"
               >
                 Join your campus
                 <Icon name="arrow" className="w-4 h-4" />
-              </a>
+              </Link>
             </Container>
           </motion.div>
         )}

@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import Container from './Container.jsx'
 import Icon from './Icon.jsx'
 import RadarSignature from './RadarSignature.jsx'
@@ -55,13 +56,13 @@ export default function Hero() {
           transition={{ duration: 0.6, delay: 0.24, ease }}
           className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3"
         >
-          <a
-            href="#cta"
+          <Link
+            to="/login"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-ink text-white text-[15px] font-semibold px-7 py-3.5 hover:bg-accent-deep active:scale-[0.98] transition-all duration-200"
           >
             Join your campus
             <Icon name="arrow" className="w-4 h-4" />
-          </a>
+          </Link>
           <a
             href="#product"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full border border-line bg-surface text-ink text-[15px] font-semibold px-7 py-3.5 hover:border-ink/30 active:scale-[0.98] transition-all duration-200"

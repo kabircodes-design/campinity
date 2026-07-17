@@ -1,27 +1,31 @@
-import Nav from './components/Nav.jsx'
-import Hero from './components/Hero.jsx'
-import FeatureGrid from './components/FeatureGrid.jsx'
-import JourneyTimeline from './components/JourneyTimeline.jsx'
-import PrivacySection from './components/PrivacySection.jsx'
-import EventsShowcase from './components/EventsShowcase.jsx'
-import CampusVerified from './components/CampusVerified.jsx'
-import CTA from './components/CTA.jsx'
-import Footer from './components/Footer.jsx'
+import { lazy, Suspense } from 'react'
+import { Routes, Route } from 'react-router-dom'
+import LandingPage from './pages/LandingPage.jsx'
+import Loader from './auth/components/Loader.jsx'
 
-export default function App() {
+const LoginPage = lazy(() => import('./auth/pages/LoginPage.jsx'))
+const SignupPage = lazy(() => import('./auth/pages/SignupPage.jsx'))
+const ForgotPasswordPage = lazy(() => import('./auth/pages/ForgotPasswordPage.jsx'))
+
+function RouteFallback() {
   return (
-    <div className="min-h-screen bg-bg">
-      <Nav />
-      <main>
-        <Hero />
-        <FeatureGrid />
-        <JourneyTimeline />
-        <PrivacySection />
-        <EventsShowcase />
-        <CampusVerified />
-        <CTA />
-      </main>
-      <Footer />
+    <div className="min-h-screen bg-bg flex items-center justify-center">
+      <Loader size="lg" tone="dark" />
     </div>
   )
 }
+
+export default function App() {
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="*" element={<LandingPage />} />
+      </Routes>
+    </Suspense>
+  )
+}
+
