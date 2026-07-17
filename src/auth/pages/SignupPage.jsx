@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
@@ -11,8 +11,16 @@ import Icon from '../../components/Icon.jsx'
 import { useAuthForm } from '../hooks/useAuthForm.js'
 import { validateSignupForm } from '../validation/authValidation.js'
 import { sanitizeEmail, sanitizePassword, sanitizeText } from '../utils/sanitize.js'
+import { auth } from "../../firebase/firebase";
+import {
+  createUserWithEmailAndPassword,
+  updateProfile,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from "firebase/auth";
 
 export default function SignupPage() {
+  const navigate = useNavigate();
   const nameRef = useRef(null)
   const [googleLoading, setGoogleLoading] = useState(false)
 
@@ -33,17 +41,26 @@ export default function SignupPage() {
   }, [])
 
   const onSubmit = handleSubmit(async () => {
-    // TODO(firebase): replace with createUserWithEmailAndPassword(auth, values.email, values.password)
-    // then updateProfile(user, { displayName: values.fullName })
-    await new Promise((resolve) => setTimeout(resolve, 900))
-  })
+    const userCredentials = await createUserWithEmailAndPassword(auth, values.email, values.password
+    );
+
+    await updateProfile(userCredentials.user, {
+      displayName: values.fullName,
+    });
+
+    navigate("/home");
+  });
+
+  
 
   const handleGoogle = async () => {
-    setGoogleLoading(true)
-    // TODO(firebase): replace with signInWithPopup(auth, googleProvider)
-    await new Promise((resolve) => setTimeout(resolve, 900))
-    setGoogleLoading(false)
-  }
+    setGoogleLoading(true);
+    
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth,provider);
+
+    setGoogleLoading(false);
+  };
 
   return (
     <AuthLayout

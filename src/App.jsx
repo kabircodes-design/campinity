@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import LandingPage from './pages/LandingPage.jsx'
+import HomePage from "./pages/HomePage";
 import Loader from './auth/components/Loader.jsx'
 
 const LoginPage = lazy(() => import('./auth/pages/LoginPage.jsx'))
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="*" element={<LandingPage />} />
+        <Route path="/home" element={<HomePage />} />
       </Routes>
     </Suspense>
   )

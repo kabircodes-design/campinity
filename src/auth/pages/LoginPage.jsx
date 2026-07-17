@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
@@ -12,7 +12,9 @@ import { validateLoginForm } from '../validation/authValidation.js'
 import { sanitizeEmail, sanitizePassword } from '../utils/sanitize.js'
 
 export default function LoginPage() {
-  const emailRef = useRef(null)
+  const navigate = useNavigate();
+
+  const emailRef = useRef(null);
   const [rememberMe, setRememberMe] = useState(true)
   const [googleLoading, setGoogleLoading] = useState(false)
 
@@ -28,8 +30,9 @@ export default function LoginPage() {
   }, [])
 
   const onSubmit = handleSubmit(async () => {
-    // TODO(firebase): replace with signInWithEmailAndPassword(auth, values.email, values.password)
-    await new Promise((resolve) => setTimeout(resolve, 900))
+    await new Promise((resolve) => setTimeout(resolve, 900));
+
+    navigate("/home");
   })
 
   const handleGoogle = async () => {
