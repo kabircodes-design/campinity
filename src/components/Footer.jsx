@@ -34,24 +34,24 @@ export default function Footer() {
             </p>
             <ul className="space-y-3 text-[13.5px]">
               <li className="text-ink-soft">
-                Founder — <span className="text-ink font-medium">Kabir Saiyed</span>
+                Founder — <span className="text-ink font-medium">It's Secret Gng😜</span>
               </li>
               <li>
                 <a
-                  href="https://wa.me/917387097365"
+                  href="https://wa.me/9173********"
                   className="flex items-center gap-2 text-ink-soft hover:text-accent transition-colors duration-200"
                 >
                   <Icon name="whatsapp" className="w-4 h-4" strokeWidth={1.4} />
-                  +91 73870 97365
+                  +91 73********
                 </a>
               </li>
               <li>
                 <a
-                  href="mailto:hello@campinity.app"
+                  href="mailto:hello@cam**********"
                   className="flex items-center gap-2 text-ink-soft hover:text-accent transition-colors duration-200"
                 >
                   <Icon name="mail" className="w-4 h-4" strokeWidth={1.6} />
-                  hello@campinity.app
+                  hello@cam**********
                 </a>
               </li>
             </ul>
