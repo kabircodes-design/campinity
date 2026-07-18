@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { createUserWithEmailAndPassword, sendEmailVerification, signInWithPopup, updateProfile } from 'firebase/auth'
 import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
@@ -11,11 +12,15 @@ import Icon from '../../components/Icon.jsx'
 import { useAuthForm } from '../hooks/useAuthForm.js'
 import { validateSignupForm } from '../validation/authValidation.js'
 import { sanitizeEmail, sanitizePassword, sanitizeText } from '../utils/sanitize.js'
+import { auth, googleProvider } from '../../firebase/firebase.js'
+import { createInitialUserDoc, ensureUserDoc } from '../utils/userProfile.js'
+import { resolveOnboardingRoute } from '../components/ProtectedRoute.jsx'
 
 export default function SignupPage() {
   const navigate = useNavigate()
   const nameRef = useRef(null)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleError, setGoogleError] = useState('')
 
   const { values, fieldError, handleChange, handleBlur, handleSubmit, isValid, isSubmitting, submitError, submitSuccess } =
     useAuthForm({
@@ -33,19 +38,49 @@ export default function SignupPage() {
     nameRef.current?.focus()
   }, [])
 
-  const onSubmit = handleSubmit(async () => {
-    // TODO(firebase): replace with createUserWithEmailAndPassword(auth, values.email, values.password)
-    // then updateProfile(user, { displayName: values.fullName })
-    await new Promise((resolve) => setTimeout(resolve, 900))
-    navigate('/home')
+  const onSubmit = handleSubmit(async ({ fullName, email, password }) => {
+    // 1. Create the Firebase Auth account.
+    const { user } = await createUserWithEmailAndPassword(auth, email, password)
+
+    if (fullName) {
+      await updateProfile(user, { displayName: fullName })
+    }
+
+    // 2. Immediately create the Firestore users/{uid} doc with defaults.
+    await createInitialUserDoc(user.uid, user.email)
+
+    // 3. Send the verification email.
+    await sendEmailVerification(user)
+
+    // 4. Navigate to the verification step.
+    navigate('/verify-email')
   })
 
+  /**
+   * Google sign-in doubles as sign-up for first-time users and sign-in for
+   * returning ones — Firebase treats both identically, so this routes
+   * through the same post-auth decision as Login rather than assuming
+   * every Google user arriving here is brand new.
+   */
   const handleGoogle = async () => {
+    if (googleLoading) return
     setGoogleLoading(true)
-    // TODO(firebase): replace with signInWithPopup(auth, googleProvider)
-    await new Promise((resolve) => setTimeout(resolve, 900))
-    setGoogleLoading(false)
-    navigate('/home')
+    setGoogleError('')
+    try {
+      const { user } = await signInWithPopup(auth, googleProvider)
+
+      if (!user.emailVerified) {
+        navigate('/verify-email')
+        return
+      }
+
+      const profile = await ensureUserDoc(user)
+      navigate(resolveOnboardingRoute(profile))
+    } catch (err) {
+      setGoogleError(err?.message || 'Could not sign up with Google. Please try again.')
+    } finally {
+      setGoogleLoading(false)
+    }
   }
 
   return (
@@ -71,6 +106,12 @@ export default function SignupPage() {
       >
         Continue with Google
       </Button>
+
+      {googleError && (
+        <p role="alert" className="mt-3 rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+          {googleError}
+        </p>
+      )}
 
       <Divider />
 
@@ -146,7 +187,7 @@ export default function SignupPage() {
             className="flex items-center gap-2 rounded-xl2 bg-accent-tint text-accent text-[13px] font-medium px-4 py-3"
           >
             <Icon name="check" className="w-4 h-4" strokeWidth={2.2} />
-            Account created — welcome to Campinity.
+            Account created — check your inbox to verify your email.
           </p>
         )}
 

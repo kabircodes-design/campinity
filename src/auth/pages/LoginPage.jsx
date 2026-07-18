@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth'
 import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
@@ -10,12 +11,16 @@ import Icon from '../../components/Icon.jsx'
 import { useAuthForm } from '../hooks/useAuthForm.js'
 import { validateLoginForm } from '../validation/authValidation.js'
 import { sanitizeEmail, sanitizePassword } from '../utils/sanitize.js'
+import { auth, googleProvider } from '../../firebase/firebase.js'
+import { ensureUserDoc, getUserProfile } from '../utils/userProfile.js'
+import { resolveOnboardingRoute } from '../components/ProtectedRoute.jsx'
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const emailRef = useRef(null)
   const [rememberMe, setRememberMe] = useState(true)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleError, setGoogleError] = useState('')
 
   const { values, fieldError, handleChange, handleBlur, handleSubmit, isValid, isSubmitting, submitError, submitSuccess } =
     useAuthForm({
@@ -28,18 +33,41 @@ export default function LoginPage() {
     emailRef.current?.focus()
   }, [])
 
-  const onSubmit = handleSubmit(async () => {
-    // TODO(firebase): replace with signInWithEmailAndPassword(auth, values.email, values.password)
-    await new Promise((resolve) => setTimeout(resolve, 900))
-    navigate('/home')
+  const onSubmit = handleSubmit(async ({ email, password }) => {
+    const { user } = await signInWithEmailAndPassword(auth, email, password)
+
+    // Spec step 1 of the login flow: always reload before trusting
+    // emailVerified, in case verification happened in another tab/session.
+    await user.reload()
+
+    if (!auth.currentUser.emailVerified) {
+      navigate('/verify-email')
+      return
+    }
+
+    const profile = await getUserProfile(user.uid)
+    navigate(resolveOnboardingRoute(profile))
   })
 
   const handleGoogle = async () => {
+    if (googleLoading) return
     setGoogleLoading(true)
-    // TODO(firebase): replace with signInWithPopup(auth, googleProvider)
-    await new Promise((resolve) => setTimeout(resolve, 900))
-    setGoogleLoading(false)
-    navigate('/home')
+    setGoogleError('')
+    try {
+      const { user } = await signInWithPopup(auth, googleProvider)
+
+      if (!user.emailVerified) {
+        navigate('/verify-email')
+        return
+      }
+
+      const profile = await ensureUserDoc(user)
+      navigate(resolveOnboardingRoute(profile))
+    } catch (err) {
+      setGoogleError(err?.message || 'Could not sign in with Google. Please try again.')
+    } finally {
+      setGoogleLoading(false)
+    }
   }
 
   return (
@@ -65,6 +93,12 @@ export default function LoginPage() {
       >
         Continue with Google
       </Button>
+
+      {googleError && (
+        <p role="alert" className="mt-3 rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+          {googleError}
+        </p>
+      )}
 
       <Divider />
 
@@ -128,7 +162,7 @@ export default function LoginPage() {
             className="flex items-center gap-2 rounded-xl2 bg-accent-tint text-accent text-[13px] font-medium px-4 py-3"
           >
             <Icon name="check" className="w-4 h-4" strokeWidth={2.2} />
-            Logged in — redirecting to your campus feed shortly.
+            Logged in — redirecting…
           </p>
         )}
 
