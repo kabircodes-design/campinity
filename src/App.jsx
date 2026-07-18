@@ -11,6 +11,9 @@ const CampusVerificationPage = lazy(() => import('./auth/pages/CampusVerificatio
 const CreateProfilePage = lazy(() => import('./auth/pages/CreateProfilePage.jsx'))
 const HomePage = lazy(() => import('./pages/HomePage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
+const ComingSoon = lazy(() => import('./pages/ComingSoon.jsx'))
+const PostDetailPlaceholder = lazy(() => import('./pages/PostDetailPlaceholder.jsx'))
+const StudentProfilePlaceholder = lazy(() => import('./pages/StudentProfilePlaceholder.jsx'))
 
 export default function App() {
   return (
@@ -66,6 +69,69 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <HomePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Bottom-nav + header destinations not yet built as real pages —
+            real, guarded routes so every button works today; each swaps
+            to its real page as that feature is built. */}
+        <Route
+          path="/search"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Search" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/create"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Create Post" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/messages"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Messages" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Profile" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Notifications" />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Dynamic feed destinations — post detail/comments and a
+            student's public profile, both linked from PostCard/StoryBubble. */}
+        <Route
+          path="/post/:postId"
+          element={
+            <ProtectedRoute stage="home">
+              <PostDetailPlaceholder />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/student/:username"
+          element={
+            <ProtectedRoute stage="home">
+              <StudentProfilePlaceholder />
             </ProtectedRoute>
           }
         />

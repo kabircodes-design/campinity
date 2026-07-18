@@ -1,0 +1,188 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  CalendarDays,
+  Clock,
+  Download,
+  FileText,
+  Heart,
+  MapPin,
+  MessageCircle,
+  MoreHorizontal,
+  PackageSearch,
+  Share2,
+  ShoppingBag
+} from 'lucide-react'
+import Avatar from './Avatar.jsx'
+import { postTypeConfig } from '../data/dummyFeed.js'
+
+const typeIcons = {
+  notes: FileText,
+  event: CalendarDays,
+  club: MessageCircle,
+  marketplace: ShoppingBag,
+  lostfound: PackageSearch
+}
+
+export default function PostCard({ post }) {
+  const navigate = useNavigate()
+  const config = postTypeConfig[post.type]
+  const TypeIcon = typeIcons[post.type]
+
+  const [liked, setLiked] = useState(post.likedByMe)
+  const [likeCount, setLikeCount] = useState(post.likes)
+  const [shareCopied, setShareCopied] = useState(false)
+
+  const goToProfile = () => navigate(`/student/${post.username}`)
+  const goToPost = () => navigate(`/post/${post.id}`)
+
+  const toggleLike = () => {
+    setLiked((prev) => !prev)
+    setLikeCount((prev) => (liked ? prev - 1 : prev + 1))
+  }
+
+  const handleShare = () => {
+    setShareCopied(true)
+    window.setTimeout(() => setShareCopied(false), 1500)
+  }
+
+  return (
+    <article className="border-b border-gray-100 hover:bg-gray-50/40 transition-all duration-300">
+      <div className="flex items-start gap-3 px-4 pt-4">
+        <button type="button" onClick={goToProfile} aria-label={`Open ${post.name}'s profile`}>
+          <Avatar initials={post.initials} colorClass={post.avatarColor} size="md" />
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <button type="button" onClick={goToProfile} className="min-w-0 text-left">
+              <p className="text-sm font-semibold text-gray-900 truncate">{post.name}</p>
+              <p className="text-xs text-gray-400 truncate">
+                {post.department}
+                {post.year && ` · ${post.year}`} · {post.college}
+              </p>
+            </button>
+            <button
+              type="button"
+              aria-label="Post options"
+              className="flex-shrink-0 text-gray-300 hover:text-gray-500 transition-all duration-300"
+            >
+              <MoreHorizontal className="w-[18px] h-[18px]" />
+            </button>
+          </div>
+
+          <div className="mt-1.5 flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${config.color}`}
+            >
+              <TypeIcon className="w-3 h-3" />
+              {config.label}
+            </span>
+            <span className="text-[11px] text-gray-400">{post.time}</span>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" onClick={goToPost} className="block w-full text-left">
+        <p className="px-4 mt-3 text-[14.5px] text-gray-700 leading-relaxed">{post.text}</p>
+      </button>
+
+      {post.type === 'notes' && (
+        <button
+          type="button"
+          onClick={goToPost}
+          className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 w-[calc(100%-2rem)] text-left hover:border-blue-100 transition-all duration-300"
+        >
+          <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+            <FileText className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">{post.file.name}</p>
+            <p className="text-xs text-gray-400">{post.file.size}</p>
+          </div>
+          <Download className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        </button>
+      )}
+
+      {post.type === 'event' && (
+        <button
+          type="button"
+          onClick={goToPost}
+          className="mx-4 mt-3 rounded-xl overflow-hidden border border-gray-100 w-[calc(100%-2rem)] text-left"
+        >
+          <div className="h-28 bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center">
+            <CalendarDays className="w-8 h-8 text-white/80" />
+          </div>
+          <div className="p-3 bg-white">
+            <p className="text-sm font-semibold text-gray-900">{post.event.title}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400">
+              <span className="flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" />
+                {post.event.date}
+              </span>
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5" />
+                {post.event.location}
+              </span>
+            </div>
+          </div>
+        </button>
+      )}
+
+      {post.type === 'marketplace' && (
+        <button
+          type="button"
+          onClick={goToPost}
+          className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 p-3 w-[calc(100%-2rem)] text-left hover:border-blue-100 transition-all duration-300"
+        >
+          <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <ShoppingBag className="w-6 h-6 text-gray-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">{post.marketplace.item}</p>
+            <p className="text-sm font-bold text-emerald-600 mt-0.5">{post.marketplace.price}</p>
+          </div>
+        </button>
+      )}
+
+      {post.type === 'lostfound' && (
+        <div className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-pink-100 bg-pink-50/50 p-3">
+          <PackageSearch className="w-5 h-5 text-pink-500 flex-shrink-0" />
+          <p className="text-sm font-medium text-gray-900 min-w-0">
+            {post.lostFound.status} near {post.lostFound.location}
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center gap-5 px-4 py-3 mt-1">
+        <button
+          type="button"
+          onClick={toggleLike}
+          aria-pressed={liked}
+          className={`flex items-center gap-1.5 text-xs font-medium transition-all duration-300 ${
+            liked ? 'text-red-500' : 'text-gray-500 hover:text-blue-600'
+          }`}
+        >
+          <Heart className="w-[18px] h-[18px]" fill={liked ? 'currentColor' : 'none'} />
+          {likeCount}
+        </button>
+        <button
+          type="button"
+          onClick={goToPost}
+          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 transition-all duration-300"
+        >
+          <MessageCircle className="w-[18px] h-[18px]" />
+          {post.comments}
+        </button>
+        <button
+          type="button"
+          onClick={handleShare}
+          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 transition-all duration-300 ml-auto"
+        >
+          <Share2 className="w-[18px] h-[18px]" />
+          {shareCopied ? 'Copied' : 'Share'}
+        </button>
+      </div>
+    </article>
+  )
+}
