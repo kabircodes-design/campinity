@@ -17,6 +17,9 @@ const StudentProfilePlaceholder = lazy(() => import('./pages/StudentProfilePlace
 const SearchPage = lazy(() => import('./pages/SearchPage.jsx'))
 const ClubDetailPlaceholder = lazy(() => import('./pages/ClubDetailPlaceholder.jsx'))
 const EventDetailPlaceholder = lazy(() => import('./pages/EventDetailPlaceholder.jsx'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'))
+const EditProfilePage = lazy(() => import('./pages/EditProfilePage.jsx'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'))
 
 export default function App() {
   return (
@@ -76,7 +79,6 @@ export default function App() {
           }
         />
 
-        {/* Search — now a real page (Feature 3). */}
         <Route
           path="/search"
           element={
@@ -86,9 +88,6 @@ export default function App() {
           }
         />
 
-        {/* Bottom-nav + header destinations not yet built as real pages —
-            real, guarded routes so every button works today; each swaps
-            to its real page as that feature is built. */}
         <Route
           path="/create"
           element={
@@ -106,18 +105,95 @@ export default function App() {
           }
         />
         <Route
-          path="/profile"
-          element={
-            <ProtectedRoute stage="home">
-              <ComingSoon title="Profile" />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/notifications"
           element={
             <ProtectedRoute stage="home">
               <ComingSoon title="Notifications" />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Profile — now real pages (Feature 4A). */}
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute stage="home">
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/edit"
+          element={
+            <ProtectedRoute stage="home">
+              <EditProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute stage="home">
+              <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Follower/following lists and Settings sub-pages — not built yet,
+            reuse ComingSoon so every row/stat still navigates somewhere real. */}
+        <Route
+          path="/followers"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Followers" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/following"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Following" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings/notifications"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Notification Settings" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings/privacy"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Privacy" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings/blocked-users"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Blocked Users" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings/help"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Help & Support" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings/about"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="About Campinity" />
             </ProtectedRoute>
           }
         />
