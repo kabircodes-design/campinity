@@ -2,19 +2,20 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Search } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
-import Logo from '../components/Logo.jsx'
 import StoryBubble from '../components/StoryBubble.jsx'
 import PostCard from '../components/PostCard.jsx'
 import BottomNav from '../components/BottomNav.jsx'
-import { currentUser, stories, feedTabs, posts } from '../data/dummyFeed.js'
+import { currentUser, stories, feedTabs } from '../data/dummyFeed.js'
+import { usePosts } from '../hooks/usePosts.jsx'
 
 export default function HomePage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(feedTabs[0].key)
+  const { posts } = usePosts()
 
   const visiblePosts = useMemo(
     () => posts.filter((post) => post.feedCategories.includes(activeTab)),
-    [activeTab]
+    [posts, activeTab]
   )
 
   return (
@@ -26,9 +27,11 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
           <div className="h-14 flex items-center justify-between px-4">
-
             <div className="flex items-center gap-2">
-             <Logo />
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                <span className="text-white text-sm font-bold">C</span>
+              </div>
+              <span className="text-base font-bold tracking-tight text-gray-900">Campinity</span>
             </div>
 
             <button

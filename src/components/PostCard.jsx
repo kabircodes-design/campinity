@@ -5,7 +5,9 @@ import {
   Clock,
   Download,
   FileText,
+  GraduationCap,
   Heart,
+  Layers,
   MapPin,
   MessageCircle,
   MoreHorizontal,
@@ -16,7 +18,14 @@ import {
 import Avatar from './Avatar.jsx'
 import { postTypeConfig } from '../data/dummyFeed.js'
 
+/**
+ * 'general' and 'study' were added for Feature 4B (Create Post) — every
+ * key in postTypeConfig must also have an icon here, or the badge below
+ * throws trying to render an undefined component.
+ */
 const typeIcons = {
+  general: Layers,
+  study: GraduationCap,
   notes: FileText,
   event: CalendarDays,
   club: MessageCircle,
@@ -87,7 +96,7 @@ export default function PostCard({ post }) {
         <p className="px-4 mt-3 text-[14.5px] text-gray-700 leading-relaxed">{post.text}</p>
       </button>
 
-      {post.type === 'notes' && (
+      {post.type === 'notes' && post.file && (
         <button
           type="button"
           onClick={goToPost}
@@ -104,7 +113,7 @@ export default function PostCard({ post }) {
         </button>
       )}
 
-      {post.type === 'event' && (
+      {post.type === 'event' && post.event && (
         <button
           type="button"
           onClick={goToPost}
@@ -129,7 +138,7 @@ export default function PostCard({ post }) {
         </button>
       )}
 
-      {post.type === 'marketplace' && (
+      {post.type === 'marketplace' && post.marketplace && (
         <button
           type="button"
           onClick={goToPost}
@@ -145,7 +154,7 @@ export default function PostCard({ post }) {
         </button>
       )}
 
-      {post.type === 'lostfound' && (
+      {post.type === 'lostfound' && post.lostFound && (
         <div className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-pink-100 bg-pink-50/50 p-3">
           <PackageSearch className="w-5 h-5 text-pink-500 flex-shrink-0" />
           <p className="text-sm font-medium text-gray-900 min-w-0">

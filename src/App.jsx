@@ -12,7 +12,6 @@ const CreateProfilePage = lazy(() => import('./auth/pages/CreateProfilePage.jsx'
 const HomePage = lazy(() => import('./pages/HomePage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const ComingSoon = lazy(() => import('./pages/ComingSoon.jsx'))
-const PostDetailPlaceholder = lazy(() => import('./pages/PostDetailPlaceholder.jsx'))
 const StudentProfilePlaceholder = lazy(() => import('./pages/StudentProfilePlaceholder.jsx'))
 const SearchPage = lazy(() => import('./pages/SearchPage.jsx'))
 const ClubDetailPlaceholder = lazy(() => import('./pages/ClubDetailPlaceholder.jsx'))
@@ -20,6 +19,8 @@ const EventDetailPlaceholder = lazy(() => import('./pages/EventDetailPlaceholder
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'))
 const EditProfilePage = lazy(() => import('./pages/EditProfilePage.jsx'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'))
+const CreatePostPage = lazy(() => import('./pages/CreatePostPage.jsx'))
+const PostDetailPage = lazy(() => import('./pages/PostDetailPage.jsx'))
 
 export default function App() {
   return (
@@ -88,14 +89,16 @@ export default function App() {
           }
         />
 
+        {/* Create Post — now a real page (Feature 4B). */}
         <Route
           path="/create"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="Create Post" />
+              <CreatePostPage />
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/messages"
           element={
@@ -113,7 +116,6 @@ export default function App() {
           }
         />
 
-        {/* Profile — now real pages (Feature 4A). */}
         <Route
           path="/profile"
           element={
@@ -139,8 +141,6 @@ export default function App() {
           }
         />
 
-        {/* Follower/following lists and Settings sub-pages — not built yet,
-            reuse ComingSoon so every row/stat still navigates somewhere real. */}
         <Route
           path="/followers"
           element={
@@ -198,15 +198,16 @@ export default function App() {
           }
         />
 
-        {/* Dynamic feed/search destinations. */}
+        {/* Post Detail + Comments — now a real page (Feature 4B). */}
         <Route
           path="/post/:postId"
           element={
             <ProtectedRoute stage="home">
-              <PostDetailPlaceholder />
+              <PostDetailPage />
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/student/:username"
           element={
