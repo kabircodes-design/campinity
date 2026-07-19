@@ -23,6 +23,8 @@ const CreatePostPage = lazy(() => import('./pages/CreatePostPage.jsx'))
 const PostDetailPage = lazy(() => import('./pages/PostDetailPage.jsx'))
 const ChatListPage = lazy(() => import('./pages/ChatListPage.jsx'))
 const ChatScreenPage = lazy(() => import('./pages/ChatScreenPage.jsx'))
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage.jsx'))
+const NotificationDetailPage = lazy(() => import('./pages/NotificationDetailPage.jsx'))
 
 export default function App() {
   return (
@@ -100,7 +102,6 @@ export default function App() {
           }
         />
 
-        {/* Messages — now real pages (Feature 4C). */}
         <Route
           path="/messages"
           element={
@@ -117,11 +118,21 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Notifications — now real pages (Feature 4D). */}
         <Route
           path="/notifications"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="Notifications" />
+              <NotificationsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications/:notificationId"
+          element={
+            <ProtectedRoute stage="home">
+              <NotificationDetailPage />
             </ProtectedRoute>
           }
         />
