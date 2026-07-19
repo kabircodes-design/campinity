@@ -4,7 +4,7 @@ import { ArrowLeft, Camera, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import { currentUserProfile } from '../data/dummyProfile.js'
 
-const years = ['FY', 'SY', 'TY', 'Final Year']
+const years = ['FYJC', 'SYJC', 'FY', 'SY', 'TY', 'Final Year']
 
 function TagInput({ label, values, onAdd, onRemove, placeholder }) {
   const [input, setInput] = useState('')

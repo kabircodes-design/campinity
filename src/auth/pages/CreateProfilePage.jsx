@@ -9,7 +9,72 @@ import { saveUserProfile } from '../utils/userProfile.js'
 import { uploadProfileImage } from '../utils/storage.js'
 import { sanitizeText } from '../utils/sanitize.js'
 
-const years = ['FY', 'SY', 'TY', 'Final Year']
+const years = ['FYJC', 'SYJC', 'FY', 'SY', 'TY', 'Final Year']
+const divisions = [
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "S1",
+  "S2",
+  "S3",
+  "S4",
+  "S5",
+  "S6",
+  "S7",
+  "S8",
+  "S9",
+  "S10",
+  "S11",
+  "S12",
+  "S13",
+  "S14",
+  "S15",
+  "S16",
+  "S17",
+  "S18",
+  "S19",
+  "S20",
+  "S21",
+  "S22",
+  "S23",
+  "S24",
+  "S25",
+  "S26",
+  "S27",
+  "S28",
+  "S29",
+  "C1",
+  "C2",
+  "C3",
+  "C4",
+  "C5",
+  "C6",
+  "C7",
+  "C8",
+  "C9",
+  "C10",
+  "C11",
+  "C12",
+  "C13",
+  "C14",
+  "C15",
+  "C16",
+  "C17",
+  "C18",
+  "C19",
+  "C20",
+  "C21",
+  "C22",
+  "C23",
+  "C24",
+  "C25",
+  "C26",
+  "C27",
+  "C28",
+  "C29",
+]
 
 
 export default function CreateProfilePage() {
@@ -239,11 +304,7 @@ export default function CreateProfilePage() {
               placeholder="e.g. A, B, C, S1, C1, IT-A"
               className="w-full rounded-xl2 border border-line bg-bg px-4 py-3 text-[15px] text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent-tint transition-colors duration-200"
             >
-              {divisions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
+              
             </input>
           </div>
         </div>
