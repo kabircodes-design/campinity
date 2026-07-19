@@ -21,6 +21,8 @@ const EditProfilePage = lazy(() => import('./pages/EditProfilePage.jsx'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'))
 const CreatePostPage = lazy(() => import('./pages/CreatePostPage.jsx'))
 const PostDetailPage = lazy(() => import('./pages/PostDetailPage.jsx'))
+const ChatListPage = lazy(() => import('./pages/ChatListPage.jsx'))
+const ChatScreenPage = lazy(() => import('./pages/ChatScreenPage.jsx'))
 
 export default function App() {
   return (
@@ -89,7 +91,6 @@ export default function App() {
           }
         />
 
-        {/* Create Post — now a real page (Feature 4B). */}
         <Route
           path="/create"
           element={
@@ -99,11 +100,20 @@ export default function App() {
           }
         />
 
+        {/* Messages — now real pages (Feature 4C). */}
         <Route
           path="/messages"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="Messages" />
+              <ChatListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/messages/:conversationId"
+          element={
+            <ProtectedRoute stage="home">
+              <ChatScreenPage />
             </ProtectedRoute>
           }
         />
@@ -198,7 +208,6 @@ export default function App() {
           }
         />
 
-        {/* Post Detail + Comments — now a real page (Feature 4B). */}
         <Route
           path="/post/:postId"
           element={
