@@ -14,6 +14,9 @@ const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const ComingSoon = lazy(() => import('./pages/ComingSoon.jsx'))
 const PostDetailPlaceholder = lazy(() => import('./pages/PostDetailPlaceholder.jsx'))
 const StudentProfilePlaceholder = lazy(() => import('./pages/StudentProfilePlaceholder.jsx'))
+const SearchPage = lazy(() => import('./pages/SearchPage.jsx'))
+const ClubDetailPlaceholder = lazy(() => import('./pages/ClubDetailPlaceholder.jsx'))
+const EventDetailPlaceholder = lazy(() => import('./pages/EventDetailPlaceholder.jsx'))
 
 export default function App() {
   return (
@@ -73,17 +76,19 @@ export default function App() {
           }
         />
 
-        {/* Bottom-nav + header destinations not yet built as real pages —
-            real, guarded routes so every button works today; each swaps
-            to its real page as that feature is built. */}
+        {/* Search — now a real page (Feature 3). */}
         <Route
           path="/search"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="Search" />
+              <SearchPage />
             </ProtectedRoute>
           }
         />
+
+        {/* Bottom-nav + header destinations not yet built as real pages —
+            real, guarded routes so every button works today; each swaps
+            to its real page as that feature is built. */}
         <Route
           path="/create"
           element={
@@ -117,8 +122,7 @@ export default function App() {
           }
         />
 
-        {/* Dynamic feed destinations — post detail/comments and a
-            student's public profile, both linked from PostCard/StoryBubble. */}
+        {/* Dynamic feed/search destinations. */}
         <Route
           path="/post/:postId"
           element={
@@ -132,6 +136,22 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <StudentProfilePlaceholder />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/club/:clubId"
+          element={
+            <ProtectedRoute stage="home">
+              <ClubDetailPlaceholder />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/event/:eventId"
+          element={
+            <ProtectedRoute stage="home">
+              <EventDetailPlaceholder />
             </ProtectedRoute>
           }
         />
