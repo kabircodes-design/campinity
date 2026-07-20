@@ -1,0 +1,54 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // users/{uid} — each user can read and write only their own profile.
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid);
+      allow delete: if false;
+    }
+
+    // posts/{postId} — any signed-in user can read public posts.
+    // Only the declared author can create/update/delete their own post.
+    match /posts/{postId} {
+      allow read: if isSignedIn() && resource.data.visibility == 'public';
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // stories/{storyId} — same read/write pattern as posts.
+    match /stories/{storyId} {
+      allow read: if isSignedIn() && resource.data.visibility == 'public';
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // verificationRequests/{requestId} — created during onboarding's
+    // campus-verification step. Only the submitting user may create or
+    // read their own request; no listing, no updates, no deletes from
+    // the client (reviewed by an admin process later).
+    match /verificationRequests/{requestId} {
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Deny everything else by default — Firestore is NOT public.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

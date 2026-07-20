@@ -1,22 +1,115 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Search } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import StoryBubble from '../components/StoryBubble.jsx'
 import PostCard from '../components/PostCard.jsx'
 import BottomNav from '../components/BottomNav.jsx'
-import { currentUser, stories, feedTabs } from '../data/dummyFeed.js'
-import { usePosts } from '../hooks/usePosts.jsx'
+import Loader from '../auth/components/Loader.jsx'
+import { auth } from '../firebase/firebase.js'
+import { getUserProfile } from '../firebase/profileService.js'
+import { getFeedPosts } from '../firebase/postService.js'
+import { getFeedStories } from '../firebase/storyService.js'
+
+// Tab labels only — no student/user data, so this stays local instead of
+// importing from dummyFeed.js.
+const feedTabs = [
+  { label: 'For You', key: 'forYou' },
+  { label: 'Following', key: 'following' },
+  { label: 'Campus', key: 'campus' },
+  { label: 'Clubs', key: 'clubs' }
+]
+
+function getInitials(name = '') {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
+}
 
 export default function HomePage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(feedTabs[0].key)
-  const { posts } = usePosts()
+
+  const [profile, setProfile] = useState(null)
+  const [posts, setPosts] = useState([])
+  const [stories, setStories] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    const uid = auth.currentUser?.uid
+
+    /**
+     * Loads the signed-in user's real Firestore profile for the greeting
+     * and avatar. Kept in its own try/catch, completely independent from
+     * the posts/stories fetch below — a Firestore error on the feed
+     * (e.g. a missing composite index) must never wipe out a profile
+     * that loaded successfully. This was the actual bug: both fetches
+     * used to share a single Promise.all, so a feed-side failure threw
+     * before setProfile() ever ran, leaving the greeting on its
+     * empty-name fallback every time.
+     */
+    const loadProfile = async () => {
+      if (!uid) return
+      try {
+        const data = await getUserProfile(uid)
+        if (!cancelled) setProfile(data)
+      } catch {
+        // Greeting falls back to initials-only if this fails; the feed
+        // below still loads on its own regardless.
+      }
+    }
+
+    const loadFeed = async () => {
+      try {
+        const [postsData, storiesData] = await Promise.all([getFeedPosts(uid), getFeedStories()])
+        if (!cancelled) {
+          setPosts(postsData)
+          setStories(storiesData)
+        }
+      } catch (err) {
+        if (!cancelled) setError(err?.message || 'Could not load the feed.')
+      }
+    }
+
+    Promise.all([loadProfile(), loadFeed()]).finally(() => {
+      if (!cancelled) setLoading(false)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const visiblePosts = useMemo(
     () => posts.filter((post) => post.feedCategories.includes(activeTab)),
     [posts, activeTab]
   )
+
+  const displayName = profile?.displayName || ''
+  const firstName = displayName.split(' ')[0] || 'there'
+  const initials = getInitials(displayName)
+
+  const storyBubbles = useMemo(() => {
+    const addStory = {
+      id: 'write',
+      label: 'Your Story',
+      initials,
+      colorClass: 'from-blue-500 to-blue-600',
+      isAdd: true
+    }
+    const moreStory = { id: 'more', label: 'More', isMore: true }
+    return [addStory, ...stories, moreStory]
+  }, [stories, initials])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
+        <Loader size="lg" tone="dark" />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
@@ -46,15 +139,18 @@ export default function HomePage() {
         </header>
 
         {/* -------------------------------------------------------- */}
-        {/* Greeting + search                                        */}
+        {/* Greeting + search — real Firebase profile                */}
         {/* -------------------------------------------------------- */}
         <section className="px-4 pt-4 pb-3">
           <div className="flex items-center gap-3">
-            <Avatar initials={currentUser.initials} colorClass={currentUser.colorClass} size="md" />
+            <Avatar
+              initials={initials}
+              colorClass="from-blue-500 to-blue-600"
+              size="md"
+              src={profile?.avatar || undefined}
+            />
             <div>
-              <h1 className="text-xl font-bold text-gray-900 tracking-tight">
-                Good morning, {currentUser.name.split(' ')[0]}
-              </h1>
+              <h1 className="text-xl font-bold text-gray-900 tracking-tight">Good morning, {firstName}</h1>
               <p className="mt-0.5 text-[13px] text-gray-400">Catch up on what's happening across campus.</p>
             </div>
           </div>
@@ -73,11 +169,11 @@ export default function HomePage() {
         </section>
 
         {/* -------------------------------------------------------- */}
-        {/* Stories row                                               */}
+        {/* Stories row — real Firestore stories                     */}
         {/* -------------------------------------------------------- */}
         <section className="pb-3 border-b border-gray-100">
           <div className="flex items-start gap-3.5 px-4 overflow-x-auto scroll-hidden">
-            {stories.map((story) => (
+            {storyBubbles.map((story) => (
               <StoryBubble key={story.id} story={story} />
             ))}
           </div>
@@ -104,12 +200,17 @@ export default function HomePage() {
         </nav>
 
         {/* -------------------------------------------------------- */}
-        {/* Feed                                                      */}
+        {/* Feed — Firestore posts                                    */}
         {/* -------------------------------------------------------- */}
         <main className="pb-24">
-          {visiblePosts.length === 0 ? (
+          {error ? (
             <div className="px-6 py-16 text-center">
-              <p className="text-sm text-gray-400">Nothing here yet — check back soon.</p>
+              <p className="text-sm text-gray-400">{error}</p>
+            </div>
+          ) : visiblePosts.length === 0 ? (
+            <div className="px-6 py-16 text-center">
+              <p className="text-sm font-semibold text-gray-900">No posts yet.</p>
+              <p className="mt-1 text-sm text-gray-400">Be the first student to post.</p>
             </div>
           ) : (
             visiblePosts.map((post) => <PostCard key={post.id} post={post} />)
