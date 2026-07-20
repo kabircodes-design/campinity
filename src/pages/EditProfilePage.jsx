@@ -1,12 +1,21 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Camera, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import CollegeSearch from '../components/CollegeSearch.jsx'
-import { currentUserProfile } from '../data/dummyProfile.js'
-import { getCollegeByName } from '../data/dummyColleges.js'
+import Loader from '../auth/components/Loader.jsx'
+import { dummyProfileStats } from '../data/dummyProfileStats.js'
+import { getCollegeById } from '../data/dummyColleges.js'
+import { auth } from '../firebase/firebase.js'
+import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
 
 const years = ['FY', 'SY', 'TY', 'Final Year']
+
+function getInitials(name = '') {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
+}
 
 function TagInput({ label, values, onAdd, onRemove, placeholder }) {
   const [input, setInput] = useState('')
@@ -59,18 +68,59 @@ export default function EditProfilePage() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
 
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
   const [photoPreview, setPhotoPreview] = useState('')
-  const [name, setName] = useState(currentUserProfile.name)
-  const [username, setUsername] = useState(currentUserProfile.username)
-  const [bio, setBio] = useState(currentUserProfile.bio)
-  const [selectedCollege, setSelectedCollege] = useState(() => getCollegeByName(currentUserProfile.college))
-  const [department, setDepartment] = useState(currentUserProfile.department)
-  const [year, setYear] = useState(currentUserProfile.year)
-  const [skills, setSkills] = useState(currentUserProfile.skills)
-  const [interests, setInterests] = useState(currentUserProfile.interests)
+  const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
+  const [bio, setBio] = useState('')
+  const [selectedCollege, setSelectedCollege] = useState(null)
+  const [department, setDepartment] = useState('')
+  const [year, setYear] = useState(years[0])
+  const [skills, setSkills] = useState([])
+  const [interests, setInterests] = useState([])
 
   const [errors, setErrors] = useState({})
   const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const load = async () => {
+      const uid = auth.currentUser?.uid
+      if (!uid) {
+        if (!cancelled) {
+          setLoadError('Not signed in.')
+          setLoading(false)
+        }
+        return
+      }
+      try {
+        const profile = await getUserProfile(uid)
+        if (cancelled) return
+        if (profile) {
+          setName(profile.displayName || '')
+          setUsername(profile.username || '')
+          setBio(profile.bio || '')
+          setSelectedCollege(getCollegeById(profile.collegeId))
+          setDepartment(profile.course || '')
+          setYear(profile.year || years[0])
+          setSkills(profile.skills || [])
+          setInterests(profile.interests || [])
+        }
+      } catch (err) {
+        if (!cancelled) setLoadError(err?.message || 'Could not load your profile.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handlePhotoChange = (event) => {
     const file = event.target.files?.[0]
@@ -94,11 +144,38 @@ export default function EditProfilePage() {
     event.preventDefault()
     if (!validate() || isSaving) return
 
+    const uid = auth.currentUser?.uid
+    if (!uid) {
+      setErrors({ form: 'Not signed in.' })
+      return
+    }
+
     setIsSaving(true)
-    // TODO(firebase): persist to Firestore users/{uid} once Firebase is wired up.
-    await new Promise((resolve) => setTimeout(resolve, 600))
-    setIsSaving(false)
-    navigate('/profile')
+    try {
+      await updateUserProfile(uid, {
+        displayName: name.trim(),
+        username: username.trim(),
+        bio: bio.trim(),
+        collegeId: selectedCollege.id,
+        course: department.trim(),
+        year,
+        skills,
+        interests
+      })
+      navigate('/profile')
+    } catch (err) {
+      setErrors({ form: err?.message || 'Could not save your profile. Please try again.' })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
+        <Loader size="lg" tone="dark" />
+      </div>
+    )
   }
 
   return (
@@ -119,13 +196,19 @@ export default function EditProfilePage() {
         </header>
 
         <form onSubmit={handleSave} className="px-4 py-5 space-y-5 pb-10">
+          {loadError && (
+            <p role="alert" className="rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+              {loadError}
+            </p>
+          )}
+
           <div className="flex flex-col items-center">
             <label htmlFor="edit-photo" className="relative cursor-pointer group">
               <div className="w-20 h-20 rounded-full bg-blue-50 border border-gray-200 overflow-hidden flex items-center justify-center">
                 {photoPreview ? (
                   <img src={photoPreview} alt="Profile preview" className="w-full h-full object-cover" />
                 ) : (
-                  <Avatar initials={currentUserProfile.initials} colorClass={currentUserProfile.colorClass} size="xl" />
+                  <Avatar initials={getInitials(name)} colorClass={dummyProfileStats.colorClass} size="xl" />
                 )}
               </div>
               <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center border-2 border-white group-hover:bg-blue-700 transition-colors duration-300">
@@ -152,6 +235,7 @@ export default function EditProfilePage() {
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
+              disabled={isSaving}
               className={`w-full rounded-xl border bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
                 errors.name ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
               }`}
@@ -168,6 +252,7 @@ export default function EditProfilePage() {
               type="text"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
+              disabled={isSaving}
               className={`w-full rounded-xl border bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
                 errors.username ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
               }`}
@@ -184,6 +269,7 @@ export default function EditProfilePage() {
               rows={3}
               value={bio}
               onChange={(event) => setBio(event.target.value)}
+              disabled={isSaving}
               className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
             />
           </div>
@@ -206,6 +292,7 @@ export default function EditProfilePage() {
               type="text"
               value={department}
               onChange={(event) => setDepartment(event.target.value)}
+              disabled={isSaving}
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
             />
           </div>
@@ -218,6 +305,7 @@ export default function EditProfilePage() {
               id="edit-year"
               value={year}
               onChange={(event) => setYear(event.target.value)}
+              disabled={isSaving}
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
             >
               {years.map((option) => (
@@ -244,11 +332,18 @@ export default function EditProfilePage() {
             onRemove={(value) => setInterests((prev) => prev.filter((item) => item !== value))}
           />
 
+          {errors.form && (
+            <p role="alert" className="rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+              {errors.form}
+            </p>
+          )}
+
           <div className="flex items-center gap-3 pt-2">
             <button
               type="button"
               onClick={() => navigate('/profile')}
-              className="flex-1 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-3 hover:border-gray-300 transition-all duration-300"
+              disabled={isSaving}
+              className="flex-1 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-3 hover:border-gray-300 transition-all duration-300 disabled:opacity-50"
             >
               Cancel
             </button>

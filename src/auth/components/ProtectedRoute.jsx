@@ -19,13 +19,34 @@ export function FullScreenLoader() {
  * would fight the Skip button's own navigation, since Skip intentionally
  * leaves verificationStatus as "not_started" while still advancing the
  * user to /create-profile).
+ *
+ * BUGFIX: a skip is a completed decision and must never be re-prompted.
+ * Skip leaves verificationStatus at "not_started" — identical to a
+ * profile that has never touched campus verification at all — so this
+ * function previously couldn't tell the two apart. Any re-evaluation
+ * while profileCompleted was still false (e.g. the /home guard firing
+ * right after Create Profile saves) would send an already-skipped user
+ * straight back to /campus-verification, which re-saves the same skip
+ * fields and hardcodes navigate('/create-profile') — an infinite loop
+ * between the two pages. Checking verificationMethod === 'skipped' first
+ * closes that loop. The pending-ID-review case (verificationMethod:
+ * 'college_id', verificationStatus: 'pending') and the genuinely
+ * undecided fresh-signup case are untouched — both still route to
+ * /campus-verification exactly as before.
  */
 export function resolveOnboardingRoute(profile) {
   if (!profile?.profileCompleted) {
     const status = profile?.verificationStatus
+    const method = profile?.verificationMethod
+
+    if (method === 'skipped') {
+      return '/create-profile'
+    }
+
     if (!status || status === 'not_started' || status === 'pending') {
       return '/campus-verification'
     }
+
     return '/create-profile'
   }
   return '/home'
@@ -105,4 +126,4 @@ export function PublicRoute({ children }) {
   }
 
   return children
-} 
+}
