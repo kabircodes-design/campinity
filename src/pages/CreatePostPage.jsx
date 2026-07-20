@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { FileText, Image as ImageIcon, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import Switch from '../components/Switch.jsx'
-import { usePosts } from '../hooks/usePosts.jsx'
-import { currentUserProfile } from '../data/dummyProfile.js'
+import { auth } from '../firebase/firebase.js'
+import { getUserProfile } from '../firebase/profileService.js'
+import { createPost, uploadPostImage } from '../firebase/postService.js'
 
 const categories = ['general', 'study', 'notes', 'event', 'club', 'marketplace']
 
@@ -19,6 +20,12 @@ const categoryLabels = {
 
 const MAX_LENGTH = 500
 
+function getInitials(name = '') {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
+}
+
 function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -27,9 +34,10 @@ function formatFileSize(bytes) {
 
 export default function CreatePostPage() {
   const navigate = useNavigate()
-  const { addPost } = usePosts()
   const imageInputRef = useRef(null)
   const pdfInputRef = useRef(null)
+
+  const [profile, setProfile] = useState(null)
 
   const [postText, setPostText] = useState('')
   const [category, setCategory] = useState('general')
@@ -39,6 +47,27 @@ export default function CreatePostPage() {
   const [pdfFile, setPdfFile] = useState(null)
   const [error, setError] = useState('')
   const [isPublishing, setIsPublishing] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadProfile = async () => {
+      const uid = auth.currentUser?.uid
+      if (!uid) return
+      try {
+        const data = await getUserProfile(uid)
+        if (!cancelled) setProfile(data)
+      } catch {
+        // The composer still works without a loaded profile preview —
+        // publishing itself re-checks auth.currentUser directly.
+      }
+    }
+
+    loadProfile()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -73,81 +102,52 @@ export default function CreatePostPage() {
   }
 
   const hasContent = postText.trim().length > 0 || Boolean(imageFile) || Boolean(pdfFile)
-  const notesNeedsFile = category === 'notes' && !pdfFile
-  const isValid = hasContent && !notesNeedsFile
+  const isValid = hasContent
+
+  const displayName = profile?.displayName || ''
+  const username = profile?.username || ''
+  const initials = getInitials(displayName)
 
   const handlePublish = async () => {
     if (!hasContent) {
       setError('Write something or attach a file before publishing.')
       return
     }
-    if (notesNeedsFile) {
-      setError('Notes posts need a PDF attached.')
+    if (isPublishing) return
+
+    const uid = auth.currentUser?.uid
+    if (!uid) {
+      setError('You need to be signed in to publish a post.')
       return
     }
-    if (isPublishing) return
 
     setError('')
     setIsPublishing(true)
-    await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const author = isAnonymous
-      ? {
-          name: 'Anonymous',
-          username: 'anonymous',
-          initials: '?',
-          avatarColor: 'from-gray-400 to-gray-500',
-          department: '',
-          year: '',
-          college: currentUserProfile.college
-        }
-      : {
-          name: currentUserProfile.name,
-          username: currentUserProfile.username,
-          initials: currentUserProfile.initials,
-          avatarColor: currentUserProfile.colorClass,
-          department: currentUserProfile.department,
-          year: currentUserProfile.year,
-          college: currentUserProfile.college
-        }
+    try {
+      let imageUrl = null
+      if (imageFile) {
+        imageUrl = await uploadPostImage(uid, imageFile)
+      }
 
-    const trimmedText = postText.trim()
+      const author = isAnonymous
+        ? { displayName: 'Anonymous', username: 'anonymous', profilePhoto: '' }
+        : { displayName, username, profilePhoto: profile?.avatar || '' }
 
-    const newPost = {
-      id: `local-${Date.now()}`,
-      type: category,
-      name: author.name,
-      username: author.username,
-      initials: author.initials,
-      avatarColor: author.avatarColor,
-      department: author.department,
-      year: author.year,
-      college: author.college,
-      time: 'Just now',
-      text: trimmedText,
-      likes: 0,
-      comments: 0,
-      likedByMe: false,
-      feedCategories: ['forYou'],
-      ...(pdfFile ? { file: { name: pdfFile.name, size: formatFileSize(pdfFile.size) } } : {}),
-      ...(imagePreviewUrl ? { imagePreviewUrl } : {}),
-      ...(category === 'event'
-        ? {
-            event: {
-              title: trimmedText.slice(0, 60) || 'New event',
-              date: 'See post for details',
-              location: 'See post for details'
-            }
-          }
-        : {}),
-      ...(category === 'marketplace'
-        ? { marketplace: { item: trimmedText.slice(0, 60) || 'New listing', price: 'See post for price' } }
-        : {})
+      await createPost({
+        uid,
+        text: postText.trim(),
+        imageUrl,
+        author,
+        extra: { category, isAnonymous }
+      })
+
+      navigate('/home')
+    } catch (err) {
+      setError(err?.message || 'Could not publish your post. Please try again.')
+    } finally {
+      setIsPublishing(false)
     }
-
-    addPost(newPost)
-    setIsPublishing(false)
-    navigate('/home')
   }
 
   return (
@@ -178,16 +178,15 @@ export default function CreatePostPage() {
         <div className="px-4 py-4 pb-24 space-y-5">
           <div className="flex items-center gap-3">
             <Avatar
-              initials={isAnonymous ? '?' : currentUserProfile.initials}
-              colorClass={isAnonymous ? 'from-gray-400 to-gray-500' : currentUserProfile.colorClass}
+              initials={isAnonymous ? '?' : initials}
+              colorClass={isAnonymous ? 'from-gray-400 to-gray-500' : 'from-blue-500 to-blue-600'}
               size="md"
+              src={isAnonymous ? undefined : profile?.avatar || undefined}
             />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-900">
-                {isAnonymous ? 'Anonymous' : currentUserProfile.name}
-              </p>
+              <p className="text-sm font-semibold text-gray-900">{isAnonymous ? 'Anonymous' : displayName}</p>
               <p className="text-xs text-gray-400">
-                {isAnonymous ? 'Your identity is hidden' : `@${currentUserProfile.username}`}
+                {isAnonymous ? 'Your identity is hidden' : username && `@${username}`}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -289,9 +288,6 @@ export default function CreatePostPage() {
                 </button>
               ))}
             </div>
-            {notesNeedsFile && (
-              <p className="mt-2 text-xs text-amber-600">Notes posts need a PDF attached before publishing.</p>
-            )}
           </div>
 
           {error && (
@@ -304,7 +300,8 @@ export default function CreatePostPage() {
             <button
               type="button"
               onClick={() => navigate('/home')}
-              className="flex-1 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-3 hover:border-gray-300 transition-all duration-300"
+              disabled={isPublishing}
+              className="flex-1 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-3 hover:border-gray-300 transition-all duration-300 disabled:opacity-50"
             >
               Cancel
             </button>

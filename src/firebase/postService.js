@@ -1,5 +1,6 @@
-import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
-import { db } from './firebase.js'
+import { addDoc, collection, getDocs, limit, orderBy, query, serverTimestamp, where } from 'firebase/firestore'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { db, storage } from './firebase.js'
 
 const COLLECTION = 'posts'
 
@@ -45,12 +46,11 @@ function formatTimeAgo(timestamp) {
  * feedCategories, ...) — the ONLY translation layer between Firestore's
  * schema and the existing, untouched PostCard component.
  *
- * `type` is always 'general' since this schema has no category field yet
- * — 'general' is the one type PostCard can render with zero risk (no
- * specialized preview block, always present in postTypeConfig).
- * `feedCategories` is always ['forYou'] for the same reason — real posts
- * only appear under the default "For You" tab until real categorization
- * exists.
+ * `type` is always 'general' since this schema has no category field
+ * PostCard knows how to render yet — 'general' is the one type PostCard
+ * can render with zero risk (no specialized preview block, always
+ * present in postTypeConfig). `feedCategories` is always ['forYou'] for
+ * the same reason.
  */
 function mapPostDoc(docSnap, currentUid) {
   const data = docSnap.data()
@@ -101,8 +101,8 @@ export async function getFeedPosts(currentUid, maxResults = 50) {
 }
 
 /**
- * Loads a single user's posts, newest first. Not called by the Home Feed
- * yet — kept ready for the Profile "Posts" tab / future reconnection.
+ * Loads a single user's posts, newest first. Used by Profile's Posts tab.
+ * Same composite-index note as getFeedPosts applies (userId + orderBy).
  */
 export async function getUserPosts(userId, currentUid, maxResults = 50) {
   const postsQuery = query(
@@ -113,4 +113,48 @@ export async function getUserPosts(userId, currentUid, maxResults = 50) {
   )
   const snap = await getDocs(postsQuery)
   return snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+}
+
+/**
+ * Uploads a Create Post image to Storage and returns its public download
+ * URL. Path is namespaced per-user and timestamped so re-uploads never
+ * collide.
+ */
+export async function uploadPostImage(uid, file) {
+  const path = `postImages/${uid}/${Date.now()}-${file.name}`
+  const fileRef = ref(storage, path)
+  await uploadBytes(fileRef, file)
+  return getDownloadURL(fileRef)
+}
+
+/**
+ * Creates a new posts/{id} document.
+ *
+ * `author` carries the fields the feed needs to render the post
+ * immediately: { displayName, username, profilePhoto }. `extra` accepts
+ * additional, non-required fields (category, isAnonymous) so the
+ * existing Create Post UI's category selector and anonymous toggle keep
+ * writing somewhere meaningful even though they're not part of the
+ * required schema — mapPostDoc() doesn't read them yet, so they don't
+ * affect how the post renders today, but the data isn't silently lost.
+ *
+ * Returns the new document's id.
+ */
+export async function createPost({ uid, text, imageUrl, author, extra = {} }) {
+  const payload = {
+    userId: uid,
+    displayName: author.displayName || '',
+    username: author.username || '',
+    profilePhoto: author.profilePhoto || '',
+    text: text || '',
+    image: imageUrl || null,
+    visibility: 'public',
+    likesCount: 0,
+    commentsCount: 0,
+    likedBy: [],
+    createdAt: serverTimestamp(),
+    ...extra
+  }
+  const docRef = await addDoc(collection(db, COLLECTION), payload)
+  return docRef.id
 }

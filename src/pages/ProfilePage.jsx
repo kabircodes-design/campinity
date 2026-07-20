@@ -14,6 +14,7 @@ import { notes, events } from '../data/dummySearch.js'
 import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
+import { getUserPosts } from '../firebase/postService.js'
 
 function getInitials(name = '') {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -25,19 +26,22 @@ export default function ProfilePage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(profileTabs[0].key)
   const [profile, setProfile] = useState(null)
+  const [myPosts, setMyPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let cancelled = false
+    const uid = auth.currentUser?.uid
 
-    const load = async () => {
-      const uid = auth.currentUser?.uid
+    /**
+     * Profile and Posts are fetched independently — a Firestore error on
+     * one (e.g. a missing composite index on the posts query) must never
+     * wipe out data that loaded successfully on the other.
+     */
+    const loadProfile = async () => {
       if (!uid) {
-        if (!cancelled) {
-          setError('Not signed in.')
-          setLoading(false)
-        }
+        if (!cancelled) setError('Not signed in.')
         return
       }
       try {
@@ -45,12 +49,24 @@ export default function ProfilePage() {
         if (!cancelled) setProfile(data)
       } catch (err) {
         if (!cancelled) setError(err?.message || 'Could not load your profile.')
-      } finally {
-        if (!cancelled) setLoading(false)
       }
     }
 
-    load()
+    const loadPosts = async () => {
+      if (!uid) return
+      try {
+        const data = await getUserPosts(uid, uid)
+        if (!cancelled) setMyPosts(data)
+      } catch {
+        // Posts tab just falls back to its empty state if this fails;
+        // the profile above still loads independently.
+      }
+    }
+
+    Promise.all([loadProfile(), loadPosts()]).finally(() => {
+      if (!cancelled) setLoading(false)
+    })
+
     return () => {
       cancelled = true
     }
@@ -58,10 +74,6 @@ export default function ProfilePage() {
 
   const username = profile?.username || ''
 
-  const myPosts = useMemo(
-    () => posts.filter((post) => post.username === username && post.type !== 'marketplace'),
-    [username]
-  )
   const myMarketplace = useMemo(
     () => posts.filter((post) => post.username === username && post.type === 'marketplace'),
     [username]
