@@ -2,9 +2,11 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Camera, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
+import CollegeSearch from '../components/CollegeSearch.jsx'
 import { currentUserProfile } from '../data/dummyProfile.js'
+import { getCollegeByName } from '../data/dummyColleges.js'
 
-const years = ['FYJC', 'SYJC', 'FY', 'SY', 'TY', 'Final Year']
+const years = ['FY', 'SY', 'TY', 'Final Year']
 
 function TagInput({ label, values, onAdd, onRemove, placeholder }) {
   const [input, setInput] = useState('')
@@ -61,7 +63,7 @@ export default function EditProfilePage() {
   const [name, setName] = useState(currentUserProfile.name)
   const [username, setUsername] = useState(currentUserProfile.username)
   const [bio, setBio] = useState(currentUserProfile.bio)
-  const [college, setCollege] = useState(currentUserProfile.college)
+  const [selectedCollege, setSelectedCollege] = useState(() => getCollegeByName(currentUserProfile.college))
   const [department, setDepartment] = useState(currentUserProfile.department)
   const [year, setYear] = useState(currentUserProfile.year)
   const [skills, setSkills] = useState(currentUserProfile.skills)
@@ -83,6 +85,7 @@ export default function EditProfilePage() {
     else if (!/^[a-zA-Z0-9_.]{3,20}$/.test(username.trim())) {
       next.username = '3-20 characters — letters, numbers, "." or "_" only'
     }
+    if (!selectedCollege) next.college = 'Please select your college from the list'
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -185,18 +188,14 @@ export default function EditProfilePage() {
             />
           </div>
 
-          <div>
-            <label htmlFor="edit-college" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-              College
-            </label>
-            <input
-              id="edit-college"
-              type="text"
-              value={college}
-              onChange={(event) => setCollege(event.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
-            />
-          </div>
+          <CollegeSearch
+            id="edit-college"
+            label="College"
+            value={selectedCollege}
+            onChange={setSelectedCollege}
+            error={errors.college}
+            disabled={isSaving}
+          />
 
           <div>
             <label htmlFor="edit-department" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">

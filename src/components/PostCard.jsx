@@ -12,7 +12,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   PackageSearch,
-  Share2,
+  Share,
   ShoppingBag
 } from 'lucide-react'
 import Avatar from './Avatar.jsx'
@@ -188,7 +188,7 @@ export default function PostCard({ post }) {
           onClick={handleShare}
           className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 transition-all duration-300 ml-auto"
         >
-          <Share2 className="w-[18px] h-[18px]" />
+          <Share className="w-[18px] h-[18px]" />
           {shareCopied ? 'Copied' : 'Share'}
         </button>
       </div>

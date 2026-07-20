@@ -25,6 +25,7 @@ const ChatListPage = lazy(() => import('./pages/ChatListPage.jsx'))
 const ChatScreenPage = lazy(() => import('./pages/ChatScreenPage.jsx'))
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage.jsx'))
 const NotificationDetailPage = lazy(() => import('./pages/NotificationDetailPage.jsx'))
+const AddCollegePage = lazy(() => import('./pages/AddCollegePage.jsx'))
 
 export default function App() {
   return (
@@ -119,7 +120,6 @@ export default function App() {
           }
         />
 
-        {/* Notifications — now real pages (Feature 4D). */}
         <Route
           path="/notifications"
           element={
@@ -133,6 +133,16 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <NotificationDetailPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Add College — new (this feature). */}
+        <Route
+          path="/college/add"
+          element={
+            <ProtectedRoute stage="home">
+              <AddCollegePage />
             </ProtectedRoute>
           }
         />

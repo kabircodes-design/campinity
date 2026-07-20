@@ -31,7 +31,6 @@ export default function HomePage() {
               <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
                 <span className="text-white text-sm font-bold">C</span>
               </div>
-              <span className="text-base font-bold tracking-tight text-gray-900">Campinity</span>
             </div>
 
             <button

@@ -13,7 +13,7 @@ import {
   MoreHorizontal,
   PackageSearch,
   Send,
-  Share2,
+  Share,
   ShoppingBag
 } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
@@ -248,7 +248,7 @@ export default function PostDetailPage() {
               onClick={handleShare}
               className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 transition-all duration-300"
             >
-              <Share2 className="w-[18px] h-[18px]" />
+              <Share className="w-[18px] h-[18px]" />
               {shareCopied ? 'Copied' : 'Share'}
             </button>
             <button
