@@ -13,43 +13,62 @@ export function FullScreenLoader() {
 /**
  * The one-time "what's next" decision — mirrors the login-flow spec
  * exactly. Used right after a successful login/signup/email-verification
- * to compute a single initial redirect target, NOT re-applied as a
- * recurring per-navigation guard (see ProtectedRoute's "onboarding" stage
- * below for why: forcing this same granular check on every route mount
- * would fight the Skip button's own navigation, since Skip intentionally
- * leaves verificationStatus as "not_started" while still advancing the
- * user to /create-profile).
+ * (and as ProtectedRoute's own fallback below) to compute a single
+ * redirect target, NOT re-applied as a recurring per-navigation guard
+ * that second-guesses a completed profile.
  *
- * BUGFIX: a skip is a completed decision and must never be re-prompted.
- * Skip leaves verificationStatus at "not_started" — identical to a
- * profile that has never touched campus verification at all — so this
- * function previously couldn't tell the two apart. Any re-evaluation
- * while profileCompleted was still false (e.g. the /home guard firing
- * right after Create Profile saves) would send an already-skipped user
- * straight back to /campus-verification, which re-saves the same skip
- * fields and hardcodes navigate('/create-profile') — an infinite loop
- * between the two pages. Checking verificationMethod === 'skipped' first
- * closes that loop. The pending-ID-review case (verificationMethod:
- * 'college_id', verificationStatus: 'pending') and the genuinely
- * undecided fresh-signup case are untouched — both still route to
- * /campus-verification exactly as before.
+ * profileCompleted is checked FIRST and unconditionally — once true,
+ * this always returns '/home' no matter what verifiedCampus,
+ * verificationStatus, or verificationMethod say. Campus verification is
+ * a one-time onboarding decision, not a standing condition on app
+ * access; a skipped or never-verified campus must never re-route a
+ * fully onboarded user away from the app.
+ *
+ * Below that, for a profile that ISN'T complete yet:
+ *  - verificationMethod === 'skipped' means the user already made their
+ *    decision about campus verification (they chose to skip it) — this
+ *    is a completed step, so it routes straight to /create-profile, not
+ *    back to /campus-verification. Skip sets verificationStatus to
+ *    'not_started', which is otherwise indistinguishable from a profile
+ *    that has never touched campus verification at all — checking
+ *    verificationStatus alone (as an earlier version of this function
+ *    did) is exactly what caused the Campus Verification <-> Create
+ *    Profile loop: any re-evaluation while profileCompleted briefly read
+ *    as false sent an already-skipped user back to Campus Verification,
+ *    which re-saves the same skip fields and hardcodes
+ *    navigate('/create-profile') — repeating forever.
+ *  - A genuinely undecided profile (no method chosen yet) or an ID-card
+ *    review still "pending" both still correctly land on
+ *    /campus-verification, unchanged from the original design.
  */
 export function resolveOnboardingRoute(profile) {
-  if (!profile?.profileCompleted) {
-    const status = profile?.verificationStatus
-    const method = profile?.verificationMethod
+  if (profile?.profileCompleted) {
+    return '/home'
+  }
 
-    if (method === 'skipped') {
-      return '/create-profile'
-    }
-
-    if (!status || status === 'not_started' || status === 'pending') {
-      return '/campus-verification'
-    }
-
+  if (profile?.verificationMethod === 'skipped') {
     return '/create-profile'
   }
-  return '/home'
+
+  const status = profile?.verificationStatus
+  if (!status || status === 'not_started' || status === 'pending') {
+    return '/campus-verification'
+  }
+
+  return '/create-profile'
+}
+
+/**
+ * Whether a profile has actually completed campus verification —
+ * distinct from being allowed into the app at all. Skipping verification
+ * is a fully supported way to enter Campinity; this helper exists so
+ * future verified-only actions (posting, notes upload, marketplace
+ * listings, etc.) can gate the ACTION without ever gating entry to the
+ * app itself. Not used by ProtectedRoute's own guards below — app access
+ * is decided purely by profileCompleted.
+ */
+export function isCampusVerified(profile) {
+  return profile?.verifiedCampus === true
 }
 
 /**
@@ -60,11 +79,15 @@ export function resolveOnboardingRoute(profile) {
  *  - 'onboarding'   -> /campus-verification and /create-profile; both are
  *                      freely reachable once email is verified and the
  *                      profile isn't complete yet (no forced ordering
- *                      between the two — see note above)
- *  - 'home'         -> requires a verified, fully-onboarded user
- *  - 'admin'        -> requires a verified, fully-onboarded user AND
- *                      role === 'admin'; otherwise renders "Access denied"
- *                      in place rather than redirecting elsewhere
+ *                      between the two — see resolveOnboardingRoute above)
+ *  - 'home'         -> requires a verified-email, fully-onboarded user.
+ *                      "Fully-onboarded" means profileCompleted === true
+ *                      ONLY — verifiedCampus is never checked here.
+ *                      Skipping campus verification must never block
+ *                      entry once the profile itself is complete.
+ *  - 'admin'        -> same as 'home', plus role === 'admin'; otherwise
+ *                      renders "Access denied" in place rather than
+ *                      redirecting elsewhere
  */
 export default function ProtectedRoute({ stage, children }) {
   const { user, profile, loading } = useAuthUser()
@@ -94,7 +117,9 @@ export default function ProtectedRoute({ stage, children }) {
     return children
   }
 
-  // stage === 'home' or 'admin' from here on — both require a completed profile.
+  // stage === 'home' or 'admin' from here on — both require a completed
+  // profile. verifiedCampus is intentionally NOT part of this check:
+  // skipping campus verification is a supported way to enter the app.
   if (!profile?.profileCompleted) {
     return <Navigate to={resolveOnboardingRoute(profile)} replace />
   }
