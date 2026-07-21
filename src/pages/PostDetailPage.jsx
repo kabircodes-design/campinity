@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -18,7 +18,9 @@ import {
 } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
-import { usePosts } from '../hooks/usePosts.jsx'
+import Loader from '../auth/components/Loader.jsx'
+import { auth } from '../firebase/firebase.js'
+import { getPostById } from '../firebase/postService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
 import { currentUserProfile } from '../data/dummyProfile.js'
 import { dummyCommentsByPostId } from '../data/dummyComments.js'
@@ -26,20 +28,63 @@ import { dummyCommentsByPostId } from '../data/dummyComments.js'
 export default function PostDetailPage() {
   const { postId } = useParams()
   const navigate = useNavigate()
-  const { getPostById } = usePosts()
   const commentInputRef = useRef(null)
 
-  const post = getPostById(postId)
+  const [post, setPost] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
 
-  const [liked, setLiked] = useState(post?.likedByMe ?? false)
-  const [likeCount, setLikeCount] = useState(post?.likes ?? 0)
+  const [liked, setLiked] = useState(false)
+  const [likeCount, setLikeCount] = useState(0)
   const [saved, setSaved] = useState(false)
   const [reported, setReported] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
-  const [comments, setComments] = useState(() => dummyCommentsByPostId[post?.id] || [])
+  const [comments, setComments] = useState([])
   const [commentText, setCommentText] = useState('')
 
-  if (!post) {
+  useEffect(() => {
+    let cancelled = false
+
+    const load = async () => {
+      setLoading(true)
+      setNotFound(false)
+      try {
+        const data = await getPostById(postId, auth.currentUser?.uid)
+        if (cancelled) return
+        if (!data) {
+          setNotFound(true)
+          setPost(null)
+        } else {
+          setPost(data)
+          setLiked(data.likedByMe)
+          setLikeCount(data.likes)
+          setComments(dummyCommentsByPostId[data.id] || [])
+        }
+      } catch {
+        if (!cancelled) {
+          setNotFound(true)
+          setPost(null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [postId])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
+        <Loader size="lg" tone="dark" />
+      </div>
+    )
+  }
+
+  if (notFound || !post) {
     return (
       <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
         <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm flex items-center justify-center px-6 text-center">

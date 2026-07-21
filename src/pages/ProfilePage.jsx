@@ -27,6 +27,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState(profileTabs[0].key)
   const [profile, setProfile] = useState(null)
   const [myPosts, setMyPosts] = useState([])
+  const [postsError, setPostsError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -57,9 +58,8 @@ export default function ProfilePage() {
       try {
         const data = await getUserPosts(uid, uid)
         if (!cancelled) setMyPosts(data)
-      } catch {
-        // Posts tab just falls back to its empty state if this fails;
-        // the profile above still loads independently.
+      } catch (err) {
+        if (!cancelled) setPostsError(err?.message || 'Could not load your posts.')
       }
     }
 
@@ -92,7 +92,7 @@ export default function ProfilePage() {
   }[activeTab]
 
   const emptyMessage = {
-    posts: "You haven't posted anything yet.",
+    posts: postsError || "You haven't posted anything yet.",
     notes: 'No notes uploaded yet.',
     events: 'No events yet — RSVP to something from the feed.',
     marketplace: 'No marketplace listings yet.'
@@ -131,7 +131,7 @@ export default function ProfilePage() {
     coverGradient: dummyProfileStats.coverGradient,
     followers: dummyProfileStats.followers,
     following: dummyProfileStats.following,
-    postsCount: dummyProfileStats.postsCount
+    postsCount: myPosts.length
   }
 
   return (

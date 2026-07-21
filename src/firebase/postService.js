@@ -1,4 +1,4 @@
-import { addDoc, collection, getDocs, limit, orderBy, query, serverTimestamp, where } from 'firebase/firestore'
+import { addDoc, collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, where } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { db, storage } from './firebase.js'
 
@@ -102,17 +102,45 @@ export async function getFeedPosts(currentUid, maxResults = 50) {
 
 /**
  * Loads a single user's posts, newest first. Used by Profile's Posts tab.
- * Same composite-index note as getFeedPosts applies (userId + orderBy).
+ *
+ * Includes the same `visibility == 'public'` filter Home Feed's query
+ * uses. This isn't optional: Firestore security rules require that a
+ * list/collection query be structurally provable to only ever return
+ * documents the rule allows — for our rules (`resource.data.visibility
+ * == 'public'`), that means the query itself must filter on visibility,
+ * not just rely on every matching document happening to have that value.
+ * A userId-only query has no such guarantee from Firestore's point of
+ * view, so it was rejected outright with "Missing or insufficient
+ * permissions" regardless of the actual document contents. Two equality
+ * filters on different fields (userId, visibility) don't require a
+ * composite index, so this stays index-free — sorting still happens
+ * client-side below rather than via orderBy, for the same reason noted
+ * on the composite-index issue this replaced.
  */
 export async function getUserPosts(userId, currentUid, maxResults = 50) {
   const postsQuery = query(
     collection(db, COLLECTION),
     where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
+    where('visibility', '==', 'public'),
     limit(maxResults)
   )
   const snap = await getDocs(postsQuery)
-  return snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+  const sortedDocs = [...snap.docs].sort((a, b) => {
+    const aTime = a.data().createdAt?.toMillis?.() ?? 0
+    const bTime = b.data().createdAt?.toMillis?.() ?? 0
+    return bTime - aTime
+  })
+  return sortedDocs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+}
+
+/**
+ * Loads a single post by its Firestore document id — used by
+ * PostDetailPage.jsx. Returns null if the document doesn't exist.
+ */
+export async function getPostById(postId, currentUid) {
+  const snap = await getDoc(doc(db, COLLECTION, postId))
+  if (!snap.exists()) return null
+  return mapPostDoc(snap, currentUid)
 }
 
 /**
