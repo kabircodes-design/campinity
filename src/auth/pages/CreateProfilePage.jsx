@@ -1,118 +1,86 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Facebook, Ghost, Instagram, Linkedin, X } from 'lucide-react'
+import { Camera, X } from 'lucide-react'
 import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
 import { auth } from '../../firebase/firebase.js'
 import { saveUserProfile } from '../utils/userProfile.js'
 import { uploadProfileImage } from '../utils/storage.js'
-import { sanitizeText } from '../utils/sanitize.js'
+import { reserveUsername } from '../../firebase/usernameService.js'
+import { useUsernameAvailability } from '../../hooks/useUsernameAvailability.js'
 
 const years = ['FYJC', 'SYJC', 'FY', 'SY', 'TY', 'Final Year']
-const divisions = [
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "S1",
-  "S2",
-  "S3",
-  "S4",
-  "S5",
-  "S6",
-  "S7",
-  "S8",
-  "S9",
-  "S10",
-  "S11",
-  "S12",
-  "S13",
-  "S14",
-  "S15",
-  "S16",
-  "S17",
-  "S18",
-  "S19",
-  "S20",
-  "S21",
-  "S22",
-  "S23",
-  "S24",
-  "S25",
-  "S26",
-  "S27",
-  "S28",
-  "S29",
-  "C1",
-  "C2",
-  "C3",
-  "C4",
-  "C5",
-  "C6",
-  "C7",
-  "C8",
-  "C9",
-  "C10",
-  "C11",
-  "C12",
-  "C13",
-  "C14",
-  "C15",
-  "C16",
-  "C17",
-  "C18",
-  "C19",
-  "C20",
-  "C21",
-  "C22",
-  "C23",
-  "C24",
-  "C25",
-  "C26",
-  "C27",
-  "C28",
-  "C29",
-]
 
+function TagInput({ label, values, onAdd, onRemove, placeholder }) {
+  const [input, setInput] = useState('')
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault()
+      const clean = input.trim()
+      if (clean && !values.includes(clean)) onAdd(clean)
+      setInput('')
+    }
+  }
+
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{label}</label>
+      <input
+        type="text"
+        value={input}
+        onChange={(event) => setInput(event.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+      />
+      {values.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {values.map((value) => (
+            <span
+              key={value}
+              className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 text-blue-600 text-xs font-medium pl-3 pr-2 py-1.5"
+            >
+              {value}
+              <button
+                type="button"
+                onClick={() => onRemove(value)}
+                aria-label={`Remove ${value}`}
+                className="hover:text-blue-800 transition-colors duration-300"
+              >
+                <X className="w-3 h-3" strokeWidth={2.4} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function CreateProfilePage() {
   const navigate = useNavigate()
-  const nameRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState('')
-
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
   const [college, setCollege] = useState('')
   const [course, setCourse] = useState('')
   const [year, setYear] = useState(years[0])
-  const [division, setDivision] = useState("")
+  const [division, setDivision] = useState('')
   const [bio, setBio] = useState('')
-
-  const [interestInput, setInterestInput] = useState('')
   const [interests, setInterests] = useState([])
 
-  const [instagram, setInstagram] = useState('')
-  const [linkedin, setLinkedin] = useState('')
-  const [facebook, setFacebook] = useState('')
-  const [snapchat, setSnapchat] = useState('')
-
   const [errors, setErrors] = useState({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  useEffect(() => {
-    nameRef.current?.focus()
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      if (photoPreview) URL.revokeObjectURL(photoPreview)
-    }
-  }, [photoPreview])
+  // A brand-new profile has no existing username yet, so there is
+  // nothing to compare against or release — pass '' as currentUsername.
+  const usernameCheck = useUsernameAvailability(username, '')
 
   const handlePhotoChange = (event) => {
     const file = event.target.files?.[0]
@@ -121,37 +89,21 @@ export default function CreateProfilePage() {
     setPhotoPreview(URL.createObjectURL(file))
   }
 
-  const addInterest = () => {
-    const clean = sanitizeText(interestInput).trim()
-    if (!clean) return
-    if (interests.includes(clean)) {
-      setInterestInput('')
-      return
-    }
-    setInterests((prev) => [...prev, clean])
-    setInterestInput('')
-  }
-
-  const removeInterest = (value) => {
-    setInterests((prev) => prev.filter((item) => item !== value))
-  }
-
-  const handleInterestKeyDown = (event) => {
-    if (event.key === 'Enter' || event.key === ',') {
-      event.preventDefault()
-      addInterest()
-    }
-  }
-
   const validate = () => {
     const next = {}
     if (!fullName.trim()) next.fullName = 'Full name is required'
-    if (!username.trim()) next.username = 'Username is required'
-    else if (!/^[a-zA-Z0-9_.]{3,20}$/.test(username.trim())) {
-      next.username = '3-20 characters — letters, numbers, "." or "_" only'
+    if (!username.trim()) {
+      next.username = 'Username is required'
+    } else if (usernameCheck.status === 'invalid') {
+      next.username = usernameCheck.message
+    } else if (usernameCheck.status === 'taken') {
+      next.username = 'Username already taken'
+    } else if (usernameCheck.status === 'checking') {
+      next.username = 'Still checking username — please wait'
+    } else if (usernameCheck.status === 'error') {
+      next.username = 'Network error — try again'
     }
-    if (!college.trim()) next.college = 'College name is required'
-    if (!course.trim()) next.course = 'Course is required'
+    if (!college.trim()) next.college = 'College is required'
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -165,6 +117,13 @@ export default function CreateProfilePage() {
 
     try {
       const uid = auth.currentUser.uid
+
+      const reservedUsername = await reserveUsername({
+        uid,
+        newUsername: username,
+        oldUsername: ''
+      })
+
       let photoURL = null
       if (photoFile) {
         photoURL = await uploadProfileImage(uid, photoFile)
@@ -172,253 +131,147 @@ export default function CreateProfilePage() {
 
       await saveUserProfile(uid, {
         uid,
-        fullName: sanitizeText(fullName).trim(),
-        username: sanitizeText(username).trim(),
-        college: sanitizeText(college).trim(),
-        course: sanitizeText(course).trim(),
+        fullName: fullName.trim(),
+        username: reservedUsername,
+        college: college.trim(),
+        course: course.trim(),
         year,
-        division,
-        bio: sanitizeText(bio).trim(),
+        division: division.trim(),
+        bio: bio.trim(),
         interests,
         photoURL,
-        instagram: sanitizeText(instagram).trim(),
-        linkedin: sanitizeText(linkedin).trim(),
-        facebook: sanitizeText(facebook).trim(),
-        snapchat: sanitizeText(snapchat).trim(),
         role: 'student',
         profileCompleted: true
       })
 
       navigate('/home')
     } catch (err) {
-      setSubmitError(err?.message || 'Could not save your profile. Please try again.')
+      if (err?.code === 'username-taken') {
+        setErrors((prev) => ({ ...prev, username: 'Username already taken' }))
+      } else if (err?.code === 'invalid-username') {
+        setErrors((prev) => ({ ...prev, username: err.message }))
+      } else {
+        setSubmitError(err?.message || 'Could not save your profile. Please try again.')
+      }
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <AuthLayout
-      eyebrow="Almost there"
-      title="Create your profile"
-      subtitle="This is how classmates will find and recognize you."
-    >
-      <form onSubmit={handleSubmit} noValidate className="space-y-5">
-        {/* Photo */}
+    <AuthLayout title="Create your profile" subtitle="This is how other students on campus will see you.">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div className="flex flex-col items-center">
-          <label htmlFor="profile-photo" className="relative cursor-pointer group">
-            <div className="w-20 h-20 rounded-full bg-accent-tint border border-line overflow-hidden flex items-center justify-center">
+          <label htmlFor="create-profile-photo" className="relative cursor-pointer group">
+            <div className="w-20 h-20 rounded-full bg-blue-50 border border-gray-200 overflow-hidden flex items-center justify-center">
               {photoPreview ? (
                 <img src={photoPreview} alt="Profile preview" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-accent font-semibold text-lg">
-                  {fullName ? fullName.trim().charAt(0).toUpperCase() : '+'}
-                </span>
+                <Camera className="w-6 h-6 text-blue-300" strokeWidth={1.6} />
               )}
             </div>
-            <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-ink flex items-center justify-center border-2 border-surface group-hover:bg-accent-deep transition-colors duration-200">
+            <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center border-2 border-white group-hover:bg-blue-700 transition-colors duration-300">
               <Camera className="w-3.5 h-3.5 text-white" strokeWidth={1.8} />
             </span>
-            <input id="profile-photo" type="file" accept="image/*" className="sr-only" onChange={handlePhotoChange} />
-          </label>
-          <p className="mt-2 text-[12.5px] text-ink-faint">Profile photo</p>
-        </div>
-
-        <Input
-          ref={nameRef}
-          id="profile-fullname"
-          label="Full name"
-          autoComplete="name"
-          placeholder="Aarav Sharma"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          error={errors.fullName}
-          disabled={isSubmitting}
-          required
-        />
-
-        <Input
-          id="profile-username"
-          label="Username"
-          autoComplete="username"
-          placeholder="aarav.sharma"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          error={errors.username}
-          disabled={isSubmitting}
-          required
-        />
-
-        <Input
-          id="profile-college"
-          label="College name"
-          autoComplete="organization"
-          placeholder="Xavier Institute of Engineering"
-          value={college}
-          onChange={(e) => setCollege(e.target.value)}
-          error={errors.college}
-          disabled={isSubmitting}
-          required
-        />
-
-        <Input
-          id="profile-course"
-          label="Course"
-          placeholder="Computer Science"
-          value={course}
-          onChange={(e) => setCourse(e.target.value)}
-          error={errors.course}
-          disabled={isSubmitting}
-          required
-        />
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="profile-year" className="block text-[13px] font-medium text-ink-soft mb-1.5">
-              Year
-            </label>
-            <select
-              id="profile-year"
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-              disabled={isSubmitting}
-              className="w-full rounded-xl2 border border-line bg-bg px-4 py-3 text-[15px] text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent-tint transition-colors duration-200"
-            >
-              {years.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="profile-division" className="block text-[13px] font-medium text-ink-soft mb-1.5">
-              Division
-            </label>
             <input
-              id="profile-division"
-              type="text"
-              value={division}
-              onChange={(e) => setDivision(e.target.value)}
-              placeholder="e.g. A, B, C, S1, C1, IT-A"
-              className="w-full rounded-xl2 border border-line bg-bg px-4 py-3 text-[15px] text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent-tint transition-colors duration-200"
-            >
-              
-            </input>
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="profile-bio" className="block text-[13px] font-medium text-ink-soft mb-1.5">
-            Bio
+              id="create-profile-photo"
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={handlePhotoChange}
+            />
           </label>
-          <textarea
-            id="profile-bio"
-            rows={3}
-            placeholder="A line about yourself..."
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            disabled={isSubmitting}
-            className="w-full resize-none rounded-xl2 border border-line bg-bg px-4 py-3 text-[15px] text-ink placeholder:text-ink-faint outline-none focus:border-accent focus:ring-4 focus:ring-accent-tint transition-colors duration-200"
-          />
+          <p className="mt-2 text-xs text-gray-400">Add a profile photo</p>
         </div>
 
+        <Input
+          id="fullName"
+          label="Full name"
+          value={fullName}
+          onChange={(event) => setFullName(event.target.value)}
+          error={errors.fullName}
+        />
+
         <div>
-          <label htmlFor="profile-interests" className="block text-[13px] font-medium text-ink-soft mb-1.5">
-            Interests
+          <label htmlFor="username" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+            Username
           </label>
           <input
-            id="profile-interests"
+            id="username"
             type="text"
-            placeholder="Type an interest, press Enter"
-            value={interestInput}
-            onChange={(e) => setInterestInput(e.target.value)}
-            onKeyDown={handleInterestKeyDown}
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
             disabled={isSubmitting}
-            className="w-full rounded-xl2 border border-line bg-bg px-4 py-3 text-[15px] text-ink placeholder:text-ink-faint outline-none focus:border-accent focus:ring-4 focus:ring-accent-tint transition-colors duration-200"
+            placeholder="yourname"
+            className={`w-full rounded-xl border bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
+              errors.username ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
+            }`}
           />
-          {interests.length > 0 && (
-            <div className="mt-2.5 flex flex-wrap gap-2">
-              {interests.map((interest) => (
-                <span
-                  key={interest}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-accent-tint text-accent text-[12.5px] font-medium pl-3 pr-2 py-1.5"
-                >
-                  {interest}
-                  <button
-                    type="button"
-                    onClick={() => removeInterest(interest)}
-                    aria-label={`Remove ${interest}`}
-                    className="hover:text-accent-deep transition-colors duration-200"
-                  >
-                    <X className="w-3 h-3" strokeWidth={2.4} />
-                  </button>
-                </span>
-              ))}
-            </div>
+          {errors.username && <p className="mt-1 text-xs text-red-500">{errors.username}</p>}
+          {!errors.username && usernameCheck.message && (
+            <p
+              className={`mt-1 text-xs ${
+                usernameCheck.status === 'available' ? 'text-emerald-600' : 'text-gray-400'
+              }`}
+            >
+              {usernameCheck.message}
+            </p>
           )}
         </div>
 
-        {/* Optional socials */}
-        <div className="pt-1">
-          <p className="text-[13px] font-medium text-ink-soft mb-3">Social links (optional)</p>
-          <div className="space-y-3">
-            <div className="relative">
-              <Instagram className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
-              <input
-                type="text"
-                placeholder="Instagram username"
-                value={instagram}
-                onChange={(e) => setInstagram(e.target.value)}
-                disabled={isSubmitting}
-                className="w-full rounded-xl2 border border-line bg-bg pl-11 pr-4 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent focus:ring-4 focus:ring-accent-tint transition-colors duration-200"
-              />
-            </div>
-            <div className="relative">
-              <Linkedin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
-              <input
-                type="text"
-                placeholder="LinkedIn username"
-                value={linkedin}
-                onChange={(e) => setLinkedin(e.target.value)}
-                disabled={isSubmitting}
-                className="w-full rounded-xl2 border border-line bg-bg pl-11 pr-4 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent focus:ring-4 focus:ring-accent-tint transition-colors duration-200"
-              />
-            </div>
-            <div className="relative">
-              <Facebook className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
-              <input
-                type="text"
-                placeholder="Facebook username"
-                value={facebook}
-                onChange={(e) => setFacebook(e.target.value)}
-                disabled={isSubmitting}
-                className="w-full rounded-xl2 border border-line bg-bg pl-11 pr-4 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent focus:ring-4 focus:ring-accent-tint transition-colors duration-200"
-              />
-            </div>
-            <div className="relative">
-              <Ghost className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
-              <input
-                type="text"
-                placeholder="Snapchat username"
-                value={snapchat}
-                onChange={(e) => setSnapchat(e.target.value)}
-                disabled={isSubmitting}
-                className="w-full rounded-xl2 border border-line bg-bg pl-11 pr-4 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent focus:ring-4 focus:ring-accent-tint transition-colors duration-200"
-              />
-            </div>
-          </div>
+        <Input id="college" label="College" value={college} onChange={(event) => setCollege(event.target.value)} error={errors.college} />
+        <Input id="course" label="Course" value={course} onChange={(event) => setCourse(event.target.value)} />
+
+        <div>
+          <label htmlFor="year" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+            Year
+          </label>
+          <select
+            id="year"
+            value={year}
+            onChange={(event) => setYear(event.target.value)}
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+          >
+            {years.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </div>
 
+        <Input id="division" label="Division" value={division} onChange={(event) => setDivision(event.target.value)} />
+
+        <div>
+          <label htmlFor="bio" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+            Bio
+          </label>
+          <textarea
+            id="bio"
+            rows={3}
+            value={bio}
+            onChange={(event) => setBio(event.target.value)}
+            className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+          />
+        </div>
+
+        <TagInput
+          label="Interests"
+          values={interests}
+          placeholder="Type an interest, press Enter"
+          onAdd={(value) => setInterests((prev) => [...prev, value])}
+          onRemove={(value) => setInterests((prev) => prev.filter((item) => item !== value))}
+        />
+
         {submitError && (
-          <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+          <p role="alert" className="rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
             {submitError}
           </p>
         )}
 
-        <Button type="submit" loading={isSubmitting}>
-          Continue
+        <Button type="submit" disabled={isSubmitting || usernameCheck.status === 'checking'}>
+          {isSubmitting ? 'Saving…' : 'Continue'}
         </Button>
       </form>
     </AuthLayout>

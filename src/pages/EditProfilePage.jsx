@@ -8,8 +8,10 @@ import { dummyProfileStats } from '../data/dummyProfileStats.js'
 import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
+import { reserveUsername } from '../firebase/usernameService.js'
+import { useUsernameAvailability } from '../hooks/useUsernameAvailability.js'
 
-const years = ['FY', 'SY', 'TY', 'Final Year']
+const years = ['FYJC', 'SYJC', 'FY', 'SY', 'TY', 'Final Year']
 
 function getInitials(name = '') {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -74,6 +76,7 @@ export default function EditProfilePage() {
   const [photoPreview, setPhotoPreview] = useState('')
   const [name, setName] = useState('')
   const [username, setUsername] = useState('')
+  const [originalUsername, setOriginalUsername] = useState('')
   const [bio, setBio] = useState('')
   const [selectedCollege, setSelectedCollege] = useState(null)
   const [department, setDepartment] = useState('')
@@ -102,6 +105,7 @@ export default function EditProfilePage() {
         if (profile) {
           setName(profile.displayName || '')
           setUsername(profile.username || '')
+          setOriginalUsername(profile.username || '')
           setBio(profile.bio || '')
           setSelectedCollege(getCollegeById(profile.collegeId))
           setDepartment(profile.course || '')
@@ -122,6 +126,8 @@ export default function EditProfilePage() {
     }
   }, [])
 
+  const usernameCheck = useUsernameAvailability(username, originalUsername)
+
   const handlePhotoChange = (event) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -131,9 +137,16 @@ export default function EditProfilePage() {
   const validate = () => {
     const next = {}
     if (!name.trim()) next.name = 'Full name is required'
-    if (!username.trim()) next.username = 'Username is required'
-    else if (!/^[a-zA-Z0-9_.]{3,20}$/.test(username.trim())) {
-      next.username = '3-20 characters — letters, numbers, "." or "_" only'
+    if (!username.trim()) {
+      next.username = 'Username is required'
+    } else if (usernameCheck.status === 'invalid') {
+      next.username = usernameCheck.message
+    } else if (usernameCheck.status === 'taken') {
+      next.username = 'Username already taken'
+    } else if (usernameCheck.status === 'checking') {
+      next.username = 'Still checking username — please wait'
+    } else if (usernameCheck.status === 'error') {
+      next.username = 'Network error — try again'
     }
     if (!selectedCollege) next.college = 'Please select your college from the list'
     setErrors(next)
@@ -152,9 +165,14 @@ export default function EditProfilePage() {
 
     setIsSaving(true)
     try {
+      const reservedUsername = await reserveUsername({
+        uid,
+        newUsername: username,
+        oldUsername: originalUsername
+      })
+
       await updateUserProfile(uid, {
         displayName: name.trim(),
-        username: username.trim(),
         bio: bio.trim(),
         collegeId: selectedCollege.id,
         course: department.trim(),
@@ -162,9 +180,18 @@ export default function EditProfilePage() {
         skills,
         interests
       })
+
+      setOriginalUsername(reservedUsername)
+      setUsername(reservedUsername)
       navigate('/profile')
     } catch (err) {
-      setErrors({ form: err?.message || 'Could not save your profile. Please try again.' })
+      if (err?.code === 'username-taken') {
+        setErrors({ username: 'Username already taken' })
+      } else if (err?.code === 'invalid-username') {
+        setErrors({ username: err.message })
+      } else {
+        setErrors({ form: err?.message || 'Could not save your profile. Please try again.' })
+      }
     } finally {
       setIsSaving(false)
     }
@@ -258,6 +285,15 @@ export default function EditProfilePage() {
               }`}
             />
             {errors.username && <p className="mt-1 text-xs text-red-500">{errors.username}</p>}
+            {!errors.username && usernameCheck.message && (
+              <p
+                className={`mt-1 text-xs ${
+                  usernameCheck.status === 'available' ? 'text-emerald-600' : 'text-gray-400'
+                }`}
+              >
+                {usernameCheck.message}
+              </p>
+            )}
           </div>
 
           <div>
@@ -349,7 +385,7 @@ export default function EditProfilePage() {
             </button>
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || usernameCheck.status === 'checking'}
               className="flex-1 rounded-full bg-blue-600 text-white text-sm font-semibold py-3 hover:bg-blue-700 disabled:opacity-50 transition-all duration-300"
             >
               {isSaving ? 'Saving…' : 'Save'}
