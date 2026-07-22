@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import CollegeDropdown from './CollegeDropdown.jsx'
-import { searchColleges } from '../data/dummyColleges.js'
+import { searchColleges } from '../firebase/collegeService.js'
+
+const DEBOUNCE_MS = 400
 
 /**
  * @param {string} id - input id, for label association
@@ -11,7 +13,7 @@ import { searchColleges } from '../data/dummyColleges.js'
  * @param {(college: object|null) => void} onChange - called with the
  *   selected college object, or null when the selection is cleared.
  *   Free-typed text is NEVER passed here — only a full college object
- *   from the verified list, or null.
+ *   from Firestore, or null.
  * @param {string} error - inline validation message
  * @param {boolean} disabled
  */
@@ -20,6 +22,9 @@ export default function CollegeSearch({ id, label, value, onChange, error, disab
   const containerRef = useRef(null)
   const [query, setQuery] = useState(value?.name || '')
   const [isOpen, setIsOpen] = useState(false)
+  const [results, setResults] = useState([])
+  const [status, setStatus] = useState('idle') // 'idle' | 'loading' | 'success' | 'error'
+  const requestIdRef = useRef(0)
 
   useEffect(() => {
     setQuery(value?.name || '')
@@ -36,7 +41,39 @@ export default function CollegeSearch({ id, label, value, onChange, error, disab
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [value])
 
-  const results = isOpen ? searchColleges(query) : []
+  // Debounced Firestore search — only runs while the dropdown is open,
+  // guards against a slow/stale response overwriting a newer keystroke's
+  // result (same request-id pattern as useUsernameAvailability).
+  useEffect(() => {
+    if (!isOpen) return undefined
+
+    const trimmed = query.trim()
+    requestIdRef.current += 1
+
+    if (!trimmed) {
+      setResults([])
+      setStatus('idle')
+      return undefined
+    }
+
+    setStatus('loading')
+    const requestId = requestIdRef.current
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const data = await searchColleges(trimmed)
+        if (requestIdRef.current !== requestId) return
+        setResults(data)
+        setStatus('success')
+      } catch {
+        if (requestIdRef.current !== requestId) return
+        setResults([])
+        setStatus('error')
+      }
+    }, DEBOUNCE_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [query, isOpen])
 
   const handleInputChange = (event) => {
     setQuery(event.target.value)
@@ -82,7 +119,13 @@ export default function CollegeSearch({ id, label, value, onChange, error, disab
       </div>
 
       {isOpen && (
-        <CollegeDropdown query={query} results={results} onSelect={handleSelect} onAddCollege={handleAddCollege} />
+        <CollegeDropdown
+          query={query}
+          results={results}
+          status={status}
+          onSelect={handleSelect}
+          onAddCollege={handleAddCollege}
+        />
       )}
 
       {error && (

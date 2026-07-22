@@ -5,7 +5,7 @@ import Avatar from '../components/Avatar.jsx'
 import CollegeSearch from '../components/CollegeSearch.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { dummyProfileStats } from '../data/dummyProfileStats.js'
-import { getCollegeById } from '../data/dummyColleges.js'
+import { getCollegeById } from '../firebase/collegeService.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
 import { reserveUsername } from '../firebase/usernameService.js'
@@ -107,7 +107,7 @@ export default function EditProfilePage() {
           setUsername(profile.username || '')
           setOriginalUsername(profile.username || '')
           setBio(profile.bio || '')
-          setSelectedCollege(getCollegeById(profile.collegeId))
+          setSelectedCollege(await getCollegeById(profile.collegeId))
           setDepartment(profile.course || '')
           setYear(profile.year || years[0])
           setSkills(profile.skills || [])

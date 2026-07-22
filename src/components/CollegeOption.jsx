@@ -11,7 +11,8 @@ export default function CollegeOption({ college, onSelect }) {
         <p className="text-sm font-medium text-gray-900 truncate">{college.name}</p>
         <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-400 truncate">
           <MapPin className="w-3 h-3 flex-shrink-0" />
-          {college.city}, {college.state} · {college.type}
+          {college.city}, {college.state}
+          {college.type && ` · ${college.type}`}
         </p>
       </div>
       {college.verified && <BadgeCheck className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />}
