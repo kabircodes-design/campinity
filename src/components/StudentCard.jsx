@@ -19,12 +19,14 @@ export default function StudentCard({ student }) {
       onClick={goToProfile}
       className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-all duration-300 text-left"
     >
-      <Avatar initials={student.initials} colorClass={student.colorClass} size="md" />
+      <Avatar initials={student.initials} colorClass={student.colorClass} size="md" src={student.avatar || undefined} />
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-900 truncate">{student.name}</p>
         <p className="text-xs text-gray-400 truncate">
-          {student.department} · {student.year} · {student.college}
+          @{student.username}
+          {student.course && ` · ${student.course}`}
+          {student.year && ` · ${student.year}`}
         </p>
       </div>
 
