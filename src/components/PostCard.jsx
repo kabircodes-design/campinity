@@ -17,6 +17,8 @@ import {
 } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { postTypeConfig } from '../data/dummyFeed.js'
+import { auth } from '../firebase/firebase.js'
+import { likePost, unlikePost } from '../firebase/engagementService.js'
 
 /**
  * 'general' and 'study' were added for Feature 4B (Create Post) — every
@@ -45,9 +47,25 @@ export default function PostCard({ post }) {
   const goToProfile = () => navigate(`/student/${post.username}`)
   const goToPost = () => navigate(`/post/${post.id}`)
 
-  const toggleLike = () => {
-    setLiked((prev) => !prev)
-    setLikeCount((prev) => (liked ? prev - 1 : prev + 1))
+  const toggleLike = async () => {
+    const nextLiked = !liked
+    setLiked(nextLiked)
+    setLikeCount((prev) => (nextLiked ? prev + 1 : prev - 1))
+
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+
+    try {
+      if (nextLiked) {
+        await likePost(post.id, uid)
+      } else {
+        await unlikePost(post.id, uid)
+      }
+    } catch {
+      // Roll back the optimistic update if the write failed.
+      setLiked(!nextLiked)
+      setLikeCount((prev) => (nextLiked ? prev - 1 : prev + 1))
+    }
   }
 
   const handleShare = () => {

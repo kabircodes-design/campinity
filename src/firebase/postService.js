@@ -13,14 +13,14 @@ const AVATAR_COLORS = [
   'from-indigo-500 to-blue-600'
 ]
 
-function getInitials(name = '') {
+export function getInitials(name = '') {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return '?'
   return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
 }
 
 /** Deterministic so the same author always gets the same avatar color. */
-function getAvatarColor(seed = '') {
+export function getAvatarColor(seed = '') {
   let hash = 0
   for (let i = 0; i < seed.length; i += 1) {
     hash = (hash * 31 + seed.charCodeAt(i)) % AVATAR_COLORS.length
@@ -28,7 +28,7 @@ function getAvatarColor(seed = '') {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 }
 
-function formatTimeAgo(timestamp) {
+export function formatTimeAgo(timestamp) {
   if (!timestamp?.toDate) return 'Just now'
   const diffMs = Date.now() - timestamp.toDate().getTime()
   const diffMinutes = Math.floor(diffMs / 60000)

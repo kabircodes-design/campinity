@@ -20,10 +20,31 @@ import Avatar from '../components/Avatar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
-import { getPostById } from '../firebase/postService.js'
+import { getAvatarColor, getInitials, formatTimeAgo, getPostById } from '../firebase/postService.js'
+import { getUserProfile } from '../firebase/profileService.js'
+import { addComment, deleteComment, getComments, likePost, unlikePost } from '../firebase/engagementService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
-import { currentUserProfile } from '../data/dummyProfile.js'
-import { dummyCommentsByPostId } from '../data/dummyComments.js'
+
+/**
+ * Maps a Firestore comment doc into the shape the existing comment list
+ * JSX already expects (author/initials/colorClass/time) — same pattern
+ * as postService.js's mapPostDoc. Comment-level likes aren't part of
+ * this feature's scope, so likes/likedByMe stay local-only/cosmetic
+ * exactly as they already were.
+ */
+function mapComment(raw) {
+  return {
+    id: raw.id,
+    userId: raw.userId,
+    author: raw.displayName || 'Student',
+    initials: getInitials(raw.displayName),
+    colorClass: getAvatarColor(raw.userId || raw.id),
+    text: raw.text || '',
+    time: formatTimeAgo(raw.createdAt),
+    likes: 0,
+    likedByMe: false
+  }
+}
 
 export default function PostDetailPage() {
   const { postId } = useParams()
@@ -31,6 +52,7 @@ export default function PostDetailPage() {
   const commentInputRef = useRef(null)
 
   const [post, setPost] = useState(null)
+  const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -41,15 +63,17 @@ export default function PostDetailPage() {
   const [shareCopied, setShareCopied] = useState(false)
   const [comments, setComments] = useState([])
   const [commentText, setCommentText] = useState('')
+  const [isPostingComment, setIsPostingComment] = useState(false)
 
   useEffect(() => {
     let cancelled = false
+    const uid = auth.currentUser?.uid
 
-    const load = async () => {
+    const loadPost = async () => {
       setLoading(true)
       setNotFound(false)
       try {
-        const data = await getPostById(postId, auth.currentUser?.uid)
+        const data = await getPostById(postId, uid)
         if (cancelled) return
         if (!data) {
           setNotFound(true)
@@ -58,7 +82,6 @@ export default function PostDetailPage() {
           setPost(data)
           setLiked(data.likedByMe)
           setLikeCount(data.likes)
-          setComments(dummyCommentsByPostId[data.id] || [])
         }
       } catch {
         if (!cancelled) {
@@ -70,7 +93,31 @@ export default function PostDetailPage() {
       }
     }
 
-    load()
+    const loadComments = async () => {
+      try {
+        const data = await getComments(postId)
+        if (!cancelled) setComments(data.map(mapComment))
+      } catch {
+        // Comment thread just shows empty if this fails; the post above
+        // still loads independently.
+      }
+    }
+
+    const loadProfile = async () => {
+      if (!uid) return
+      try {
+        const data = await getUserProfile(uid)
+        if (!cancelled) setProfile(data)
+      } catch {
+        // Composer avatar/name just falls back to initials-only if this
+        // fails; posting a comment still re-checks auth.currentUser.
+      }
+    }
+
+    loadPost()
+    loadComments()
+    loadProfile()
+
     return () => {
       cancelled = true
     }
@@ -107,9 +154,24 @@ export default function PostDetailPage() {
 
   const config = postTypeConfig[post.type] || postTypeConfig.general
 
-  const toggleLike = () => {
-    setLiked((prev) => !prev)
-    setLikeCount((prev) => (liked ? prev - 1 : prev + 1))
+  const toggleLike = async () => {
+    const nextLiked = !liked
+    setLiked(nextLiked)
+    setLikeCount((prev) => (nextLiked ? prev + 1 : prev - 1))
+
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+
+    try {
+      if (nextLiked) {
+        await likePost(post.id, uid)
+      } else {
+        await unlikePost(post.id, uid)
+      }
+    } catch {
+      setLiked(!nextLiked)
+      setLikeCount((prev) => (nextLiked ? prev - 1 : prev + 1))
+    }
   }
 
   const handleShare = () => {
@@ -136,24 +198,54 @@ export default function PostDetailPage() {
     )
   }
 
-  const handleSendComment = (event) => {
+  const handleSendComment = async (event) => {
     event.preventDefault()
     const trimmed = commentText.trim()
-    if (!trimmed) return
+    if (!trimmed || isPostingComment) return
 
-    const newComment = {
-      id: `local-comment-${Date.now()}`,
-      author: currentUserProfile.name,
-      initials: currentUserProfile.initials,
-      colorClass: currentUserProfile.colorClass,
-      text: trimmed,
-      time: 'Just now',
-      likes: 0,
-      likedByMe: false
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+
+    setIsPostingComment(true)
+    try {
+      const displayName = profile?.displayName || ''
+      const username = profile?.username || ''
+      const commentId = await addComment(post.id, { uid, displayName, username, text: trimmed })
+
+      setComments((prev) => [
+        ...prev,
+        {
+          id: commentId,
+          userId: uid,
+          author: displayName || 'You',
+          initials: getInitials(displayName),
+          colorClass: getAvatarColor(uid),
+          text: trimmed,
+          time: 'Just now',
+          likes: 0,
+          likedByMe: false
+        }
+      ])
+      setCommentText('')
+    } catch {
+      // Keep the typed text in place so the user can retry.
+    } finally {
+      setIsPostingComment(false)
     }
+  }
 
-    setComments((prev) => [...prev, newComment])
-    setCommentText('')
+  const handleDeleteComment = async (commentId) => {
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+
+    const previousComments = comments
+    setComments((prev) => prev.filter((comment) => comment.id !== commentId))
+
+    try {
+      await deleteComment(post.id, commentId, uid)
+    } catch {
+      setComments(previousComments)
+    }
   }
 
   return (
@@ -355,6 +447,15 @@ export default function PostDetailPage() {
                         >
                           Reply
                         </button>
+                        {comment.userId === auth.currentUser?.uid && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteComment(comment.id)}
+                            className="text-[11px] font-medium text-gray-400 hover:text-red-500 transition-all duration-300"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </div>
                   </li>
@@ -368,7 +469,7 @@ export default function PostDetailPage() {
           onSubmit={handleSendComment}
           className="fixed bottom-16 left-1/2 -translate-x-1/2 z-30 w-full max-w-[480px] lg:max-w-[520px] bg-white/95 backdrop-blur-md border-t border-gray-100 px-3 py-2.5 flex items-center gap-2"
         >
-          <Avatar initials={currentUserProfile.initials} colorClass={currentUserProfile.colorClass} size="sm" />
+          <Avatar initials={getInitials(profile?.displayName)} colorClass={getAvatarColor(auth.currentUser?.uid)} size="sm" />
           <input
             ref={commentInputRef}
             type="text"
@@ -379,7 +480,7 @@ export default function PostDetailPage() {
           />
           <button
             type="submit"
-            disabled={!commentText.trim()}
+            disabled={!commentText.trim() || isPostingComment}
             aria-label="Send comment"
             className="w-9 h-9 flex-shrink-0 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
           >
