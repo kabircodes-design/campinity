@@ -1,13 +1,13 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Bell, HelpCircle, Info, LogOut, Moon, Shield, UserX } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import SettingsItem from '../components/SettingsItem.jsx'
 import Switch from '../components/Switch.jsx'
+import { useDarkMode } from '../hooks/useDarkMode.js'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const [darkMode, setDarkMode] = useState(false)
+  const [darkMode, setDarkMode] = useDarkMode()
 
   const handleLogout = () => {
     // TODO(firebase): auth.signOut() then navigate('/login') once Firebase is wired up.
@@ -36,7 +36,6 @@ export default function SettingsPage() {
             <SettingsItem
               icon={Moon}
               label="Dark Mode"
-              description="Coming soon"
               rightElement={<Switch checked={darkMode} onChange={setDarkMode} label="Dark mode" />}
             />
           </section>
@@ -49,7 +48,6 @@ export default function SettingsPage() {
           </section>
 
           <section className="mt-2 border-t border-gray-100">
-            <p className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Support</p>
             <SettingsItem icon={HelpCircle} label="Help & Support" onClick={() => navigate('/settings/help')} />
             <SettingsItem icon={Info} label="About Campinity" onClick={() => navigate('/settings/about')} />
           </section>

@@ -1,0 +1,153 @@
+/*
+ * Dark Mode theme layer.
+ *
+ * Strategy: instead of adding `dark:` utility classes to every page and
+ * component (which would mean touching dozens of already-shipped files),
+ * this overrides what the small, consistent set of Tailwind utility
+ * classes already used throughout the app resolve to, whenever the
+ * `.dark` class is present on <html>. Toggling that one class is enough
+ * for every existing page — Home, Profile, Search, Settings, Chat,
+ * Notifications, post cards, buttons, inputs, bottom nav — to adapt
+ * automatically, with zero changes to their own markup or logic.
+ *
+ * Trade-off, stated plainly: this only re-colors the exact class names
+ * already in use (bg-white, bg-gray-50/100, text-gray-900/700/500/400/
+ * 300, border-gray-100/200/300, bg-blue-50, bg-red-50, bg-emerald-50,
+ * ring-white, divide-gray-100). Any future page using a Tailwind color
+ * class not listed here won't automatically pick up dark styling. A
+ * fully precise implementation would use `dark:` variants per element;
+ * this is the minimal-footprint version that satisfies "automatically
+ * adapt" for everything already built, without touching those files.
+ */
+
+:root {
+  --transition-theme: background-color 300ms ease, border-color 300ms ease, color 300ms ease;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+/* AMOLED-style base with a soft, fixed radial blue-purple glow — not a
+   flat black. This sits behind every page's outer bg-gray-50 wrapper. */
+html.dark body {
+  background-color: #07070c;
+  background-image:
+    radial-gradient(ellipse 90% 60% at 20% -10%, rgba(59, 96, 255, 0.16), transparent 60%),
+    radial-gradient(ellipse 80% 55% at 100% 0%, rgba(139, 92, 246, 0.12), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 50% 100%, rgba(37, 99, 235, 0.08), transparent 60%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+/* Smooth, subtle theme-switch transition — scoped to color properties
+   only, never transform/opacity, so nothing feels "animated". */
+html.dark,
+html.dark * {
+  transition: var(--transition-theme);
+}
+
+/* ---- Surfaces ---- */
+
+/* Outer page wrapper (bg-gray-50) — transparent so the body glow shows
+   through, matching an AMOLED wallpaper's soft ambient light. */
+html.dark .bg-gray-50 {
+  background-color: transparent;
+}
+
+/* Card / sheet surface (bg-white) — slightly lighter than the page
+   background, with its own faint tint rather than flat black. */
+html.dark .bg-white {
+  background-color: #101018;
+}
+
+/* Secondary surface (bg-gray-100) — used for pills, chips, secondary
+   buttons, avatar fallback rings' background context. */
+html.dark .bg-gray-100 {
+  background-color: #1a1a26;
+}
+
+/* ---- Text ---- */
+
+html.dark .text-gray-900 {
+  color: #f3f3f7;
+}
+html.dark .text-gray-800 {
+  color: #e4e4ec;
+}
+html.dark .text-gray-700 {
+  color: #cfcfdb;
+}
+html.dark .text-gray-600 {
+  color: #b3b3c4;
+}
+html.dark .text-gray-500 {
+  color: #9494a8;
+}
+html.dark .text-gray-400 {
+  color: #71718a;
+}
+html.dark .text-gray-300 {
+  color: #52526a;
+}
+
+/* ---- Borders / dividers ---- */
+
+html.dark .border-gray-100 {
+  border-color: #1c1c2a;
+}
+html.dark .border-gray-200 {
+  border-color: #262638;
+}
+html.dark .border-gray-300 {
+  border-color: #34344a;
+}
+html.dark .divide-gray-100 > * + * {
+  border-color: #1c1c2a;
+}
+
+/* ---- Accent-tinted surfaces ----
+   Campinity blue itself (bg-blue-600, text-blue-600) is intentionally
+   left untouched — it should stay the same vivid accent in both themes.
+   Only the pale, light-mode-only tint backgrounds are darkened so blue
+   text stays readable on them. */
+
+html.dark .bg-blue-50 {
+  background-color: rgba(37, 99, 235, 0.16);
+}
+html.dark .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.14);
+}
+html.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.14);
+}
+html.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.14);
+}
+html.dark .bg-pink-50 {
+  background-color: rgba(236, 72, 153, 0.14);
+}
+html.dark .bg-gray-50\/50 {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Avatar rings (ring-4 ring-white on Profile headers) — a soft border
+   instead of a bright white ring against a dark surface. */
+html.dark .ring-white {
+  --tw-ring-color: #101018;
+}
+
+/* Inputs and cards using bg-gray-50 as a form-field fill (Search bar,
+   Edit Profile fields, Create Post composer) — same treatment as the
+   secondary surface above, kept legible with the border color also
+   darkened via .border-gray-200 already handled. */
+html.dark input.bg-gray-50,
+html.dark textarea.bg-gray-50,
+html.dark select.bg-gray-50 {
+  background-color: #14141f;
+  color: #f3f3f7;
+}
+html.dark input.bg-gray-50::placeholder,
+html.dark textarea.bg-gray-50::placeholder {
+  color: #71718a;
+}
