@@ -42,6 +42,19 @@ export function validateUsername(normalized) {
 }
 
 /**
+ * Resolves a normalized username to the uid that owns it, via the
+ * existing usernames/{username} reservation collection. Returns null if
+ * no such username is reserved. Used by the Student Profile page to
+ * turn a route's :username param into a real users/{uid} lookup.
+ */
+export async function getUserIdByUsername(rawUsername) {
+  const normalized = normalizeUsername(rawUsername)
+  if (!normalized) return null
+  const snap = await getDoc(doc(db, USERNAMES_COLLECTION, normalized))
+  return snap.exists() ? snap.data().uid || null : null
+}
+
+/**
  * Single-read availability check, for live "Checking… / Available /
  * Username already taken" UI feedback only. This is NOT the source of
  * truth for uniqueness — it's a cheap read that can go stale the instant
@@ -67,7 +80,9 @@ export async function checkUsernameAvailable(normalized) {
  *      from newUsername, and its reservation belongs to this uid,
  *      delete that reservation.
  *   3. Set usernames/{newUsername} -> { uid, createdAt }.
- *   4. Update users/{uid}.username -> newUsername.
+ *   4. Update users/{uid}.username -> newUsername, and mark
+ *      usernameReserved: true so getUserProfile()'s self-heal (see
+ *      profileService.js) never needs to re-check this user.
  *
  * Firestore re-validates every document this transaction read against
  * its state at commit time. If two users race for the same username,
@@ -118,8 +133,48 @@ export async function reserveUsername({ uid, newUsername, oldUsername = '' }) {
     }
 
     transaction.set(newRef, { uid, createdAt: serverTimestamp() })
-    transaction.update(userRef, { username: normalizedNew })
+    transaction.update(userRef, { username: normalizedNew, usernameReserved: true })
   })
 
   return normalizedNew
+}
+
+/**
+ * Ensures a usernames/{username} reservation exists for `uid`'s current
+ * username, creating it if missing. This is the self-healing migration
+ * for users whose reservation was never created — either their account
+ * pre-dates the username-reservation system entirely, or whatever flow
+ * set their username at the time didn't call reserveUsername(). Safe to
+ * call repeatedly: a no-op once the reservation already exists and
+ * belongs to this uid.
+ *
+ * If the username is already reserved by a DIFFERENT uid (a rare
+ * pre-existing collision from before this system existed), this does
+ * NOT overwrite it — it reports a conflict rather than silently
+ * stealing a username out from under another account.
+ */
+export async function ensureUsernameReservation(uid, rawUsername) {
+  const normalized = normalizeUsername(rawUsername)
+  if (!normalized) return { ok: false, reason: 'no-username' }
+
+  const { valid } = validateUsername(normalized)
+  if (!valid) return { ok: false, reason: 'invalid-username' }
+
+  const ref = doc(db, USERNAMES_COLLECTION, normalized)
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(ref)
+      if (snap.exists()) {
+        if (snap.data().uid === uid) return
+        const err = new Error('Username already reserved by another account')
+        err.code = 'conflict'
+        throw err
+      }
+      transaction.set(ref, { uid, createdAt: serverTimestamp() })
+    })
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, reason: err?.code === 'conflict' ? 'conflict' : 'error' }
+  }
 }

@@ -1,19 +1,43 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { UserPlus } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 
 export default function ProfileHeader({ profile, onEdit, isOwnProfile = true }) {
   const navigate = useNavigate()
   const [shareCopied, setShareCopied] = useState(false)
 
-  const handleShare = () => {
-    setShareCopied(true)
-    window.setTimeout(() => setShareCopied(false), 1500)
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/student/${profile.username}`
+    const shareData = { title: profile.name, text: `Check out ${profile.name} on Campinity`, url: shareUrl }
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData)
+      } catch {
+        // User cancelled the share sheet or it failed — nothing to do.
+      }
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setShareCopied(true)
+      window.setTimeout(() => setShareCopied(false), 1500)
+    } catch {
+      // Clipboard unavailable — nothing more we can do silently.
+    }
   }
 
   return (
     <div>
-      <div className={`h-28 sm:h-32 bg-gradient-to-br ${profile.coverGradient}`} />
+      {profile.coverPhoto ? (
+        <div className="h-28 sm:h-32 overflow-hidden">
+          <img src={profile.coverPhoto} alt="" className="w-full h-full object-cover" />
+        </div>
+      ) : (
+        <div className={`h-28 sm:h-32 bg-gradient-to-br ${profile.coverGradient}`} />
+      )}
 
       <div className="px-4 -mt-10">
         <div className="flex items-end justify-between">
@@ -39,6 +63,25 @@ export default function ProfileHeader({ profile, onEdit, isOwnProfile = true }) 
               </button>
             </div>
           )}
+
+          {!isOwnProfile && (
+            <div className="flex items-center gap-2 pb-1">
+              <button
+                type="button"
+                className="flex items-center gap-1.5 rounded-full bg-blue-600 text-white text-xs font-semibold px-4 py-2 hover:bg-blue-700 transition-all duration-300"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                Follow
+              </button>
+              <button
+                type="button"
+                onClick={handleShare}
+                className="rounded-full border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 hover:border-gray-300 transition-all duration-300"
+              >
+                {shareCopied ? 'Copied' : 'Share'}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="mt-3">
@@ -48,6 +91,7 @@ export default function ProfileHeader({ profile, onEdit, isOwnProfile = true }) 
             {profile.department} · {profile.year} · {profile.college}
           </p>
           {profile.bio && <p className="mt-2 text-[13.5px] text-gray-700 leading-relaxed">{profile.bio}</p>}
+          {profile.joinedDate && <p className="mt-1 text-xs text-gray-400">Joined {profile.joinedDate}</p>}
         </div>
 
         <div className="mt-4 flex items-center gap-6 pb-4">
