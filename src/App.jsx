@@ -29,6 +29,8 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage.jsx'))
 const NotificationDetailPage = lazy(() => import('./pages/NotificationDetailPage.jsx'))
 const AddCollegePage = lazy(() => import('./pages/AddCollegePage.jsx'))
 const CollegePage = lazy(() => import('./pages/CollegePage.jsx'))
+const FollowersPage = lazy(() => import('./pages/FollowersPage.jsx'))
+const FollowingPage = lazy(() => import('./pages/FollowingPage.jsx'))
 
 export default function App() {
   return (
@@ -97,6 +99,7 @@ export default function App() {
           }
         />
 
+        {/* Create Post — now a real page (Feature 4B). */}
         <Route
           path="/create"
           element={
@@ -182,18 +185,18 @@ export default function App() {
         />
 
         <Route
-          path="/followers"
+          path="/followers/:username?"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="Followers" />
+              <FollowersPage />
             </ProtectedRoute>
           }
         />
         <Route
-          path="/following"
+          path="/following/:username?"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="Following" />
+              <FollowingPage />
             </ProtectedRoute>
           }
         />
@@ -254,6 +257,7 @@ export default function App() {
           }
         />
 
+        {/* Post Detail + Comments — now a real page (Feature 4B). */}
         <Route
           path="/post/:postId"
           element={
