@@ -172,8 +172,8 @@ export default function ProfilePage() {
     initials: getInitials(profile.displayName),
     colorClass: pickBySeed(AVATAR_COLORS, seed),
     coverGradient: pickBySeed(COVER_GRADIENTS, seed),
-    followers: dummyProfileStats.followers,
-    following: dummyProfileStats.following,
+    followers: profile.followersCount || 0,
+    following: profile.followingCount || 0,
     postsCount: myPosts.length
   }
 
