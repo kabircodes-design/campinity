@@ -12,6 +12,8 @@ const CreateProfilePage = lazy(() => import('./auth/pages/CreateProfilePage.jsx'
 const HomePage = lazy(() => import('./pages/HomePage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const ComingSoon = lazy(() => import('./pages/ComingSoon.jsx'))
+const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage.jsx'))
+const DeleteAccountPage = lazy(() => import('./pages/DeleteAccountPage.jsx'))
 const StudentProfilePlaceholder = lazy(() => import('./pages/StudentProfilePlaceholder.jsx'))
 const SearchPage = lazy(() => import('./pages/SearchPage.jsx'))
 const ClubDetailPlaceholder = lazy(() => import('./pages/ClubDetailPlaceholder.jsx'))
@@ -21,14 +23,12 @@ const EditProfilePage = lazy(() => import('./pages/EditProfilePage.jsx'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'))
 const CreatePostPage = lazy(() => import('./pages/CreatePostPage.jsx'))
 const PostDetailPage = lazy(() => import('./pages/PostDetailPage.jsx'))
-const ChatListPage = lazy(() => import('./pages/ChatListPage.jsx'))
-const ChatScreenPage = lazy(() => import('./pages/ChatScreenPage.jsx'))
+const MessagesPage = lazy(() => import('./pages/MessagesPage.jsx'))
+const ChatPage = lazy(() => import('./pages/ChatPage.jsx'))
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage.jsx'))
 const NotificationDetailPage = lazy(() => import('./pages/NotificationDetailPage.jsx'))
 const AddCollegePage = lazy(() => import('./pages/AddCollegePage.jsx'))
 const CollegePage = lazy(() => import('./pages/CollegePage.jsx'))
-const MessagesPage = lazy(() => import('./pages/MessagesPage.jsx'))
-const ChatPage = lazy(() => import('./pages/ChatPage.jsx'))
 
 export default function App() {
   return (
@@ -97,7 +97,6 @@ export default function App() {
           }
         />
 
-        {/* Create Post — now a real page (Feature 4B). */}
         <Route
           path="/create"
           element={
@@ -207,6 +206,22 @@ export default function App() {
           }
         />
         <Route
+          path="/settings/change-password"
+          element={
+            <ProtectedRoute stage="home">
+              <ChangePasswordPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings/delete-account"
+          element={
+            <ProtectedRoute stage="home">
+              <DeleteAccountPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/settings/privacy"
           element={
             <ProtectedRoute stage="home">
@@ -239,7 +254,6 @@ export default function App() {
           }
         />
 
-        {/* Post Detail + Comments — now a real page (Feature 4B). */}
         <Route
           path="/post/:postId"
           element={
