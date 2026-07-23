@@ -57,6 +57,12 @@ export async function getOrCreateChat(currentUid, otherUid) {
  * and a user's own chat list is small enough that sorting the already-
  * fetched snapshot client-side (by lastMessageAt, newest first) is both
  * index-free and effectively instant. Returns the unsubscribe function.
+ *
+ * Every chat document is mapped defensively: if a document is somehow
+ * missing its participants (structurally incomplete), it's dropped
+ * entirely rather than passed along as a partial object — this is what
+ * prevents "Cannot read properties of undefined" crashes further down
+ * the chain in MessagesPage.jsx / ChatCard.jsx.
  */
 export function subscribeToUserChats(uid, callback, onError) {
   const chatsQuery = query(
@@ -70,16 +76,21 @@ export function subscribeToUserChats(uid, callback, onError) {
     (snap) => {
       const chats = snap.docs
         .map((docSnap) => {
-          const data = docSnap.data()
-          const otherUid = (data.participants || []).find((id) => id !== uid) || null
+          const data = docSnap.data() || {}
+          const participants = Array.isArray(data.participants) ? data.participants : []
+          if (participants.length === 0) return null // structurally incomplete doc — never rendered
+
+          const otherUid = participants.find((id) => id !== uid) || null
+
           return {
             id: docSnap.id,
             otherUid,
             lastMessage: data.lastMessage || '',
             lastMessageAt: data.lastMessageAt || null,
-            unreadCount: data.unreadCounts?.[uid] || 0
+            unreadCount: data.unreadCounts?.[uid] ?? 0
           }
         })
+        .filter(Boolean)
         .sort((a, b) => {
           const aTime = a.lastMessageAt?.toMillis?.() ?? 0
           const bTime = b.lastMessageAt?.toMillis?.() ?? 0

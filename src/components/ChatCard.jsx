@@ -1,34 +1,56 @@
 import { useNavigate } from 'react-router-dom'
 import Avatar from './Avatar.jsx'
-import OnlineDot from './OnlineDot.jsx'
+import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
 
-export default function ChatCard({ conversation }) {
+/**
+ * `chat` comes from chatService.js's subscribeToUserChats():
+ *   { id, otherUid, lastMessage, lastMessageAt, unreadCount }
+ * `profile` comes from profileService.js's getUserProfile(otherUid), and
+ * may be undefined for a brief moment while it's still loading — this
+ * renders a safe placeholder in that case rather than crashing.
+ *
+ * `chat` itself is guarded too: chatService.js already filters out
+ * incomplete documents before this ever renders, but this component
+ * never assumes that upstream guarantee holds — rendering nothing for a
+ * missing chat is always safer than crashing the whole list.
+ *
+ * No online indicator is rendered — there's no real presence system
+ * backing it, and showing a fabricated online/offline dot would be
+ * exactly the kind of dummy shortcut this feature avoids.
+ */
+export default function ChatCard({ chat, profile }) {
   const navigate = useNavigate()
-  const hasUnread = conversation.unreadCount > 0
+
+  if (!chat) return null
+
+  const hasUnread = (chat.unreadCount ?? 0) > 0
+  const displayName = profile?.displayName || 'Student'
 
   return (
     <button
       type="button"
-      onClick={() => navigate(`/messages/${conversation.id}`)}
+      onClick={() => navigate(`/messages/${chat.id}`)}
       className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-all duration-300 text-left"
     >
-      <div className="relative flex-shrink-0">
-        <Avatar initials={conversation.initials} colorClass={conversation.colorClass} size="md" />
-        {conversation.isOnline && <OnlineDot className="w-3 h-3 absolute bottom-0 right-0" />}
-      </div>
+      <Avatar
+        initials={getInitials(displayName)}
+        colorClass={getAvatarColor(chat.otherUid || chat.id)}
+        size="md"
+        src={profile?.avatar || undefined}
+      />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-gray-900 truncate">{conversation.name}</p>
-          <span className="text-[11px] text-gray-400 flex-shrink-0">{conversation.lastMessageTime}</span>
+          <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
+          <span className="text-[11px] text-gray-400 flex-shrink-0">{formatTimeAgo(chat.lastMessageAt)}</span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
           <p className={`text-xs truncate ${hasUnread ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
-            {conversation.lastMessage}
+            {chat.lastMessage || 'Say hello 👋'}
           </p>
           {hasUnread && (
             <span className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center px-1">
-              {conversation.unreadCount}
+              {chat.unreadCount}
             </span>
           )}
         </div>

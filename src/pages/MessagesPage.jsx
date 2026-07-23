@@ -28,11 +28,12 @@ export default function MessagesPage() {
     const unsubscribe = subscribeToUserChats(
       uid,
       (data) => {
-        setChats(data)
+        const safeChats = Array.isArray(data) ? data.filter(Boolean) : []
+        setChats(safeChats)
         setLoading(false)
 
-        data.forEach((chat) => {
-          if (!chat.otherUid || fetchedUidsRef.current.has(chat.otherUid)) return
+        safeChats.forEach((chat) => {
+          if (!chat?.otherUid || fetchedUidsRef.current.has(chat.otherUid)) return
           fetchedUidsRef.current.add(chat.otherUid)
 
           getUserProfile(chat.otherUid)
