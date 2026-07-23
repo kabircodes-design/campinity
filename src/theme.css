@@ -1,23 +1,34 @@
 /*
- * Dark Mode theme layer.
+ * Dark Mode theme layer — true OLED black.
  *
  * Strategy: instead of adding `dark:` utility classes to every page and
- * component (which would mean touching dozens of already-shipped files),
- * this overrides what the small, consistent set of Tailwind utility
- * classes already used throughout the app resolve to, whenever the
- * `.dark` class is present on <html>. Toggling that one class is enough
- * for every existing page — Home, Profile, Search, Settings, Chat,
- * Notifications, post cards, buttons, inputs, bottom nav — to adapt
- * automatically, with zero changes to their own markup or logic.
+ * component, this overrides what the small, consistent set of Tailwind
+ * utility classes already used throughout the app resolve to, whenever
+ * the `.dark` class is present on <html>. Toggling that one class is
+ * enough for every existing page to adapt automatically, with zero
+ * changes to their own markup or logic.
  *
- * Trade-off, stated plainly: this only re-colors the exact class names
- * already in use (bg-white, bg-gray-50/100, text-gray-900/700/500/400/
- * 300, border-gray-100/200/300, bg-blue-50, bg-red-50, bg-emerald-50,
- * ring-white, divide-gray-100). Any future page using a Tailwind color
- * class not listed here won't automatically pick up dark styling. A
- * fully precise implementation would use `dark:` variants per element;
- * this is the minimal-footprint version that satisfies "automatically
- * adapt" for everything already built, without touching those files.
+ * Palette, defined once as custom properties so every rule below stays
+ * in sync — this is "every page follows the same color system" made
+ * literal:
+ *   --surface-0  true black (#000000) — page background AND card
+ *                background. Instagram/Threads-style: cards are NOT a
+ *                different shade from the page, separation comes from
+ *                --border alone.
+ *   --surface-1  barely-lifted black — used only where something
+ *                would otherwise be invisible sitting on a --surface-0
+ *                card (input fills, secondary pills/chips, skeleton
+ *                placeholders).
+ *   --surface-2  the one step further up — modals/sheets that need to
+ *                visually float above page content.
+ *   --border     the ONE divider/border color used everywhere ("every
+ *                divider should use the same border color").
+ *   --border-strong  a slightly stronger version for things that need
+ *                more visual weight (e.g. an outlined button's resting
+ *                border) — still part of the same system, not a
+ *                separate palette.
+ *   --text-*     four-step text scale, each calibrated for real
+ *                contrast against --surface-0/--surface-1.
  */
 
 :root {
@@ -26,18 +37,22 @@
 
 html.dark {
   color-scheme: dark;
+  --surface-0: #000000;
+  --surface-1: #0a0a0a;
+  --surface-2: #131313;
+  --border: #1a1a1a;
+  --border-strong: #2a2a2a;
+  --text-primary: #f5f5f5;
+  --text-secondary: #d0d0d0;
+  --text-tertiary: #9a9a9a;
+  --text-quaternary: #6e6e6e;
+  --text-faint: #4a4a4a;
 }
 
-/* AMOLED-style base with a soft, fixed radial blue-purple glow — not a
-   flat black. This sits behind every page's outer bg-gray-50 wrapper. */
+/* True OLED black — no gradient, no glow. The page background IS the
+   card background IS the surface everything sits on. */
 html.dark body {
-  background-color: #07070c;
-  background-image:
-    radial-gradient(ellipse 90% 60% at 20% -10%, rgba(59, 96, 255, 0.16), transparent 60%),
-    radial-gradient(ellipse 80% 55% at 100% 0%, rgba(139, 92, 246, 0.12), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 50% 100%, rgba(37, 99, 235, 0.08), transparent 60%);
-  background-attachment: fixed;
-  background-repeat: no-repeat;
+  background-color: var(--surface-0);
 }
 
 /* Smooth, subtle theme-switch transition — scoped to color properties
@@ -49,105 +64,154 @@ html.dark * {
 
 /* ---- Surfaces ---- */
 
-/* Outer page wrapper (bg-gray-50) — transparent so the body glow shows
-   through, matching an AMOLED wallpaper's soft ambient light. */
-html.dark .bg-gray-50 {
-  background-color: transparent;
-}
-
-/* Card / sheet surface (bg-white) — slightly lighter than the page
-   background, with its own faint tint rather than flat black. */
+/* Outer page wrapper (bg-gray-50) and card/sheet surface (bg-white) —
+   both true black. This is what "remove every remaining white header,
+   white section, white container" means concretely: there is no longer
+   a lighter "card" shade to leave white by omission. */
+html.dark .bg-gray-50,
 html.dark .bg-white {
-  background-color: #101018;
+  background-color: var(--surface-0);
 }
 
-/* Secondary surface (bg-gray-100) — used for pills, chips, secondary
-   buttons, avatar fallback rings' background context. */
+/* Secondary surface (bg-gray-100) — pills, chips, secondary buttons,
+   skeleton placeholders. Needs to be visually distinct from a
+   --surface-0 card sitting behind it, so it's the one step up. */
 html.dark .bg-gray-100 {
-  background-color: #1a1a26;
+  background-color: var(--surface-1);
 }
 
 /* ---- Text ---- */
 
 html.dark .text-gray-900 {
-  color: #f3f3f7;
+  color: var(--text-primary);
 }
 html.dark .text-gray-800 {
-  color: #e4e4ec;
+  color: var(--text-primary);
 }
 html.dark .text-gray-700 {
-  color: #cfcfdb;
+  color: var(--text-secondary);
 }
 html.dark .text-gray-600 {
-  color: #b3b3c4;
+  color: var(--text-secondary);
 }
 html.dark .text-gray-500 {
-  color: #9494a8;
+  color: var(--text-tertiary);
 }
 html.dark .text-gray-400 {
-  color: #71718a;
+  color: var(--text-tertiary);
 }
 html.dark .text-gray-300 {
-  color: #52526a;
+  color: var(--text-quaternary);
 }
 
-/* ---- Borders / dividers ---- */
+/* ---- Borders / dividers ----
+   One color for every divider in the app, as requested — border-100
+   and border-200 (previously two different shades) now both resolve to
+   the same --border value. border-300 stays one step stronger for
+   resting states on outlined buttons/inputs that need a touch more
+   definition, without introducing a third divider color for actual
+   separators. */
 
-html.dark .border-gray-100 {
-  border-color: #1c1c2a;
-}
+html.dark .border-gray-100,
 html.dark .border-gray-200 {
-  border-color: #262638;
+  border-color: var(--border);
 }
 html.dark .border-gray-300 {
-  border-color: #34344a;
+  border-color: var(--border-strong);
 }
 html.dark .divide-gray-100 > * + * {
-  border-color: #1c1c2a;
+  border-color: var(--border);
 }
 
 /* ---- Accent-tinted surfaces ----
    Campinity blue itself (bg-blue-600, text-blue-600) is intentionally
-   left untouched — it should stay the same vivid accent in both themes.
-   Only the pale, light-mode-only tint backgrounds are darkened so blue
-   text stays readable on them. */
+   left untouched — same vivid accent in both themes. Only the pale,
+   light-mode-only tint backgrounds are darkened, with slightly higher
+   opacity than a navy-based dark theme would need, since these now sit
+   on true black and need a bit more presence to read clearly. */
 
 html.dark .bg-blue-50 {
-  background-color: rgba(37, 99, 235, 0.16);
+  background-color: rgba(37, 99, 235, 0.22);
 }
 html.dark .bg-red-50 {
-  background-color: rgba(239, 68, 68, 0.14);
+  background-color: rgba(239, 68, 68, 0.18);
 }
 html.dark .bg-emerald-50 {
-  background-color: rgba(16, 185, 129, 0.14);
+  background-color: rgba(16, 185, 129, 0.18);
 }
 html.dark .bg-amber-50 {
-  background-color: rgba(245, 158, 11, 0.14);
+  background-color: rgba(245, 158, 11, 0.18);
 }
 html.dark .bg-pink-50 {
-  background-color: rgba(236, 72, 153, 0.14);
+  background-color: rgba(236, 72, 153, 0.18);
 }
 html.dark .bg-gray-50\/50 {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: rgba(255, 255, 255, 0.04);
 }
 
-/* Avatar rings (ring-4 ring-white on Profile headers) — a soft border
-   instead of a bright white ring against a dark surface. */
+/* Avatar rings (ring-4 ring-white on Profile headers) — matches the
+   surface behind them instead of a bright white ring. */
 html.dark .ring-white {
-  --tw-ring-color: #101018;
+  --tw-ring-color: var(--surface-0);
 }
 
-/* Inputs and cards using bg-gray-50 as a form-field fill (Search bar,
-   Edit Profile fields, Create Post composer) — same treatment as the
-   secondary surface above, kept legible with the border color also
-   darkened via .border-gray-200 already handled. */
+/* Inputs, textareas, selects using bg-gray-50 as a form-field fill
+   (Search bar, Edit Profile fields, Create Post composer, Change
+   Password, Delete Account confirm) — one step up from --surface-0 so
+   they stay visibly distinct from the card/page behind them, with the
+   border/placeholder treated the same way as everywhere else. */
 html.dark input.bg-gray-50,
 html.dark textarea.bg-gray-50,
 html.dark select.bg-gray-50 {
-  background-color: #14141f;
-  color: #f3f3f7;
+  background-color: var(--surface-1);
+  color: var(--text-primary);
 }
 html.dark input.bg-gray-50::placeholder,
 html.dark textarea.bg-gray-50::placeholder {
-  color: #71718a;
+  color: var(--text-tertiary);
+}
+
+/* Modals / sheets (Campus Verification reminder + celebration) — the
+   one place allowed to sit visibly above --surface-0, since a modal
+   floating over black-on-black content needs SOME separation to read
+   as a distinct layer. Scoped narrowly to role="dialog"/role="status"
+   containers rather than reused .bg-white, so ordinary cards stay true
+   black while modals get just enough lift to be legible. */
+html.dark [role='dialog'].bg-white,
+html.dark [role='status'].bg-white {
+  background-color: var(--surface-2);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes badgePop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
 }

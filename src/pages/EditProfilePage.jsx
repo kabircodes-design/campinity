@@ -4,10 +4,10 @@ import { ArrowLeft, Camera, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import CollegeSearch from '../components/CollegeSearch.jsx'
 import Loader from '../auth/components/Loader.jsx'
-import { dummyProfileStats } from '../data/dummyProfileStats.js'
-import { getCollegeById } from '../firebase/collegeService.js'
+import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
+import { getAvatarColor } from '../firebase/postService.js'
 import { reserveUsername } from '../firebase/usernameService.js'
 import { useUsernameAvailability } from '../hooks/useUsernameAvailability.js'
 
@@ -107,7 +107,7 @@ export default function EditProfilePage() {
           setUsername(profile.username || '')
           setOriginalUsername(profile.username || '')
           setBio(profile.bio || '')
-          setSelectedCollege(await getCollegeById(profile.collegeId))
+          setSelectedCollege(getCollegeById(profile.collegeId))
           setDepartment(profile.course || '')
           setYear(profile.year || years[0])
           setSkills(profile.skills || [])
@@ -235,7 +235,7 @@ export default function EditProfilePage() {
                 {photoPreview ? (
                   <img src={photoPreview} alt="Profile preview" className="w-full h-full object-cover" />
                 ) : (
-                  <Avatar initials={getInitials(name)} colorClass={dummyProfileStats.colorClass} size="xl" />
+                  <Avatar initials={getInitials(name)} colorClass={getAvatarColor(auth.currentUser?.uid)} size="xl" />
                 )}
               </div>
               <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center border-2 border-white group-hover:bg-blue-700 transition-colors duration-300">

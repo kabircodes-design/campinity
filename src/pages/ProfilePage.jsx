@@ -11,51 +11,15 @@ import { myEventIds, profileTabs } from '../data/dummyProfile.js'
 import { dummyProfileStats } from '../data/dummyProfileStats.js'
 import { posts } from '../data/dummyFeed.js'
 import { notes, events } from '../data/dummySearch.js'
+import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
-import { getUserPosts } from '../firebase/postService.js'
-import { getCollegeById } from '../firebase/collegeService.js'
-
-const AVATAR_COLORS = [
-  'from-blue-500 to-blue-600',
-  'from-violet-500 to-purple-600',
-  'from-emerald-500 to-teal-600',
-  'from-pink-500 to-rose-500',
-  'from-amber-500 to-orange-500',
-  'from-indigo-500 to-blue-600'
-]
-
-const COVER_GRADIENTS = [
-  'from-blue-600 via-indigo-600 to-blue-700',
-  'from-violet-600 via-purple-600 to-indigo-700',
-  'from-emerald-600 via-teal-600 to-blue-700',
-  'from-rose-600 via-pink-600 to-purple-700',
-  'from-amber-600 via-orange-600 to-rose-700'
-]
-
-function getInitials(name = '') {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
-}
-
-/**
- * Deterministic so a given user always gets the same avatar/cover color,
- * without depending on dummyProfileStats' shared, non-personal constant.
- */
-function pickBySeed(list, seed = '') {
-  let hash = 0
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) % list.length
-  }
-  return list[Math.abs(hash) % list.length]
-}
+import { getAvatarColor, getInitials, getUserPosts } from '../firebase/postService.js'
 
 export default function ProfilePage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(profileTabs[0].key)
   const [profile, setProfile] = useState(null)
-  const [collegeName, setCollegeName] = useState('')
   const [myPosts, setMyPosts] = useState([])
   const [postsError, setPostsError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -67,11 +31,8 @@ export default function ProfilePage() {
 
     /**
      * Profile and Posts are fetched independently — a Firestore error on
-     * one must never wipe out data that loaded successfully on the
-     * other. The college lookup runs as a follow-up to the profile
-     * fetch (it needs profile.collegeId) but is wrapped in its own
-     * try/catch so a college-lookup failure can't block the rest of the
-     * page — it just leaves the college field blank.
+     * one (e.g. a missing composite index on the posts query) must never
+     * wipe out data that loaded successfully on the other.
      */
     const loadProfile = async () => {
       if (!uid) {
@@ -80,17 +41,7 @@ export default function ProfilePage() {
       }
       try {
         const data = await getUserProfile(uid)
-        if (cancelled) return
-        setProfile(data)
-
-        if (data?.collegeId) {
-          try {
-            const college = await getCollegeById(data.collegeId)
-            if (!cancelled) setCollegeName(college?.name || '')
-          } catch {
-            if (!cancelled) setCollegeName('')
-          }
-        }
+        if (!cancelled) setProfile(data)
       } catch (err) {
         if (!cancelled) setError(err?.message || 'Could not load your profile.')
       }
@@ -160,18 +111,18 @@ export default function ProfilePage() {
     )
   }
 
-  const seed = auth.currentUser?.uid || profile.username || profile.displayName || ''
+  const college = getCollegeById(profile.collegeId)
 
   const displayProfile = {
-    name: profile.displayName || '',
-    username: profile.username || '',
-    bio: profile.bio || '',
-    college: collegeName || '',
-    department: profile.course || '',
-    year: profile.year || '',
+    name: profile.displayName,
+    username: profile.username,
+    bio: profile.bio,
+    college: college?.name || '',
+    department: profile.course,
+    year: profile.year,
     initials: getInitials(profile.displayName),
-    colorClass: pickBySeed(AVATAR_COLORS, seed),
-    coverGradient: pickBySeed(COVER_GRADIENTS, seed),
+    colorClass: getAvatarColor(auth.currentUser?.uid || profile.username),
+    coverGradient: dummyProfileStats.coverGradient,
     followers: profile.followersCount || 0,
     following: profile.followingCount || 0,
     postsCount: myPosts.length

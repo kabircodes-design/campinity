@@ -1,31 +1,9 @@
 import { collection, deleteDoc, doc, getDocs, limit, orderBy, query, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from './firebase.js'
+import { getAvatarColor, getInitials } from './postService.js'
 
 const USERS_COLLECTION = 'users'
 const NOTIFICATIONS_SUBCOLLECTION = 'notifications'
-
-const AVATAR_COLORS = [
-  'from-blue-500 to-blue-600',
-  'from-violet-500 to-purple-600',
-  'from-emerald-500 to-teal-600',
-  'from-pink-500 to-rose-500',
-  'from-amber-500 to-orange-500',
-  'from-indigo-500 to-blue-600'
-]
-
-function getInitials(name = '') {
-  const parts = (name || '').trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
-}
-
-function getAvatarColor(seed = '') {
-  let hash = 0
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) % AVATAR_COLORS.length
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
-}
 
 function formatTimeAgo(timestamp) {
   if (!timestamp?.toDate) return 'Just now'
@@ -51,6 +29,14 @@ function targetLinkFor(raw) {
   return null
 }
 
+/**
+ * Maps a Firestore users/{uid}/notifications/{id} document into the
+ * exact shape the existing, untouched NotificationCard.jsx and
+ * NotificationIcon.jsx already expect (actorName, actorInitials,
+ * actorColorClass, text, time, targetLink, read) — the ONLY translation
+ * layer between Firestore's schema and the existing UI, same pattern as
+ * postService.js's mapPostDoc.
+ */
 function mapNotification(docSnap) {
   const raw = { id: docSnap.id, ...docSnap.data() }
   const actorLabel = raw.actorDisplayName || raw.actorUsername || 'Someone'
@@ -68,6 +54,9 @@ function mapNotification(docSnap) {
   }
 }
 
+/**
+ * Loads a user's notifications, newest first.
+ */
 export async function getNotifications(uid, maxResults = 50) {
   const notificationsQuery = query(
     collection(db, USERS_COLLECTION, uid, NOTIFICATIONS_SUBCOLLECTION),
@@ -78,6 +67,11 @@ export async function getNotifications(uid, maxResults = 50) {
   return snap.docs.map(mapNotification)
 }
 
+/**
+ * Returns just the unread count — used for the Home header's bell
+ * badge. A dedicated equality-filtered query rather than fetching every
+ * notification and counting client-side, to keep the read cheap.
+ */
 export async function getUnreadNotificationCount(uid) {
   const unreadQuery = query(
     collection(db, USERS_COLLECTION, uid, NOTIFICATIONS_SUBCOLLECTION),
@@ -87,10 +81,12 @@ export async function getUnreadNotificationCount(uid) {
   return snap.size
 }
 
+/** Marks a single notification as read. */
 export async function markNotificationRead(uid, notificationId) {
   await updateDoc(doc(db, USERS_COLLECTION, uid, NOTIFICATIONS_SUBCOLLECTION, notificationId), { read: true })
 }
 
+/** Marks every unread notification as read in one batch. */
 export async function markAllNotificationsRead(uid) {
   const unreadQuery = query(
     collection(db, USERS_COLLECTION, uid, NOTIFICATIONS_SUBCOLLECTION),
@@ -104,6 +100,7 @@ export async function markAllNotificationsRead(uid) {
   await batch.commit()
 }
 
+/** Deletes a single notification. */
 export async function deleteNotification(uid, notificationId) {
   await deleteDoc(doc(db, USERS_COLLECTION, uid, NOTIFICATIONS_SUBCOLLECTION, notificationId))
 }

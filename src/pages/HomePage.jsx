@@ -8,22 +8,21 @@ import BottomNav from '../components/BottomNav.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
-import { getFeedPosts } from '../firebase/postService.js'
+import { getFeedPosts, getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getFeedStories } from '../firebase/storyService.js'
 import { getUnreadNotificationCount } from '../firebase/notificationService.js'
+import { useCampusVerificationReminder } from '../hooks/useCampusVerificationReminder.js'
+import CampusVerificationModal from '../components/CampusVerificationModal.jsx'
+import CampusVerificationBanner from '../components/CampusVerificationBanner.jsx'
 
+// Tab labels only — no student/user data, so this stays local instead of
+// importing from dummyFeed.js.
 const feedTabs = [
   { label: 'For You', key: 'forYou' },
   { label: 'Following', key: 'following' },
   { label: 'Campus', key: 'campus' },
   { label: 'Clubs', key: 'clubs' }
 ]
-
-function getInitials(name = '') {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
-}
 
 export default function HomePage() {
   const navigate = useNavigate()
@@ -40,12 +39,24 @@ export default function HomePage() {
     let cancelled = false
     const uid = auth.currentUser?.uid
 
+    /**
+     * Loads the signed-in user's real Firestore profile for the greeting
+     * and avatar. Kept in its own try/catch, completely independent from
+     * the posts/stories fetch below — a Firestore error on the feed
+     * (e.g. a missing composite index) must never wipe out a profile
+     * that loaded successfully. This was the actual bug: both fetches
+     * used to share a single Promise.all, so a feed-side failure threw
+     * before setProfile() ever ran, leaving the greeting on its
+     * empty-name fallback every time.
+     */
     const loadProfile = async () => {
       if (!uid) return
       try {
         const data = await getUserProfile(uid)
         if (!cancelled) setProfile(data)
       } catch {
+        // Greeting falls back to initials-only if this fails; the feed
+        // below still loads on its own regardless.
       }
     }
 
@@ -67,6 +78,7 @@ export default function HomePage() {
         const count = await getUnreadNotificationCount(uid)
         if (!cancelled) setUnreadCount(count)
       } catch {
+        // Badge just stays hidden if this fails; unrelated to the feed itself.
       }
     }
 
@@ -87,18 +99,21 @@ export default function HomePage() {
   const displayName = profile?.displayName || ''
   const firstName = displayName.split(' ')[0] || 'there'
   const initials = getInitials(displayName)
+  const myColorClass = getAvatarColor(auth.currentUser?.uid || displayName)
 
   const storyBubbles = useMemo(() => {
     const addStory = {
       id: 'write',
       label: 'Your Story',
       initials,
-      colorClass: 'from-blue-500 to-blue-600',
+      colorClass: myColorClass,
       isAdd: true
     }
     const moreStory = { id: 'more', label: 'More', isMore: true }
     return [addStory, ...stories, moreStory]
-  }, [stories, initials])
+  }, [stories, initials, myColorClass])
+
+  const { showModal, showBanner, closeModal, dismissBanner } = useCampusVerificationReminder(profile)
 
   if (loading) {
     return (
@@ -110,7 +125,11 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
+      {/* Centered mobile-first column — desktop simply centers this same layout */}
       <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
+        {/* -------------------------------------------------------- */}
+        {/* Top header — logo + notifications, stays pinned          */}
+        {/* -------------------------------------------------------- */}
         <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
           <div className="h-14 flex items-center justify-between px-4">
             <div className="flex items-center gap-2">
@@ -133,11 +152,16 @@ export default function HomePage() {
           </div>
         </header>
 
+        {showBanner && <CampusVerificationBanner onDismiss={dismissBanner} />}
+
+        {/* -------------------------------------------------------- */}
+        {/* Greeting + search — real Firebase profile                */}
+        {/* -------------------------------------------------------- */}
         <section className="px-4 pt-4 pb-3">
           <div className="flex items-center gap-3">
             <Avatar
               initials={initials}
-              colorClass="from-blue-500 to-blue-600"
+              colorClass={myColorClass}
               size="md"
               src={profile?.avatar || undefined}
             />
@@ -160,6 +184,9 @@ export default function HomePage() {
           </button>
         </section>
 
+        {/* -------------------------------------------------------- */}
+        {/* Stories row — real Firestore stories                     */}
+        {/* -------------------------------------------------------- */}
         <section className="pb-3 border-b border-gray-100">
           <div className="flex items-start gap-3.5 px-4 overflow-x-auto scroll-hidden">
             {storyBubbles.map((story) => (
@@ -168,6 +195,9 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* -------------------------------------------------------- */}
+        {/* Feed tabs                                                 */}
+        {/* -------------------------------------------------------- */}
         <nav className="sticky top-14 z-30 flex items-center bg-white border-b border-gray-100">
           {feedTabs.map((tab) => (
             <button
@@ -185,6 +215,9 @@ export default function HomePage() {
           ))}
         </nav>
 
+        {/* -------------------------------------------------------- */}
+        {/* Feed — Firestore posts                                    */}
+        {/* -------------------------------------------------------- */}
         <main className="pb-24">
           {error ? (
             <div className="px-6 py-16 text-center">
@@ -201,7 +234,12 @@ export default function HomePage() {
         </main>
       </div>
 
+      {/* -------------------------------------------------------- */}
+      {/* Bottom mobile navigation — sticky, centered to match column */}
+      {/* -------------------------------------------------------- */}
       <BottomNav />
+
+      <CampusVerificationModal open={showModal} onRemindLater={closeModal} />
     </div>
   )
 }

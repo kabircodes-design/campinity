@@ -5,7 +5,7 @@ import Avatar from '../components/Avatar.jsx'
 import Switch from '../components/Switch.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
-import { createPost, uploadPostImage } from '../firebase/postService.js'
+import { createPost, getAvatarColor, getInitials, uploadPostImage } from '../firebase/postService.js'
 
 const categories = ['general', 'study', 'notes', 'event', 'club', 'marketplace']
 
@@ -19,12 +19,6 @@ const categoryLabels = {
 }
 
 const MAX_LENGTH = 500
-
-function getInitials(name = '') {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
-}
 
 function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`
@@ -179,7 +173,7 @@ export default function CreatePostPage() {
           <div className="flex items-center gap-3">
             <Avatar
               initials={isAnonymous ? '?' : initials}
-              colorClass={isAnonymous ? 'from-gray-400 to-gray-500' : 'from-blue-500 to-blue-600'}
+              colorClass={isAnonymous ? 'from-gray-400 to-gray-500' : getAvatarColor(auth.currentUser?.uid || displayName)}
               size="md"
               src={isAnonymous ? undefined : profile?.avatar || undefined}
             />

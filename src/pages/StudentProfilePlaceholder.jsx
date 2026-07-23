@@ -6,18 +6,9 @@ import PostCard from '../components/PostCard.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfileByUsername } from '../firebase/profileService.js'
-import { getUserPosts } from '../firebase/postService.js'
+import { getAvatarColor, getInitials, getUserPosts } from '../firebase/postService.js'
 import { getCollegeById } from '../firebase/collegeService.js'
 import { useFollow } from '../hooks/useFollow.js'
-
-const AVATAR_COLORS = [
-  'from-blue-500 to-blue-600',
-  'from-violet-500 to-purple-600',
-  'from-emerald-500 to-teal-600',
-  'from-pink-500 to-rose-500',
-  'from-amber-500 to-orange-500',
-  'from-indigo-500 to-blue-600'
-]
 
 const COVER_GRADIENTS = [
   'from-blue-600 via-indigo-600 to-blue-700',
@@ -26,12 +17,6 @@ const COVER_GRADIENTS = [
   'from-rose-600 via-pink-600 to-purple-700',
   'from-amber-600 via-orange-600 to-rose-700'
 ]
-
-function getInitials(name = '') {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
-}
 
 function pickBySeed(list, seed = '') {
   let hash = 0
@@ -128,7 +113,7 @@ export default function StudentProfilePlaceholder() {
       department: profile.course || '',
       year: profile.year || '',
       initials: getInitials(profile.displayName),
-      colorClass: pickBySeed(AVATAR_COLORS, seed),
+      colorClass: getAvatarColor(seed),
       coverGradient: pickBySeed(COVER_GRADIENTS, seed),
       coverPhoto: profile.coverPhoto || '',
       followers: (profile.followersCount || 0) + followersDelta,

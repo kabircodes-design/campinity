@@ -1,5 +1,6 @@
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
 import { db } from './firebase.js'
+import { getAvatarColor, getInitials } from './postService.js'
 
 const COLLECTION = 'stories'
 
@@ -10,27 +11,12 @@ const RING_COLORS = [
   'from-emerald-400 via-teal-500 to-blue-500'
 ]
 
-const AVATAR_COLORS = [
-  'from-blue-500 to-blue-600',
-  'from-violet-500 to-purple-600',
-  'from-emerald-500 to-teal-600',
-  'from-pink-500 to-rose-500',
-  'from-amber-500 to-orange-500',
-  'from-indigo-500 to-blue-600'
-]
-
-function getInitials(name = '') {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
-}
-
-function pickBySeed(list, seed = '') {
+function pickRingBySeed(seed = '') {
   let hash = 0
   for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) % list.length
+    hash = (hash * 31 + seed.charCodeAt(i)) % RING_COLORS.length
   }
-  return list[Math.abs(hash) % list.length]
+  return RING_COLORS[Math.abs(hash) % RING_COLORS.length]
 }
 
 /**
@@ -38,6 +24,12 @@ function pickBySeed(list, seed = '') {
  * already expects (label, initials, colorClass, ringClass, username).
  * isAdd/isMore are never set here — those two bubbles are UI-only
  * affordances built locally in HomePage.jsx, not real story documents.
+ *
+ * initials/colorClass use the SAME functions every other surface uses
+ * (postService.js) — this is what guarantees a story bubble shows
+ * exactly the same avatar color as that person's posts, comments,
+ * profile, chat, and everywhere else, rather than a coincidentally
+ * matching separate implementation.
  */
 function mapStoryDoc(docSnap) {
   const data = docSnap.data()
@@ -48,8 +40,8 @@ function mapStoryDoc(docSnap) {
     label: data.displayName || 'Student',
     username: data.username || '',
     initials: getInitials(data.displayName),
-    colorClass: pickBySeed(AVATAR_COLORS, seed),
-    ringClass: pickBySeed(RING_COLORS, seed)
+    colorClass: getAvatarColor(seed),
+    ringClass: pickRingBySeed(seed)
   }
 }
 
