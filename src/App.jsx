@@ -27,6 +27,8 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage.jsx'))
 const NotificationDetailPage = lazy(() => import('./pages/NotificationDetailPage.jsx'))
 const AddCollegePage = lazy(() => import('./pages/AddCollegePage.jsx'))
 const CollegePage = lazy(() => import('./pages/CollegePage.jsx'))
+const MessagesPage = lazy(() => import('./pages/MessagesPage.jsx'))
+const ChatPage = lazy(() => import('./pages/ChatPage.jsx'))
 
 export default function App() {
   return (
@@ -109,15 +111,15 @@ export default function App() {
           path="/messages"
           element={
             <ProtectedRoute stage="home">
-              <ChatListPage />
+              <MessagesPage />
             </ProtectedRoute>
           }
         />
         <Route
-          path="/messages/:conversationId"
+          path="/messages/:chatId"
           element={
             <ProtectedRoute stage="home">
-              <ChatScreenPage />
+              <ChatPage />
             </ProtectedRoute>
           }
         />

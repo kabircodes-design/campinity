@@ -1,46 +1,52 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Avatar from './Avatar.jsx'
+import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
 
-export default function ClubCard({ club }) {
+/**
+ * `chat` comes from chatService.js's subscribeToUserChats():
+ *   { id, otherUid, lastMessage, lastMessageAt, unreadCount }
+ * `profile` comes from profileService.js's getUserProfile(otherUid), and
+ * may be undefined for a brief moment while it's still loading — this
+ * renders a safe placeholder in that case rather than crashing.
+ *
+ * No online indicator is rendered — there's no real presence system
+ * backing it, and showing a fabricated online/offline dot would be
+ * exactly the kind of dummy shortcut this feature avoids.
+ */
+export default function ChatCard({ chat, profile }) {
   const navigate = useNavigate()
-  const [joined, setJoined] = useState(false)
-
-  const goToClub = () => navigate(`/club/${club.id}`)
-
-  const toggleJoin = (event) => {
-    event.stopPropagation()
-    setJoined((prev) => !prev)
-  }
+  const hasUnread = chat.unreadCount > 0
+  const displayName = profile?.displayName || 'Student'
 
   return (
     <button
       type="button"
-      onClick={goToClub}
+      onClick={() => navigate(`/messages/${chat.id}`)}
       className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-all duration-300 text-left"
     >
-      <Avatar initials={club.initials} colorClass={club.colorClass} size="md" />
+      <Avatar
+        initials={getInitials(displayName)}
+        colorClass={getAvatarColor(chat.otherUid || chat.id)}
+        size="md"
+        src={profile?.avatar || undefined}
+      />
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900 truncate">{club.name}</p>
-        <p className="text-xs text-gray-400 truncate">
-          {club.category} · {club.members} members
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
+          <span className="text-[11px] text-gray-400 flex-shrink-0">{formatTimeAgo(chat.lastMessageAt)}</span>
+        </div>
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <p className={`text-xs truncate ${hasUnread ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
+            {chat.lastMessage || 'Say hello 👋'}
+          </p>
+          {hasUnread && (
+            <span className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center px-1">
+              {chat.unreadCount}
+            </span>
+          )}
+        </div>
       </div>
-
-      <span
-        role="button"
-        tabIndex={0}
-        onClick={toggleJoin}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') toggleJoin(event)
-        }}
-        className={`flex-shrink-0 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-300 ${
-          joined ? 'bg-gray-100 text-gray-600' : 'bg-blue-600 text-white'
-        }`}
-      >
-        {joined ? 'Joined' : 'Join'}
-      </span>
     </button>
   )
 }

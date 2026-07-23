@@ -79,6 +79,8 @@ export default function StudentProfilePlaceholder() {
         return
       }
 
+      // Viewing your own profile via a student link goes to the real,
+      // editable Profile page instead of this read-only public view.
       if (resolved.uid === auth.currentUser?.uid) {
         navigate('/profile', { replace: true })
         return
@@ -118,6 +120,7 @@ export default function StudentProfilePlaceholder() {
   const displayProfile = useMemo(() => {
     if (!profile) return null
     return {
+      uid: profile.uid,
       name: profile.displayName || '',
       username: profile.username || '',
       bio: profile.bio || '',

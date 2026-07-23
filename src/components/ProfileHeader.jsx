@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UserCheck, UserPlus } from 'lucide-react'
+import { MessageCircle, UserCheck, UserPlus } from 'lucide-react'
 import Avatar from './Avatar.jsx'
+import { auth } from '../firebase/firebase.js'
+import { getOrCreateChat } from '../firebase/chatService.js'
 
 export default function ProfileHeader({
   profile,
@@ -13,6 +15,23 @@ export default function ProfileHeader({
 }) {
   const navigate = useNavigate()
   const [shareCopied, setShareCopied] = useState(false)
+  const [isMessaging, setIsMessaging] = useState(false)
+
+  const handleMessage = async () => {
+    const currentUid = auth.currentUser?.uid
+    const otherUid = profile.uid
+    if (!currentUid || !otherUid || isMessaging) return
+
+    setIsMessaging(true)
+    try {
+      const chatId = await getOrCreateChat(currentUid, otherUid)
+      if (chatId) navigate(`/messages/${chatId}`)
+    } catch (err) {
+      console.error('Failed to open chat:', err)
+    } finally {
+      setIsMessaging(false)
+    }
+  }
 
   const handleShare = async () => {
     const shareUrl = `${window.location.origin}/student/${profile.username}`
@@ -22,6 +41,7 @@ export default function ProfileHeader({
       try {
         await navigator.share(shareData)
       } catch {
+        // User cancelled the share sheet or it failed — nothing to do.
       }
       return
     }
@@ -31,6 +51,7 @@ export default function ProfileHeader({
       setShareCopied(true)
       window.setTimeout(() => setShareCopied(false), 1500)
     } catch {
+      // Clipboard unavailable — nothing more we can do silently.
     }
   }
 
@@ -81,6 +102,15 @@ export default function ProfileHeader({
               >
                 {isFollowing ? <UserCheck className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
                 {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
+              </button>
+              <button
+                type="button"
+                onClick={handleMessage}
+                disabled={isMessaging}
+                className="flex items-center gap-1.5 rounded-full border border-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 hover:border-gray-300 transition-all duration-300 disabled:opacity-60"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                Message
               </button>
               <button
                 type="button"

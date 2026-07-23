@@ -1,13 +1,18 @@
 import { useState } from 'react'
 import { Camera, Paperclip, Send, Smile } from 'lucide-react'
 
-export default function MessageInput({ onSend }) {
+/**
+ * Enter-to-send on desktop is native <form> behavior — no extra keydown
+ * handler needed, since submitting the form is exactly what Enter
+ * already does inside a text input.
+ */
+export default function MessageInput({ onSend, disabled = false }) {
   const [text, setText] = useState('')
 
   const handleSubmit = (event) => {
     event.preventDefault()
     const trimmed = text.trim()
-    if (!trimmed) return
+    if (!trimmed || disabled) return
     onSend(trimmed)
     setText('')
   }
@@ -40,11 +45,12 @@ export default function MessageInput({ onSend }) {
         value={text}
         onChange={(event) => setText(event.target.value)}
         placeholder="Message..."
-        className="flex-1 min-w-0 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+        disabled={disabled}
+        className="flex-1 min-w-0 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300 disabled:opacity-60"
       />
       <button
         type="submit"
-        disabled={!text.trim()}
+        disabled={!text.trim() || disabled}
         aria-label="Send message"
         className="w-9 h-9 flex-shrink-0 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
       >
