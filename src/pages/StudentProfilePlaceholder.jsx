@@ -8,6 +8,7 @@ import { auth } from '../firebase/firebase.js'
 import { getUserProfileByUsername } from '../firebase/profileService.js'
 import { getUserPosts } from '../firebase/postService.js'
 import { getCollegeById } from '../firebase/collegeService.js'
+import { useFollow } from '../hooks/useFollow.js'
 
 const AVATAR_COLORS = [
   'from-blue-500 to-blue-600',
@@ -78,8 +79,6 @@ export default function StudentProfilePlaceholder() {
         return
       }
 
-      // Viewing your own profile via a student link goes to the real,
-      // editable Profile page instead of this read-only public view.
       if (resolved.uid === auth.currentUser?.uid) {
         navigate('/profile', { replace: true })
         return
@@ -112,6 +111,8 @@ export default function StudentProfilePlaceholder() {
     }
   }, [username, navigate])
 
+  const { following, isToggling, toggleFollow, followersDelta } = useFollow(profile?.uid)
+
   const seed = profile?.uid || profile?.username || ''
 
   const displayProfile = useMemo(() => {
@@ -127,12 +128,12 @@ export default function StudentProfilePlaceholder() {
       colorClass: pickBySeed(AVATAR_COLORS, seed),
       coverGradient: pickBySeed(COVER_GRADIENTS, seed),
       coverPhoto: profile.coverPhoto || '',
-      followers: 0,
-      following: 0,
+      followers: (profile.followersCount || 0) + followersDelta,
+      following: profile.followingCount || 0,
       postsCount: posts.length,
       joinedDate: formatJoinedDate(profile.createdAt)
     }
-  }, [profile, collegeName, posts.length, seed])
+  }, [profile, collegeName, posts.length, seed, followersDelta])
 
   if (loading) {
     return (
@@ -156,7 +157,13 @@ export default function StudentProfilePlaceholder() {
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
       <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
-        <ProfileHeader profile={displayProfile} isOwnProfile={false} />
+        <ProfileHeader
+          profile={displayProfile}
+          isOwnProfile={false}
+          isFollowing={following}
+          isFollowLoading={isToggling}
+          onToggleFollow={toggleFollow}
+        />
 
         <main className="pb-24 border-t border-gray-100">
           {postsError ? (

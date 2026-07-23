@@ -1,42 +1,97 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import NotificationCard from '../components/NotificationCard.jsx'
 import EmptyNotifications from '../components/EmptyNotifications.jsx'
 import NotificationBadge from '../components/NotificationBadge.jsx'
-import { dummyNotifications } from '../data/dummyNotifications.js'
-
-const groupLabels = { today: 'Today', yesterday: 'Yesterday', earlier: 'Earlier' }
-const groupOrder = ['today', 'yesterday', 'earlier']
+import Loader from '../auth/components/Loader.jsx'
+import { auth } from '../firebase/firebase.js'
+import {
+  deleteNotification,
+  getNotifications,
+  markAllNotificationsRead,
+  markNotificationRead
+} from '../firebase/notificationService.js'
 
 export default function NotificationsPage() {
   const navigate = useNavigate()
-  const [notifications, setNotifications] = useState(dummyNotifications)
+  const [notifications, setNotifications] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    const uid = auth.currentUser?.uid
+
+    const load = async () => {
+      if (!uid) {
+        if (!cancelled) {
+          setError('Not signed in.')
+          setLoading(false)
+        }
+        return
+      }
+      try {
+        const data = await getNotifications(uid)
+        if (!cancelled) setNotifications(data)
+      } catch (err) {
+        if (!cancelled) setError(err?.message || 'Could not load notifications.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const unreadCount = notifications.filter((notification) => !notification.read).length
 
   const markAsRead = (id) => {
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+
+    const target = notifications.find((notification) => notification.id === id)
+    if (!target || target.read) return
+
     setNotifications((prev) =>
       prev.map((notification) => (notification.id === id ? { ...notification, read: true } : notification))
     )
+    markNotificationRead(uid, id).catch(() => {
+      setNotifications((prev) =>
+        prev.map((notification) => (notification.id === id ? { ...notification, read: false } : notification))
+      )
+    })
   }
 
   const markAllAsRead = () => {
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+
+    const previous = notifications
     setNotifications((prev) => prev.map((notification) => ({ ...notification, read: true })))
+    markAllNotificationsRead(uid).catch(() => setNotifications(previous))
   }
 
-  const deleteNotification = (id) => {
+  const handleDeleteNotification = (id) => {
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+
+    const previous = notifications
     setNotifications((prev) => prev.filter((notification) => notification.id !== id))
+    deleteNotification(uid, id).catch(() => setNotifications(previous))
   }
 
-  const groups = groupOrder
-    .map((key) => ({
-      key,
-      label: groupLabels[key],
-      items: notifications.filter((notification) => notification.group === key)
-    }))
-    .filter((group) => group.items.length > 0)
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
+        <Loader size="lg" tone="dark" />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
@@ -68,26 +123,23 @@ export default function NotificationsPage() {
         </header>
 
         <main className="pb-24">
-          {groups.length === 0 ? (
+          {error ? (
+            <div className="px-6 py-16 text-center">
+              <p className="text-sm text-gray-400">{error}</p>
+            </div>
+          ) : notifications.length === 0 ? (
             <EmptyNotifications />
           ) : (
-            groups.map((group) => (
-              <section key={group.key}>
-                <p className="px-4 pt-4 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  {group.label}
-                </p>
-                <div>
-                  {group.items.map((notification) => (
-                    <NotificationCard
-                      key={notification.id}
-                      notification={notification}
-                      onRead={markAsRead}
-                      onDelete={deleteNotification}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))
+            <div>
+              {notifications.map((notification) => (
+                <NotificationCard
+                  key={notification.id}
+                  notification={notification}
+                  onRead={markAsRead}
+                  onDelete={handleDeleteNotification}
+                />
+              ))}
+            </div>
           )}
         </main>
       </div>

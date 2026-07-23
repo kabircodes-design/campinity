@@ -1,9 +1,16 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UserPlus } from 'lucide-react'
+import { UserCheck, UserPlus } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 
-export default function ProfileHeader({ profile, onEdit, isOwnProfile = true }) {
+export default function ProfileHeader({
+  profile,
+  onEdit,
+  isOwnProfile = true,
+  isFollowing = false,
+  isFollowLoading = false,
+  onToggleFollow
+}) {
   const navigate = useNavigate()
   const [shareCopied, setShareCopied] = useState(false)
 
@@ -15,7 +22,6 @@ export default function ProfileHeader({ profile, onEdit, isOwnProfile = true }) 
       try {
         await navigator.share(shareData)
       } catch {
-        // User cancelled the share sheet or it failed — nothing to do.
       }
       return
     }
@@ -25,7 +31,6 @@ export default function ProfileHeader({ profile, onEdit, isOwnProfile = true }) 
       setShareCopied(true)
       window.setTimeout(() => setShareCopied(false), 1500)
     } catch {
-      // Clipboard unavailable — nothing more we can do silently.
     }
   }
 
@@ -68,10 +73,14 @@ export default function ProfileHeader({ profile, onEdit, isOwnProfile = true }) 
             <div className="flex items-center gap-2 pb-1">
               <button
                 type="button"
-                className="flex items-center gap-1.5 rounded-full bg-blue-600 text-white text-xs font-semibold px-4 py-2 hover:bg-blue-700 transition-all duration-300"
+                onClick={onToggleFollow}
+                disabled={isFollowLoading}
+                className={`flex items-center gap-1.5 rounded-full text-xs font-semibold px-4 py-2 transition-all duration-300 disabled:opacity-60 ${
+                  isFollowing ? 'bg-gray-100 text-gray-700' : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
               >
-                <UserPlus className="w-3.5 h-3.5" />
-                Follow
+                {isFollowing ? <UserCheck className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
+                {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
               </button>
               <button
                 type="button"
