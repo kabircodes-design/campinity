@@ -9,6 +9,8 @@ import PasswordStrengthMeter from '../components/PasswordStrengthMeter.jsx'
 import Divider from '../components/Divider.jsx'
 import GoogleGlyph from '../components/GoogleGlyph.jsx'
 import Icon from '../../components/Icon.jsx'
+import AnimatedBackground from '../../components/AnimatedBackground.jsx'
+import SignupCelebration from '../../components/SignupCelebration.jsx'
 import { useAuthForm } from '../hooks/useAuthForm.js'
 import { validateSignupForm } from '../validation/authValidation.js'
 import { sanitizeEmail, sanitizePassword, sanitizeText } from '../utils/sanitize.js'
@@ -84,117 +86,124 @@ export default function SignupPage() {
   }
 
   return (
-    <AuthLayout
-      eyebrow="Join your campus"
-      title="Create your account"
-      subtitle="Verified students only. Takes less than a minute."
-      footer={
-        <>
-          Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-accent hover:text-accent-deep transition-colors duration-200">
-            Log in
-          </Link>
-        </>
-      }
-    >
-      <Button
-        variant="secondary"
-        icon={<GoogleGlyph />}
-        loading={googleLoading}
-        disabled={isSubmitting}
-        onClick={handleGoogle}
-      >
-        Continue with Google
-      </Button>
+    <div className="relative min-h-screen">
+      <AnimatedBackground variant="signup" />
+      <SignupCelebration active={submitSuccess} />
 
-      {googleError && (
-        <p role="alert" className="mt-3 rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
-          {googleError}
-        </p>
-      )}
-
-      <Divider />
-
-      <form onSubmit={onSubmit} noValidate className="space-y-4">
-        <Input
-          ref={nameRef}
-          id="signup-name"
-          label="Full name"
-          type="text"
-          autoComplete="name"
-          placeholder="Aarav Sharma"
-          value={values.fullName}
-          onChange={handleChange('fullName')}
-          onBlur={handleBlur('fullName')}
-          error={fieldError('fullName')}
-          disabled={isSubmitting}
-          required
-        />
-
-        <Input
-          id="signup-email"
-          label="Email"
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          placeholder="you@campus.edu"
-          value={values.email}
-          onChange={handleChange('email')}
-          onBlur={handleBlur('email')}
-          error={fieldError('email')}
-          disabled={isSubmitting}
-          required
-        />
-
-        <div>
-          <PasswordInput
-            id="signup-password"
-            label="Password"
-            autoComplete="new-password"
-            placeholder="Create a password"
-            value={values.password}
-            onChange={handleChange('password')}
-            onBlur={handleBlur('password')}
-            error={fieldError('password')}
+      <div className="relative z-10">
+        <AuthLayout
+          eyebrow="Join your campus"
+          title="Create your account"
+          subtitle="Verified students only. Takes less than a minute."
+          footer={
+            <>
+              Already have an account?{' '}
+              <Link to="/login" className="font-semibold text-accent hover:text-accent-deep transition-colors duration-200">
+                Log in
+              </Link>
+            </>
+          }
+        >
+          <Button
+            variant="secondary"
+            icon={<GoogleGlyph />}
+            loading={googleLoading}
             disabled={isSubmitting}
-            required
-          />
-          <PasswordStrengthMeter password={values.password} />
-        </div>
-
-        <PasswordInput
-          id="signup-confirm-password"
-          label="Confirm password"
-          autoComplete="new-password"
-          placeholder="Re-enter your password"
-          value={values.confirmPassword}
-          onChange={handleChange('confirmPassword')}
-          onBlur={handleBlur('confirmPassword')}
-          error={fieldError('confirmPassword')}
-          disabled={isSubmitting}
-          required
-        />
-
-        {submitError && (
-          <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
-            {submitError}
-          </p>
-        )}
-
-        {submitSuccess && (
-          <p
-            role="status"
-            className="flex items-center gap-2 rounded-xl2 bg-accent-tint text-accent text-[13px] font-medium px-4 py-3"
+            onClick={handleGoogle}
           >
-            <Icon name="check" className="w-4 h-4" strokeWidth={2.2} />
-            Account created — check your inbox to verify your email.
-          </p>
-        )}
+            Continue with Google
+          </Button>
 
-        <Button type="submit" loading={isSubmitting} disabled={!isValid}>
-          Create account
-        </Button>
-      </form>
-    </AuthLayout>
+          {googleError && (
+            <p role="alert" className="mt-3 rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+              {googleError}
+            </p>
+          )}
+
+          <Divider />
+
+          <form onSubmit={onSubmit} noValidate className="space-y-4">
+            <Input
+              ref={nameRef}
+              id="signup-name"
+              label="Full name"
+              type="text"
+              autoComplete="name"
+              placeholder="Aarav Sharma"
+              value={values.fullName}
+              onChange={handleChange('fullName')}
+              onBlur={handleBlur('fullName')}
+              error={fieldError('fullName')}
+              disabled={isSubmitting}
+              required
+            />
+
+            <Input
+              id="signup-email"
+              label="Email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              placeholder="you@campus.edu"
+              value={values.email}
+              onChange={handleChange('email')}
+              onBlur={handleBlur('email')}
+              error={fieldError('email')}
+              disabled={isSubmitting}
+              required
+            />
+
+            <div>
+              <PasswordInput
+                id="signup-password"
+                label="Password"
+                autoComplete="new-password"
+                placeholder="Create a password"
+                value={values.password}
+                onChange={handleChange('password')}
+                onBlur={handleBlur('password')}
+                error={fieldError('password')}
+                disabled={isSubmitting}
+                required
+              />
+              <PasswordStrengthMeter password={values.password} />
+            </div>
+
+            <PasswordInput
+              id="signup-confirm-password"
+              label="Confirm password"
+              autoComplete="new-password"
+              placeholder="Re-enter your password"
+              value={values.confirmPassword}
+              onChange={handleChange('confirmPassword')}
+              onBlur={handleBlur('confirmPassword')}
+              error={fieldError('confirmPassword')}
+              disabled={isSubmitting}
+              required
+            />
+
+            {submitError && (
+              <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+                {submitError}
+              </p>
+            )}
+
+            {submitSuccess && (
+              <p
+                role="status"
+                className="flex items-center gap-2 rounded-xl2 bg-accent-tint text-accent text-[13px] font-medium px-4 py-3"
+              >
+                <Icon name="check" className="w-4 h-4" strokeWidth={2.2} />
+                Account created — check your inbox to verify your email.
+              </p>
+            )}
+
+            <Button type="submit" loading={isSubmitting} disabled={!isValid}>
+              Create account
+            </Button>
+          </form>
+        </AuthLayout>
+      </div>
+    </div>
   )
 }

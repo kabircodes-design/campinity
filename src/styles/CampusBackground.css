@@ -1,0 +1,277 @@
+/*
+ * Everything the animated background needs, in one file — base gradient,
+ * blur blobs, connection lines, floating icons, particles, and the
+ * post-signup celebration. Only transform/opacity/filter are animated,
+ * durations sit in the 9-20s range: slow, calm, GPU-friendly.
+ */
+
+.campus-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.campus-bg__gradient {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 0%, rgba(37, 99, 235, 0.16), transparent 60%),
+    radial-gradient(ellipse 70% 55% at 100% 100%, rgba(99, 102, 241, 0.14), transparent 60%),
+    linear-gradient(180deg, #05050a 0%, #0a0a14 50%, #05050a 100%);
+}
+
+.campus-bg__layer {
+  position: absolute;
+  inset: -5%;
+  transform: translate3d(var(--parallax-x, 0px), var(--parallax-y, 0px), 0);
+  transition: transform 400ms ease-out;
+  will-change: transform;
+}
+
+/* ---- Blurred light blobs ---- */
+
+.campus-bg__blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  will-change: transform, opacity;
+  animation: campus-bg-blob-drift var(--blob-duration, 22s) ease-in-out infinite;
+}
+.campus-bg__blob--1 {
+  width: 340px;
+  height: 340px;
+  top: -8%;
+  left: -6%;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.5), transparent 70%);
+  --blob-duration: 24s;
+}
+.campus-bg__blob--2 {
+  width: 300px;
+  height: 300px;
+  bottom: -10%;
+  right: -8%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.45), transparent 70%);
+  --blob-duration: 28s;
+  animation-delay: -6s;
+}
+.campus-bg__blob--3 {
+  width: 220px;
+  height: 220px;
+  top: 40%;
+  left: 60%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.32), transparent 70%);
+  --blob-duration: 20s;
+  animation-delay: -3s;
+}
+
+@keyframes campus-bg-blob-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate3d(3%, -4%, 0) scale(1.08);
+    opacity: 0.55;
+  }
+}
+
+/* ---- Connection lines ---- */
+
+.campus-bg__lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.campus-bg__line {
+  stroke: rgba(96, 130, 255, 0.32);
+  stroke-width: 0.15;
+  vector-effect: non-scaling-stroke;
+  animation: campus-bg-line-breathe 9s ease-in-out infinite;
+  animation-delay: var(--line-delay, 0s);
+}
+@keyframes campus-bg-line-breathe {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ---- Floating icons ---- */
+
+.campus-bg__icon {
+  position: absolute;
+  color: rgba(147, 197, 253, 0.9);
+  will-change: transform, opacity;
+  animation: campus-bg-float var(--float-duration, 14s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+@keyframes campus-bg-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: var(--icon-opacity, 0.1);
+  }
+  25% {
+    transform: translate3d(6px, -10px, 0) rotate(1.5deg);
+    opacity: calc(var(--icon-opacity, 0.1) * 1.15);
+  }
+  50% {
+    transform: translate3d(-5px, -16px, 0) rotate(3deg);
+    opacity: var(--icon-opacity, 0.1);
+  }
+  75% {
+    transform: translate3d(-9px, -5px, 0) rotate(1deg);
+    opacity: calc(var(--icon-opacity, 0.1) * 0.85);
+  }
+}
+
+/* ---- Particles ---- */
+
+.campus-bg__particle {
+  position: absolute;
+  border-radius: 9999px;
+  background-color: rgba(147, 197, 253, 0.9);
+  filter: blur(0.5px);
+  will-change: transform, opacity;
+  animation: campus-bg-particle-float var(--float-duration, 12s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+@keyframes campus-bg-particle-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.12;
+  }
+  50% {
+    transform: translate3d(8px, -14px, 0);
+    opacity: 0.4;
+  }
+}
+
+/* ---- Landing variant: slightly warmer/brighter icon tint, since it's
+   a fuller scene rather than a quiet backdrop behind a form ---- */
+.campus-bg--landing .campus-bg__icon,
+.campus-bg--landing .campus-bg__particle {
+  color: rgba(129, 170, 255, 0.85);
+  background-color: rgba(129, 170, 255, 0.85);
+}
+
+/* Respect prefers-reduced-motion: keep elements visible, stop motion. */
+.campus-bg--reduced-motion .campus-bg__icon,
+.campus-bg--reduced-motion .campus-bg__particle,
+.campus-bg--reduced-motion .campus-bg__blob,
+.campus-bg--reduced-motion .campus-bg__line {
+  animation: none !important;
+}
+.campus-bg--reduced-motion .campus-bg__icon {
+  opacity: var(--icon-opacity, 0.1);
+}
+
+/* ---- Glassmorphism card ----
+   Optional utility — apply to an existing form/card wrapper to get the
+   glass treatment without restructuring its markup. */
+.campus-glass-card {
+  position: relative;
+  background: rgba(15, 15, 25, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 0 60px rgba(37, 99, 235, 0.08);
+}
+
+/* ---- Post-signup celebration ---- */
+
+.campus-signup-celebration {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+}
+.campus-signup-glow {
+  position: absolute;
+  width: 60%;
+  max-width: 420px;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.25), transparent 70%);
+  animation: campus-bg-glow-pulse 1.8s ease-out forwards;
+}
+.campus-signup-pulse {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border-radius: 9999px;
+  border: 2px solid rgba(37, 99, 235, 0.5);
+  animation: campus-bg-ring-pulse 1.2s ease-out forwards;
+}
+.campus-confetti-piece {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  top: 50%;
+  left: 50%;
+  animation: campus-bg-confetti-burst 1.4s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes campus-bg-glow-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+@keyframes campus-bg-ring-pulse {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+@keyframes campus-bg-confetti-burst {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(0deg) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--confetti-angle, 0deg)) translateY(calc(-1 * var(--confetti-distance, 60px)))
+      scale(0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campus-bg__blob,
+  .campus-bg__line,
+  .campus-signup-glow,
+  .campus-signup-pulse,
+  .campus-confetti-piece {
+    animation-duration: 0.01ms !important;
+  }
+}
