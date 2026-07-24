@@ -18,7 +18,7 @@ const navItems = [
 export default function BottomNav() {
   return (
     <nav
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-[480px] lg:max-w-[520px] bg-white/95 backdrop-blur-md border-t border-gray-100"
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-[480px] lg:max-w-[520px] theme-bg-surface backdrop-blur-md border-t theme-border"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="grid grid-cols-5 items-center px-2 py-2">
@@ -31,12 +31,12 @@ export default function BottomNav() {
           >
             {({ isActive }) =>
               item.isCreate ? (
-                <span className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center">
-                  <item.icon className="w-5 h-5 text-white" strokeWidth={2.4} />
+                <span className="w-8 h-8 rounded-xl theme-bg-accent flex items-center justify-center">
+                  <item.icon className="w-5 h-5 theme-text-button" strokeWidth={2.4} />
                 </span>
               ) : (
                 <item.icon
-                  className={`w-6 h-6 ${isActive ? 'text-blue-600' : 'text-gray-400'} transition-all duration-300`}
+                  className={`w-6 h-6 ${isActive ? 'theme-accent' : 'theme-text-secondary'} transition-all duration-300`}
                   strokeWidth={isActive ? 2.3 : 1.8}
                 />
               )

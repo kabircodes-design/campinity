@@ -1,0 +1,308 @@
+/*
+ * Theme token variables + GLOBAL mappings from the app's existing
+ * Tailwind class vocabulary onto those variables.
+ *
+ * This is the mechanism that makes "the whole app recolors instantly"
+ * true for every page already built (Home, Search, Profile, Posts,
+ * Messages, Notifications, Settings, buttons, inputs, borders) WITHOUT
+ * editing any of those component files: every one of them already uses
+ * a small, consistent Tailwind vocabulary (bg-white, bg-gray-50/100,
+ * text-gray-900/700/500/400/300, border-gray-100/200/300, bg-blue-600,
+ * text-blue-600, etc.) — this file redefines what those class names
+ * resolve to, GLOBALLY, in terms of CSS custom properties that
+ * ThemeProvider.jsx sets on <html>.
+ *
+ * Future-proofing: nothing here is keyed to a specific theme's id or
+ * name. Any theme object in themes.js that has a `tokens` field
+ * automatically works the moment ThemeProvider applies it — Ocean,
+ * Forest, Lavender, Halloween, Christmas all "just work" the instant
+ * someone flips `locked: false` and fills in their palette, with zero
+ * changes to this file or any component.
+ *
+ * Two colors are handled with color-mix() instead of their own token,
+ * so every theme (including future ones) automatically gets a
+ * correctly-related shade without themes.js needing extra fields:
+ *   - the "one step up from surface" shade used for gray-100/pills/
+ *     input fills — derived from the theme's own surface + textPrimary
+ *   - every /50 tint background (blue-50, red-50, emerald-50, etc.) —
+ *     derived from the relevant semantic color (accent/danger/success)
+ *     mixed into the theme's own surface
+ */
+
+:root {
+  --theme-background: #f9fafb;
+  --theme-surface: #ffffff;
+  --theme-card: #ffffff;
+  --theme-border: #f3f4f6;
+  --theme-textPrimary: #111827;
+  --theme-textSecondary: #6b7280;
+  --theme-accent: #2563eb;
+  --theme-accentText: #ffffff;
+  --theme-danger: #ef4444;
+  --theme-success: #10b981;
+  --theme-notification: #2563eb;
+  --theme-button: #2563eb;
+  --theme-buttonText: #ffffff;
+}
+
+/*
+ * The 'default' pack's dark values — this is the one pack that's
+ * expected to react to the Light/Dark/System mode toggle rather than
+ * being a fixed palette (every other pack, including Midnight, sets
+ * its own inline overrides via ThemeProvider regardless of mode — see
+ * ThemeProvider.jsx). Accent/danger/success/notification/button are
+ * deliberately NOT redefined here: Campinity blue (and the semantic
+ * colors) stay the same vivid color in both light and dark, only the
+ * surfaces and text shift.
+ */
+html.dark {
+  color-scheme: dark;
+  --theme-background: #000000;
+  --theme-surface: #000000;
+  --theme-card: #000000;
+  --theme-border: #1a1a1a;
+  --theme-textPrimary: #f5f5f5;
+  --theme-textSecondary: #9a9a9a;
+}
+
+html,
+html * {
+  transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease, box-shadow 300ms ease;
+}
+
+html.dark body {
+  background-color: var(--theme-background);
+}
+
+/* ---- Token utility classes (used by the Appearance UI itself) ---- */
+
+.theme-bg-background {
+  background-color: var(--theme-background);
+}
+.theme-bg-surface {
+  background-color: var(--theme-surface);
+}
+.theme-bg-card {
+  background-color: var(--theme-card);
+}
+.theme-border {
+  border-color: var(--theme-border);
+}
+.theme-text-primary {
+  color: var(--theme-textPrimary);
+}
+.theme-text-secondary {
+  color: var(--theme-textSecondary);
+}
+.theme-accent {
+  color: var(--theme-accent);
+}
+.theme-bg-accent {
+  background-color: var(--theme-accent);
+}
+.theme-bg-danger {
+  background-color: var(--theme-danger);
+}
+.theme-bg-success {
+  background-color: var(--theme-success);
+}
+.theme-bg-button {
+  background-color: var(--theme-button);
+}
+.theme-text-button {
+  color: var(--theme-buttonText);
+}
+.theme-text-danger {
+  color: var(--theme-danger);
+}
+.theme-bg-accent-tint {
+  background-color: color-mix(in srgb, var(--theme-accent) 12%, var(--theme-surface));
+}
+.theme-bg-danger-tint {
+  background-color: color-mix(in srgb, var(--theme-danger) 12%, var(--theme-surface));
+}
+
+/* ==========================================================================
+   Global mappings — the rest of the app's EXISTING Tailwind classes,
+   redefined to resolve to the theme tokens above. No component file
+   needs to change for these to take effect.
+   ========================================================================== */
+
+/* Surfaces */
+.bg-white,
+.bg-gray-50 {
+  background-color: var(--theme-surface);
+}
+.bg-gray-100 {
+  background-color: color-mix(in srgb, var(--theme-textPrimary) 6%, var(--theme-surface));
+}
+.bg-gray-50\/50 {
+  background-color: color-mix(in srgb, var(--theme-textPrimary) 3%, var(--theme-surface));
+}
+.hover\:bg-gray-50:hover,
+.hover\:bg-gray-100:hover {
+  background-color: color-mix(in srgb, var(--theme-textPrimary) 6%, var(--theme-surface));
+}
+.hover\:bg-gray-200:hover {
+  background-color: color-mix(in srgb, var(--theme-textPrimary) 10%, var(--theme-surface));
+}
+.focus\:bg-white:focus {
+  background-color: var(--theme-surface);
+}
+
+/* Text */
+.text-gray-900,
+.text-gray-800 {
+  color: var(--theme-textPrimary);
+}
+.text-gray-700,
+.text-gray-600,
+.text-gray-500,
+.text-gray-400 {
+  color: var(--theme-textSecondary);
+}
+.text-gray-300 {
+  color: color-mix(in srgb, var(--theme-textSecondary) 60%, var(--theme-surface));
+}
+.hover\:text-gray-600:hover,
+.hover\:text-gray-800:hover {
+  color: var(--theme-textPrimary);
+}
+.placeholder\:text-gray-400::placeholder,
+.placeholder\:text-gray-300::placeholder {
+  color: var(--theme-textSecondary);
+}
+
+/* Borders / dividers — one color everywhere, as already established */
+.border-gray-100,
+.border-gray-200 {
+  border-color: var(--theme-border);
+}
+.border-gray-300 {
+  border-color: color-mix(in srgb, var(--theme-textPrimary) 16%, var(--theme-surface));
+}
+.hover\:border-gray-300:hover {
+  border-color: color-mix(in srgb, var(--theme-textPrimary) 16%, var(--theme-surface));
+}
+.divide-gray-100 > * + * {
+  border-color: var(--theme-border);
+}
+
+/* Accent — Campinity's primary action color, now theme-driven */
+.bg-blue-600 {
+  background-color: var(--theme-accent);
+}
+.text-blue-600 {
+  color: var(--theme-accent);
+}
+.hover\:bg-blue-700:hover,
+.hover\:text-blue-700:hover,
+.hover\:text-blue-800:hover {
+  filter: brightness(0.88);
+}
+.border-blue-600 {
+  border-color: var(--theme-accent);
+}
+.focus\:border-blue-500:focus {
+  border-color: var(--theme-accent);
+}
+.focus\:ring-blue-50:focus {
+  --tw-ring-color: color-mix(in srgb, var(--theme-accent) 18%, transparent);
+}
+.bg-blue-50 {
+  background-color: color-mix(in srgb, var(--theme-accent) 12%, var(--theme-surface));
+}
+
+/* Semantic tints — danger / success / notification */
+.bg-red-50 {
+  background-color: color-mix(in srgb, var(--theme-danger) 12%, var(--theme-surface));
+}
+.text-red-500,
+.text-red-600 {
+  color: var(--theme-danger);
+}
+.border-red-200 {
+  border-color: color-mix(in srgb, var(--theme-danger) 30%, var(--theme-surface));
+}
+.bg-emerald-50 {
+  background-color: color-mix(in srgb, var(--theme-success) 12%, var(--theme-surface));
+}
+.text-emerald-600 {
+  color: var(--theme-success);
+}
+.bg-amber-50 {
+  background-color: color-mix(in srgb, #f59e0b 12%, var(--theme-surface));
+}
+.bg-pink-50 {
+  background-color: color-mix(in srgb, #ec4899 12%, var(--theme-surface));
+}
+
+/* Avatar rings */
+.ring-white {
+  --tw-ring-color: var(--theme-surface);
+}
+
+/* Form field fills — one step up from surface, same derivation as
+   bg-gray-100, so an input never disappears into the card behind it. */
+input.bg-gray-50,
+textarea.bg-gray-50,
+select.bg-gray-50 {
+  background-color: color-mix(in srgb, var(--theme-textPrimary) 4%, var(--theme-surface));
+  color: var(--theme-textPrimary);
+}
+input.bg-gray-50::placeholder,
+textarea.bg-gray-50::placeholder {
+  color: var(--theme-textSecondary);
+}
+
+/* Modals / sheets — one step further up than surface, so a dialog
+   floating over themed content still reads as a distinct layer. */
+[role='dialog'].bg-white,
+[role='status'].bg-white {
+  background-color: color-mix(in srgb, var(--theme-textPrimary) 10%, var(--theme-surface));
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes badgePop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

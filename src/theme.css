@@ -29,6 +29,18 @@
  *                separate palette.
  *   --text-*     four-step text scale, each calibrated for real
  *                contrast against --surface-0/--surface-1.
+ *
+ * UPDATED for Theme Packs (ThemeProvider.jsx / theme-tokens.css): the
+ * html.dark block below now ALIASES these variables to the newer
+ * --theme-* custom properties instead of hardcoding hex values. Every
+ * selector in this file is completely unchanged — only what the
+ * variables resolve to changed. This matters because a rule like
+ * `.dark .bg-white` (two classes) is MORE specific than
+ * theme-tokens.css's plain `.bg-white` rule, so without this alias,
+ * selecting a theme pack (e.g. Romantic) while dark mode was also on
+ * would have been silently overridden back to this file's old
+ * hardcoded black — aliasing to --theme-* means both files now agree,
+ * whichever one the cascade picks.
  */
 
 :root {
@@ -37,14 +49,14 @@
 
 html.dark {
   color-scheme: dark;
-  --surface-0: #000000;
-  --surface-1: #0a0a0a;
+  --surface-0: var(--theme-background, #000000);
+  --surface-1: var(--theme-card, #0a0a0a);
   --surface-2: #131313;
-  --border: #1a1a1a;
+  --border: var(--theme-border, #1a1a1a);
   --border-strong: #2a2a2a;
-  --text-primary: #f5f5f5;
-  --text-secondary: #d0d0d0;
-  --text-tertiary: #9a9a9a;
+  --text-primary: var(--theme-textPrimary, #f5f5f5);
+  --text-secondary: var(--theme-textSecondary, #d0d0d0);
+  --text-tertiary: var(--theme-textSecondary, #9a9a9a);
   --text-quaternary: #6e6e6e;
   --text-faint: #4a4a4a;
 }
