@@ -2,13 +2,12 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
-import { PostsProvider } from './hooks/usePosts.js'
+import { PostsProvider } from './hooks/usePosts.jsx'
 import { ThemeProvider } from './theme/ThemeProvider.jsx'
 import { getThemeById } from './theme/themes.js'
 import './index.css'
 import './theme.css'
 import './theme/theme-tokens.css'
-import './styles/CampusBackground.css'
 
 // Pre-render flash prevention — mirrors ThemeProvider's own initial
 // resolution (mode + theme pack, including the legacy campinity:theme

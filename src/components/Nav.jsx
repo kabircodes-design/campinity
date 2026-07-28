@@ -44,15 +44,21 @@ export default function Nav() {
     if (el) el.scrollIntoView({ behavior: 'smooth' })
   }
 
+  // Unscrolled = transparent, sitting directly over the Hero's dark
+  // animated background. Scrolled = opaque bg-bg/80, sitting over the
+  // page's normal light content. Text/icon color has to flip with it or
+  // the nav is unreadable at the top of the page.
+  const isLight = !scrolled
+
   return (
     <header
-      className={`fixed top-0 inset-x-0 z-50 transition-shadow duration-300 ${
+      className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
         scrolled ? 'shadow-nav bg-bg/80 backdrop-blur-md' : 'bg-transparent'
       }`}
     >
       <Container className="flex items-center justify-between h-16 sm:h-[72px]">
         <a href="#top" className="flex items-center" aria-label="Campinity home">
-          <Logo className="w-8 h-8" withWordmark />
+          <Logo className="w-8 h-8" withWordmark light={isLight} />
         </a>
 
         <nav className="hidden md:flex items-center gap-8">
@@ -60,7 +66,9 @@ export default function Nav() {
             <button
               key={link.href}
               onClick={() => handleLinkClick(link.href)}
-              className="text-sm font-medium text-ink-soft hover:text-ink transition-colors duration-200"
+              className={`campus-nav-underline text-sm font-medium transition-colors duration-300 ${
+                isLight ? 'text-white/80 hover:text-white' : 'text-ink-soft hover:text-ink'
+              }`}
             >
               {link.label}
             </button>
@@ -70,7 +78,7 @@ export default function Nav() {
         <div className="hidden md:block">
           <Link
             to="/login"
-            className="inline-flex items-center gap-1.5 rounded-full bg-ink text-white text-sm font-semibold px-5 py-2.5 hover:bg-accent-deep transition-colors duration-200"
+            className="campus-cta-magnetic inline-flex items-center gap-1.5 rounded-full bg-ink text-white text-sm font-semibold px-5 py-2.5 hover:bg-accent-deep transition-colors duration-200"
           >
             Join your campus
             <Icon name="arrow" className="w-4 h-4" />
@@ -85,17 +93,23 @@ export default function Nav() {
         >
           <span className="relative w-5 h-4 block">
             <motion.span
-              className="absolute left-0 top-0 h-[1.5px] w-5 bg-ink rounded-full"
+              className={`absolute left-0 top-0 h-[1.5px] w-5 rounded-full transition-colors duration-300 ${
+                isLight && !open ? 'bg-white' : 'bg-ink'
+              }`}
               animate={open ? { rotate: 45, y: 7 } : { rotate: 0, y: 0 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             />
             <motion.span
-              className="absolute left-0 top-[7px] h-[1.5px] w-5 bg-ink rounded-full"
+              className={`absolute left-0 top-[7px] h-[1.5px] w-5 rounded-full transition-colors duration-300 ${
+                isLight && !open ? 'bg-white' : 'bg-ink'
+              }`}
               animate={open ? { opacity: 0 } : { opacity: 1 }}
               transition={{ duration: 0.15 }}
             />
             <motion.span
-              className="absolute left-0 top-[14px] h-[1.5px] w-5 bg-ink rounded-full"
+              className={`absolute left-0 top-[14px] h-[1.5px] w-5 rounded-full transition-colors duration-300 ${
+                isLight && !open ? 'bg-white' : 'bg-ink'
+              }`}
               animate={open ? { rotate: -45, y: -7 } : { rotate: 0, y: 0 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             />

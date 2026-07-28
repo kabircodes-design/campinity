@@ -1,5 +1,5 @@
 import Nav from '../components/Nav.jsx'
-import Hero from '../components/Hero.jsx'
+import Hero from '../components/HeroPremium.jsx'
 import FeatureGrid from '../components/FeatureGrid.jsx'
 import JourneyTimeline from '../components/JourneyTimeline.jsx'
 import PrivacySection from '../components/PrivacySection.jsx'

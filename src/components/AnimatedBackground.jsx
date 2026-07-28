@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 
 /**
  * Single self-contained animated background component — icons, blur
- * circles, connection lines, and particles all live in this one file on
- * purpose, alongside CampusBackground.css. No sibling components, no
- * data files, no icon folder.
+ * circles, connection lines, particles, and stars all live in this one
+ * file on purpose, alongside CampusBackground.css. No sibling
+ * components, no data files, no icon folder.
  *
  * Usage:
  *   <AnimatedBackground variant="landing" />
@@ -80,6 +80,18 @@ const SIGNUP_ELEMENTS = [
 
 const VARIANT_ELEMENTS = { landing: LANDING_ELEMENTS, login: LOGIN_ELEMENTS, signup: SIGNUP_ELEMENTS }
 const VARIANT_PARTICLE_COUNT = { landing: 14, login: 7, signup: 7 }
+
+// Twinkling stars — landing hero only, a handful of fixed points rather
+// than a generated field, since this is purely decorative texture.
+const LANDING_STARS = [
+  { top: '10%', left: '20%', size: 3, delay: 0 },
+  { top: '16%', left: '72%', size: 2, delay: 1.2 },
+  { top: '34%', left: '90%', size: 3, delay: 2.4 },
+  { top: '62%', left: '14%', size: 2, delay: 0.6 },
+  { top: '80%', left: '48%', size: 3, delay: 3 },
+  { top: '48%', left: '36%', size: 2, delay: 1.8 },
+  { top: '88%', left: '80%', size: 2, delay: 2.8 }
+]
 
 function getViewportTier() {
   if (typeof window === 'undefined') return 'desktop'
@@ -229,6 +241,21 @@ export default function AnimatedBackground({ variant = 'landing' }) {
             }}
           />
         ))}
+
+        {variant === 'landing' &&
+          LANDING_STARS.map((star, i) => (
+            <span
+              key={`star-${i}`}
+              className="campus-bg__star"
+              style={{
+                top: star.top,
+                left: star.left,
+                width: star.size,
+                height: star.size,
+                '--star-delay': `${star.delay}s`
+              }}
+            />
+          ))}
       </div>
     </div>
   )

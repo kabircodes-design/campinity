@@ -1,0 +1,338 @@
+/*
+ * HeroPremium's own styles — entirely new namespace (chp-* = "Campinity
+ * Hero Premium"), zero shared class names with the existing Hero /
+ * AnimatedBackground / CampusMascot / theme-tokens system, so nothing
+ * here can collide with or leak into anything else in the app.
+ *
+ * Deliberately does NOT use bare Tailwind color classes (bg-white,
+ * text-gray-*, etc.) anywhere — those are globally remapped by
+ * theme-tokens.css based on the app's Light/Dark/System + theme-pack
+ * selection, and this Hero is meant to look the same premium dark/blue
+ * regardless of that state, same as the current Hero already does.
+ */
+
+/* ---- Section base ---- */
+
+.chp-hero {
+  background: #05070f;
+  isolation: isolate;
+}
+
+/* ---- Background ---- */
+
+.chp-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.chp-bg__gradient {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 75% 55% at 20% -5%, rgba(59, 130, 246, 0.22), transparent 62%),
+    radial-gradient(ellipse 65% 50% at 100% 10%, rgba(99, 102, 241, 0.16), transparent 60%),
+    radial-gradient(ellipse 60% 45% at 50% 110%, rgba(37, 99, 235, 0.14), transparent 65%),
+    linear-gradient(180deg, #05070f 0%, #070a16 55%, #05070f 100%);
+}
+
+.chp-bg__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 70% at 50% 40%, transparent 55%, rgba(2, 3, 8, 0.55) 100%);
+}
+
+.chp-bg__ring {
+  position: absolute;
+}
+.chp-bg__ring--1 {
+  top: -10%;
+  left: -8%;
+}
+.chp-bg__ring--2 {
+  bottom: -14%;
+  right: -6%;
+}
+
+/* ---- Glow ring (shared: background + mascot) ---- */
+
+.chp-glow-ring {
+  position: absolute;
+  border-radius: 9999px;
+  border: 1px solid rgba(147, 197, 253, var(--chp-ring-opacity, 0.2));
+  animation: chp-ring-spin var(--chp-ring-duration, 40s) linear infinite;
+  animation-direction: var(--chp-ring-direction, normal);
+}
+
+@keyframes chp-ring-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- Particles ---- */
+
+.chp-particles {
+  position: absolute;
+  inset: 0;
+}
+
+.chp-particle {
+  position: absolute;
+  border-radius: 9999px;
+  background: rgba(147, 197, 253, 0.85);
+  filter: blur(0.4px);
+  will-change: transform, opacity;
+  animation: chp-particle-drift var(--chp-duration, 10s) ease-in-out infinite;
+  animation-delay: var(--chp-delay, 0s);
+}
+
+@keyframes chp-particle-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.15;
+  }
+  50% {
+    transform: translate3d(6px, -12px, 0);
+    opacity: 0.45;
+  }
+}
+
+/* ---- Stars ---- */
+
+.chp-star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.75);
+  animation: chp-star-twinkle 4.2s ease-in-out infinite;
+  animation-delay: var(--chp-delay, 0s);
+}
+
+@keyframes chp-star-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.25);
+  }
+}
+
+/* ---- Glassmorphism ---- */
+
+.chp-glass {
+  position: relative;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+}
+
+.chp-badge {
+  border-radius: 9999px;
+}
+
+.chp-trust-panel {
+  border-radius: 24px;
+}
+
+/* ---- Gradient heading text ---- */
+
+.chp-gradient-text {
+  background: linear-gradient(90deg, #60a5fa, #818cf8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---- CTA buttons ---- */
+
+.chp-cta-primary {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
+}
+.chp-cta-primary:hover {
+  box-shadow: 0 12px 32px rgba(59, 130, 246, 0.5);
+  transform: translateY(-2px);
+}
+
+.chp-cta-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #ffffff;
+}
+.chp-cta-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.chp-cta-secondary__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ---- Mascot ---- */
+
+.chp-mascot {
+  position: relative;
+  width: 280px;
+  height: 280px;
+}
+
+.chp-mascot__ring {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.chp-mascot__ground-glow {
+  position: absolute;
+  bottom: -6%;
+  left: 50%;
+  translate: -50% 0;
+  width: 70%;
+  aspect-ratio: 3 / 1;
+  border-radius: 9999px;
+  background: radial-gradient(ellipse, rgba(59, 130, 246, 0.4), transparent 70%);
+  filter: blur(20px);
+  animation: chp-glow-pulse 6s ease-in-out infinite;
+}
+
+.chp-mascot__orb {
+  position: absolute;
+  inset: 14%;
+  border-radius: 44% 56% 52% 48% / 50% 46% 54% 50%;
+  background: linear-gradient(160deg, #ffffff 0%, #eaf1ff 45%, #c9dcff 100%);
+  box-shadow:
+    0 24px 50px rgba(8, 15, 35, 0.45),
+    inset 0 -10px 24px rgba(120, 155, 230, 0.25);
+  overflow: hidden;
+}
+
+.chp-mascot__sheen {
+  position: absolute;
+  top: 8%;
+  left: 14%;
+  width: 46%;
+  height: 34%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95), transparent 70%);
+  filter: blur(1px);
+}
+
+.chp-mascot__core {
+  position: absolute;
+  inset: 26%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #dceaff, #3b82f6 55%, #1d4ed8 100%);
+  box-shadow:
+    0 0 30px rgba(59, 130, 246, 0.65),
+    inset 0 0 14px rgba(255, 255, 255, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10%;
+}
+
+.chp-mascot__eyes {
+  display: flex;
+  gap: 22%;
+  transform-origin: center;
+  transition: transform 130ms ease-in-out;
+}
+.chp-mascot__eyes--blink {
+  transform: scaleY(0.12);
+}
+.chp-mascot__eye {
+  width: 12%;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
+}
+
+.chp-mascot__smile {
+  width: 34%;
+  height: 12%;
+  border-bottom: 3px solid #ffffff;
+  border-radius: 0 0 50% 50%;
+  opacity: 0.9;
+}
+
+.chp-mascot__shadow {
+  position: absolute;
+  bottom: -10%;
+  left: 50%;
+  translate: -50% 0;
+  width: 55%;
+  aspect-ratio: 4 / 1;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.35);
+  filter: blur(12px);
+}
+
+@keyframes chp-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+}
+
+/* ---- Responsive ---- */
+
+@media (max-width: 1023px) {
+  .chp-mascot {
+    width: 220px;
+    height: 220px;
+  }
+}
+
+@media (max-width: 639px) {
+  .chp-mascot {
+    width: 180px;
+    height: 180px;
+  }
+  .chp-trust-panel {
+    gap: 0.75rem;
+  }
+}
+
+/* ---- Reduced motion ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  .chp-glow-ring,
+  .chp-particle,
+  .chp-star,
+  .chp-mascot__ground-glow {
+    animation: none !important;
+  }
+}

@@ -275,3 +275,199 @@
     animation-duration: 0.01ms !important;
   }
 }
+
+/* ==========================================================================
+   Twinkling stars — landing hero only
+   ========================================================================== */
+
+.campus-bg__star {
+  position: absolute;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+  animation: campus-bg-star-twinkle 4.5s ease-in-out infinite;
+  animation-delay: var(--star-delay, 0s);
+}
+
+@keyframes campus-bg-star-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.2);
+  }
+}
+
+/* ==========================================================================
+   Campus Mascot — CampusMascot.jsx
+   ========================================================================== */
+
+.campus-mascot {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  margin: 0 auto;
+  animation: campus-mascot-float 7s ease-in-out infinite;
+}
+
+.campus-mascot__glow {
+  position: absolute;
+  inset: -20%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.35), transparent 70%);
+  filter: blur(30px);
+  animation: campus-mascot-glow-pulse 6s ease-in-out infinite;
+}
+
+.campus-mascot__ring {
+  position: absolute;
+  inset: 8%;
+  border-radius: 9999px;
+  border: 1px solid rgba(147, 197, 253, 0.25);
+}
+.campus-mascot__ring--1 {
+  animation: campus-mascot-ring-spin 40s linear infinite;
+}
+.campus-mascot__ring--2 {
+  inset: 0%;
+  border-color: rgba(147, 197, 253, 0.15);
+  animation: campus-mascot-ring-spin 60s linear infinite reverse;
+}
+
+.campus-mascot__body {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 20px 40px rgba(15, 23, 42, 0.35));
+}
+
+.campus-mascot__svg {
+  width: 100%;
+  height: 100%;
+}
+
+.campus-mascot__eyes {
+  transform-origin: 80px 75px;
+  transition: transform 140ms ease-in-out;
+}
+.campus-mascot__eyes--blink {
+  transform: scaleY(0.12);
+}
+
+.campus-mascot__smile {
+  transform-origin: 80px 104px;
+  animation: campus-mascot-smile 6s ease-in-out infinite;
+}
+
+@keyframes campus-mascot-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.5deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(1.5deg);
+  }
+}
+
+@keyframes campus-mascot-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes campus-mascot-ring-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes campus-mascot-smile {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campus-mascot,
+  .campus-mascot__glow,
+  .campus-mascot__ring--1,
+  .campus-mascot__ring--2,
+  .campus-mascot__smile,
+  .campus-bg__star {
+    animation: none !important;
+  }
+}
+
+/* ==========================================================================
+   Scroll reveal — useScrollReveal.js
+   ========================================================================== */
+
+.campus-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 700ms ease-out, transform 700ms ease-out;
+}
+.campus-reveal--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campus-reveal {
+    transition: opacity 300ms ease-out;
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   Premium hover utilities — CTA magnetic lift, card lift, nav underline
+   ========================================================================== */
+
+.campus-cta-magnetic {
+  transition: transform 250ms ease, box-shadow 250ms ease;
+}
+.campus-cta-magnetic:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.35);
+}
+
+.campus-lift-card {
+  transition: transform 300ms ease, box-shadow 300ms ease;
+}
+.campus-lift-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.25);
+}
+
+.campus-nav-underline {
+  position: relative;
+}
+.campus-nav-underline::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 0%;
+  height: 2px;
+  background: currentColor;
+  transition: width 250ms ease;
+}
+.campus-nav-underline:hover::after {
+  width: 100%;
+}
