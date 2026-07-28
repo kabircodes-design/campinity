@@ -44,10 +44,6 @@ export default function Nav() {
     if (el) el.scrollIntoView({ behavior: 'smooth' })
   }
 
-  // Unscrolled = transparent, sitting directly over the Hero's dark
-  // animated background. Scrolled = opaque bg-bg/80, sitting over the
-  // page's normal light content. Text/icon color has to flip with it or
-  // the nav is unreadable at the top of the page.
   const isLight = !scrolled
 
   return (
@@ -58,7 +54,7 @@ export default function Nav() {
     >
       <Container className="flex items-center justify-between h-16 sm:h-[72px]">
         <a href="#top" className="flex items-center" aria-label="Campinity home">
-          <Logo className="w-8 h-8" withWordmark light={isLight} />
+          <Logo className="w-8 h-8" withWordmark light={isLight} premium />
         </a>
 
         <nav className="hidden md:flex items-center gap-8">

@@ -21,7 +21,7 @@ export default function Footer() {
       <Container className="pt-14 pb-8 sm:pt-16">
         <div className="grid sm:grid-cols-3 gap-10 sm:gap-8">
           <div>
-            <Logo className="w-8 h-8" withWordmark />
+            <Logo className="w-8 h-8" withWordmark premium />
             <p className="mt-4 text-[13.5px] text-ink-soft leading-relaxed max-w-[240px]">
               The operating system for college campuses. Every profile
               verified. Privacy always first.

@@ -38,6 +38,31 @@
     linear-gradient(180deg, #05070f 0%, #070a16 55%, #05070f 100%);
 }
 
+/* Extra lighting bloom concentrated behind the mascot's side of the
+   hero — adds depth without touching layout. */
+.chp-bg__bloom {
+  position: absolute;
+  top: 8%;
+  right: -6%;
+  width: 55%;
+  height: 70%;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.18), transparent 70%);
+  filter: blur(10px);
+  animation: chp-bloom-breathe 10s ease-in-out infinite;
+}
+
+@keyframes chp-bloom-breathe {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
 .chp-bg__vignette {
   position: absolute;
   inset: 0;
@@ -54,6 +79,10 @@
 .chp-bg__ring--2 {
   bottom: -14%;
   right: -6%;
+}
+.chp-bg__ring--3 {
+  top: 30%;
+  right: 8%;
 }
 
 /* ---- Glow ring (shared: background + mascot) ---- */
@@ -129,19 +158,30 @@
   }
 }
 
-/* ---- Glassmorphism ---- */
+/* ---- Glassmorphism (upgraded: stronger blur, deeper shadow, softer
+   two-tone border for more visible edge definition) ---- */
 
 .chp-glass {
   position: relative;
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 20px;
   box-shadow:
-    0 8px 30px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
-    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+    0 12px 40px rgba(0, 0, 0, 0.38),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.15) inset;
+  transition: border-color 300ms ease, box-shadow 300ms ease, transform 300ms ease;
+}
+.chp-glass:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 0 30px rgba(59, 130, 246, 0.12);
 }
 
 .chp-badge {
@@ -151,14 +191,18 @@
 .chp-trust-panel {
   border-radius: 24px;
 }
+.chp-trust-panel:hover {
+  transform: translateY(-2px);
+}
 
 /* ---- Gradient heading text ---- */
 
 .chp-gradient-text {
-  background: linear-gradient(90deg, #60a5fa, #818cf8);
+  background: linear-gradient(90deg, #79b8ff, #a6d1ff);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  text-shadow: 0 0 24px rgba(121, 184, 255, 0.25);
 }
 
 /* ---- CTA buttons ---- */
@@ -169,8 +213,11 @@
   box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
 }
 .chp-cta-primary:hover {
-  box-shadow: 0 12px 32px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 14px 36px rgba(59, 130, 246, 0.55);
   transform: translateY(-2px);
+}
+.chp-cta-primary:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .chp-cta-secondary {
@@ -179,10 +226,12 @@
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   color: #ffffff;
+  transition: background 250ms ease, border-color 250ms ease, transform 250ms ease;
 }
 .chp-cta-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.26);
+  transform: translateY(-2px);
 }
 .chp-cta-secondary__glyph {
   display: inline-flex;
@@ -192,14 +241,41 @@
   height: 20px;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.14);
+  transition: background 250ms ease;
+}
+.chp-cta-secondary:hover .chp-cta-secondary__glyph {
+  background: rgba(255, 255, 255, 0.22);
 }
 
-/* ---- Mascot ---- */
+/* ==========================================================================
+   Mascot — glass body + black OLED face plate + glowing blue eyes
+   ========================================================================== */
 
 .chp-mascot {
   position: relative;
   width: 280px;
   height: 280px;
+}
+
+.chp-mascot__aura {
+  position: absolute;
+  inset: -18%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.28), transparent 68%);
+  filter: blur(24px);
+  animation: chp-aura-pulse 5.5s ease-in-out infinite;
+}
+
+@keyframes chp-aura-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.07);
+  }
 }
 
 .chp-mascot__ring {
@@ -213,74 +289,38 @@
   bottom: -6%;
   left: 50%;
   translate: -50% 0;
-  width: 70%;
+  width: 72%;
   aspect-ratio: 3 / 1;
   border-radius: 9999px;
-  background: radial-gradient(ellipse, rgba(59, 130, 246, 0.4), transparent 70%);
+  background: radial-gradient(ellipse, rgba(59, 130, 246, 0.45), transparent 70%);
   filter: blur(20px);
   animation: chp-glow-pulse 6s ease-in-out infinite;
 }
 
-.chp-mascot__orb {
-  position: absolute;
-  inset: 14%;
-  border-radius: 44% 56% 52% 48% / 50% 46% 54% 50%;
-  background: linear-gradient(160deg, #ffffff 0%, #eaf1ff 45%, #c9dcff 100%);
-  box-shadow:
-    0 24px 50px rgba(8, 15, 35, 0.45),
-    inset 0 -10px 24px rgba(120, 155, 230, 0.25);
-  overflow: hidden;
+/* The mascot artwork itself — breathing scale + soft glow live here
+   (on the <img>), separate from Framer Motion's float/tilt transform
+   on the outer .chp-mascot wrapper, so the two never fight over the
+   same `transform` property. object-fit + max-width keep it
+   responsive and lightweight regardless of the wrapper's size. */
+.chp-mascot__image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 40px rgba(6, 12, 30, 0.5)) drop-shadow(0 0 26px rgba(59, 130, 246, 0.35));
+  animation: chp-breathe 4.5s ease-in-out infinite;
 }
 
-.chp-mascot__sheen {
-  position: absolute;
-  top: 8%;
-  left: 14%;
-  width: 46%;
-  height: 34%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.95), transparent 70%);
-  filter: blur(1px);
-}
-
-.chp-mascot__core {
-  position: absolute;
-  inset: 26%;
-  border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #dceaff, #3b82f6 55%, #1d4ed8 100%);
-  box-shadow:
-    0 0 30px rgba(59, 130, 246, 0.65),
-    inset 0 0 14px rgba(255, 255, 255, 0.3);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10%;
-}
-
-.chp-mascot__eyes {
-  display: flex;
-  gap: 22%;
-  transform-origin: center;
-  transition: transform 130ms ease-in-out;
-}
-.chp-mascot__eyes--blink {
-  transform: scaleY(0.12);
-}
-.chp-mascot__eye {
-  width: 12%;
-  aspect-ratio: 1;
-  border-radius: 9999px;
-  background: #ffffff;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
-}
-
-.chp-mascot__smile {
-  width: 34%;
-  height: 12%;
-  border-bottom: 3px solid #ffffff;
-  border-radius: 0 0 50% 50%;
-  opacity: 0.9;
+@keyframes chp-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.018);
+  }
 }
 
 .chp-mascot__shadow {
@@ -332,7 +372,327 @@
   .chp-glow-ring,
   .chp-particle,
   .chp-star,
-  .chp-mascot__ground-glow {
+  .chp-mascot__ground-glow,
+  .chp-mascot__aura,
+  .chp-mascot__image,
+  .chp-bg__bloom {
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   Landing Page Phase 2 — extends the premium dark/glass treatment from
+   Hero to every section below it (Features, Journey, Privacy, Events,
+   Campus Verified, CTA, Footer).
+
+   Strategy: rather than editing seven section files (plus SectionHeading
+   and FeatureCard, which FeatureGrid renders but weren't available to
+   verify), this recolors the shared design-system classes those files
+   already use — text-ink, text-ink-soft, text-ink-faint, bg-surface,
+   bg-bg, border-line, border-lineSoft, shadow-card, the `eyebrow`
+   utility — scoped under `.chp-landing`. Nothing here can reach
+   Login/Signup or any authenticated page: those aren't wrapped in
+   `.chp-landing`, so this whole block simply doesn't apply to them even
+   though AuthLayout shares some of the same class names.
+
+   Known gap, stated plainly: SectionHeading.jsx and FeatureCard.jsx
+   (rendered by FeatureGrid.jsx) were never shared in this conversation,
+   so their exact classes weren't verified the way every other file's
+   were. If they follow the same text-ink/text-ink-soft/bg-surface
+   convention every other component in this project uses — which has
+   been true without exception so far — they're covered by this
+   override automatically. If either of them does something different,
+   they're the one place this redesign might not fully reach, and I'd
+   need their actual source to close that gap with the same certainty
+   as everything else here.
+   ========================================================================== */
+
+.chp-landing {
+  position: relative;
+  background: #05070f;
+  color: #f5f7ff;
+}
+
+.chp-landing__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 40% at 15% 0%, rgba(59, 130, 246, 0.1), transparent 60%),
+    radial-gradient(ellipse 60% 35% at 85% 100%, rgba(99, 102, 241, 0.08), transparent 60%),
+    linear-gradient(180deg, #05070f 0%, #070a16 50%, #05070f 100%);
+}
+
+/* Every section sits above the fixed backdrop via position + z-index —
+   sections without their own explicit background class inherit the
+   dark backdrop naturally, so no blanket background override is
+   needed (or wanted: Hero's own .chp-hero background, declared earlier
+   in this file, must be left completely alone). */
+.chp-landing main,
+.chp-landing main > section {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- Surfaces ---- */
+
+.chp-landing .bg-surface,
+.chp-landing .bg-bg {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)) !important;
+}
+
+/* Cards: any element using shadow-card becomes a real glass card —
+   this is the single rule that makes "translucent glass, blur, blue
+   border glow, hover lift" apply to the campus radar card, event
+   cards, and campus-verified feed cards without touching their JSX. */
+.chp-landing .shadow-card {
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.1) inset !important;
+  transition: transform 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
+}
+.chp-landing .shadow-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(96, 165, 250, 0.35) !important;
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 0 24px rgba(59, 130, 246, 0.15) !important;
+}
+
+/* ---- Text ---- */
+
+.chp-landing .text-ink {
+  color: #ffffff !important;
+}
+.chp-landing .text-ink-soft {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+.chp-landing .text-ink-faint {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+.chp-landing .eyebrow {
+  color: #79b8ff !important;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+/* ---- Borders ---- */
+
+.chp-landing .border-line {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+.chp-landing .border-lineSoft {
+  border-color: rgba(255, 255, 255, 0.07) !important;
+}
+.chp-landing .divide-lineSoft > * + * {
+  border-color: rgba(255, 255, 255, 0.07) !important;
+}
+.chp-landing .bg-line {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* ---- Accent tints ---- */
+
+.chp-landing .bg-accent-tint {
+  background: rgba(59, 130, 246, 0.16) !important;
+}
+
+/* ---- Hover states already present in the markup ---- */
+
+.chp-landing .hover\:border-ink\/30:hover {
+  border-color: rgba(255, 255, 255, 0.28) !important;
+}
+.chp-landing .hover\:border-accent\/30:hover {
+  border-color: rgba(96, 165, 250, 0.4) !important;
+}
+
+/* ---- Buttons: align the two hard-coded light buttons (FeatureGrid's
+   "show all" toggle, CTA's white pill) with the Hero's glass button
+   language, without changing their markup or behavior. ---- */
+
+.chp-landing button.border-line,
+.chp-landing a.border-line {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* CTA.jsx's own bg-ink block was already dark before this pass — left
+   alone structurally, just letting its existing blue blur accents read
+   consistently against the now-also-dark sections around it. No rule
+   needed here; noted for completeness. */
+
+/* ---- Section dividers (bg-surface border-y border-lineSoft bands used
+   by Journey/Events) — soften into the continuous background instead
+   of reading as a distinct lighter stripe. ---- */
+
+.chp-landing .border-y.border-lineSoft {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  background: rgba(255, 255, 255, 0.015) !important;
+}
+
+/* ---- Footer ---- */
+
+.chp-landing footer {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+.chp-landing footer a.border-line {
+  background: rgba(255, 255, 255, 0.04);
+}
+.chp-landing footer a.border-line:hover {
+  border-color: rgba(96, 165, 250, 0.4) !important;
+}
+
+/* ---- Lightweight per-section ambient touches (floating particles /
+   orbit lines) — pure CSS, no new DOM nodes, no duplicated JS particle
+   system running underneath the whole page. Kept sparse and subtle. ---- */
+
+.chp-landing main > section:not(.chp-hero) {
+  overflow: hidden;
+}
+
+.chp-landing main > section:not(.chp-hero)::before {
+  content: '';
+  position: absolute;
+  top: 10%;
+  left: -4%;
+  width: 220px;
+  height: 220px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.08), transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+  z-index: 0;
+}
+.chp-landing main > section:not(.chp-hero)::after {
+  content: '';
+  position: absolute;
+  bottom: 8%;
+  right: -4%;
+  width: 260px;
+  height: 260px;
+  border-radius: 9999px;
+  border: 1px solid rgba(147, 197, 253, 0.08);
+  pointer-events: none;
+  z-index: 0;
+  animation: chp-ring-spin 60s linear infinite;
+}
+
+.chp-landing main > section:not(.chp-hero) > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chp-landing main > section:not(.chp-hero)::after {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .chp-landing main > section:not(.chp-hero)::before,
+  .chp-landing main > section:not(.chp-hero)::after {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   Final typography & readability polish
+   ========================================================================== */
+
+
+
+/* ---- Navbar / Footer wordmark ----
+   Different typeface from the hero heading (Manrope ExtraBold, loaded
+   above) — "Camp" stays pure white, "inity" carries a soft blue
+   gradient with a very subtle glow, never flashy. */
+.chp-wordmark {
+  font-family: 'Manrope', 'Inter', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  margin-left: 0.125rem;
+}
+.chp-wordmark__accent {
+  background: linear-gradient(90deg, #79b8ff, #a6d1ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 18px rgba(121, 184, 255, 0.22);
+}
+
+/* ---- Hero heading — same text, same responsive sizes, tighter
+   premium kerning and refined optical line-height only. ---- */
+.chp-hero-heading {
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+/* ---- Button typography refinement (Hero's own CTAs + the two
+   landing-page buttons touched by the Phase 2 pass: FeatureGrid's
+   "show all" toggle, CTA.jsx's white pill) — weight, spacing, and
+   transition polish only, no layout change. ---- */
+.chp-cta-primary,
+.chp-cta-secondary {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.chp-landing button.border-line,
+.chp-landing a.border-line,
+.chp-landing .bg-white.text-ink {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition: transform 250ms ease, box-shadow 250ms ease, background-color 250ms ease, border-color 250ms ease;
+}
+.chp-landing a.bg-white.text-ink:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(121, 184, 255, 0.25);
+}
+
+/* ---- Card heading/body typography refinement — reuses the existing
+   .shadow-card glass treatment from Phase 2, adds premium type scale
+   only (no border/shadow/blur redesign, no spacing change). ---- */
+.chp-landing .shadow-card h3,
+.chp-landing .shadow-card h2 {
+  letter-spacing: -0.01em;
+}
+
+/* ---- Icon accent color consistency — any icon still on the old
+   text-accent utility (JourneyTimeline's step markers, PrivacySection's
+   check icons, CampusVerified's icons) now matches the exact accent
+   spec used everywhere else on this page. ---- */
+.chp-landing .text-accent {
+  color: #79b8ff !important;
+}
+.chp-landing .border-accent {
+  border-color: #79b8ff !important;
+}
+
+/* ==========================================================================
+   Wordmark v2 — custom SVG signature mark (Logo.jsx, premium prop)
+   ========================================================================== */
+
+   
+
+.chp-wordmark-svg {
+  display: block;
+  width: auto;
+  filter: drop-shadow(0 0 6px rgba(121, 184, 255, 0.18));
+}
+
+/* Note: the Poppins @import above was used by the previous wordmark
+   iteration (SVG <text> styled with Poppins). The current wordmark
+   (Logo.jsx) uses zero <text> elements and zero fonts, so that import
+   is no longer doing anything for the wordmark — left in place per
+   "do not remove any existing styles" rather than deleted. The
+   .chp-wordmark-svg rule above it (display/width/glow) still applies
+   correctly to the new SVG and needs no changes. */

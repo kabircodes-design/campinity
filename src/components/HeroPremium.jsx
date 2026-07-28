@@ -24,14 +24,11 @@ function PlayGlyph() {
 }
 
 /**
- * Standalone premium Hero — entirely new component tree, does not
- * import or modify Hero.jsx / AnimatedBackground.jsx /
- * CampusMascot.jsx / Nav.jsx / Logo.jsx. Reuses only the existing,
- * already-verified-safe structural components (Container, Icon).
- *
- * Not wired into LandingPage.jsx — swap it in by replacing
- * `import Hero from './Hero.jsx'` with
- * `import Hero from './HeroPremium.jsx'` there when ready.
+ * The premium Hero — wired into LandingPage.jsx as the active Hero
+ * (imported there as `Hero`). Entirely its own component tree, does
+ * not import or modify the original Hero.jsx / AnimatedBackground.jsx /
+ * CampusMascot.jsx. Reuses only the existing, already-verified-safe
+ * structural components (Container, Icon).
  */
 export default function HeroPremium() {
   return (
@@ -51,7 +48,7 @@ export default function HeroPremium() {
               className="flex justify-center lg:justify-start"
             >
               <GlassCard className="chp-badge inline-flex items-center gap-2 px-3.5 py-1.5">
-                <Icon name="shield" className="w-3.5 h-3.5 text-[#7fb2ff]" strokeWidth={1.8} />
+                <Icon name="shield" className="w-3.5 h-3.5 text-[#79B8FF]" strokeWidth={1.8} />
                 <span className="font-mono text-2xs uppercase tracking-[0.12em] text-white/75">
                   The operating system for college campuses
                 </span>
@@ -62,7 +59,7 @@ export default function HeroPremium() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.65, delay: 0.1, ease }}
-              className="mt-7 font-display font-extrabold text-balance text-[2.75rem] leading-[1.05] sm:text-6xl sm:leading-[1.03] lg:text-[4.6rem] text-white"
+              className="chp-hero-heading mt-7 font-display font-extrabold text-balance text-[2.75rem] leading-[1.05] sm:text-6xl sm:leading-[1.03] lg:text-[4.6rem] text-white"
             >
               Everything campus.
               <br />
@@ -114,7 +111,7 @@ export default function HeroPremium() {
               <GlassCard className="chp-trust-panel grid grid-cols-3 gap-4 sm:gap-6 px-5 py-5 sm:px-7 sm:py-6 text-left">
                 {TRUST_BADGES.map((badge) => (
                   <div key={badge.label} className="flex flex-col gap-2">
-                    <Icon name={badge.icon} className="w-5 h-5 text-[#7fb2ff]" strokeWidth={1.7} />
+                    <Icon name={badge.icon} className="w-5 h-5 text-[#79B8FF]" strokeWidth={1.7} />
                     <span className="text-[13px] sm:text-sm font-semibold text-white leading-snug">
                       {badge.label}
                     </span>

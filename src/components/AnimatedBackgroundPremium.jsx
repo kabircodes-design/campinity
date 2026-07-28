@@ -12,7 +12,7 @@ function getViewportTier() {
 
 /**
  * Premium ambient background for HeroPremium — gradient base, glow
- * rings, floating particles, a handful of twinkling stars.
+ * rings, floating particles, twinkling stars, and a bloom layer.
  *
  * Continuous ambient loops here are CSS-driven (cheaper for many
  * simultaneous infinite animations than a JS-driven approach); Framer
@@ -32,8 +32,8 @@ export default function AnimatedBackgroundPremium() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const particleCount = tier === 'mobile' ? 8 : tier === 'tablet' ? 16 : 26
-  const starCount = tier === 'mobile' ? 4 : tier === 'tablet' ? 6 : 9
+  const particleCount = tier === 'mobile' ? 10 : tier === 'tablet' ? 20 : 34
+  const starCount = tier === 'mobile' ? 5 : tier === 'tablet' ? 8 : 12
 
   const stars = Array.from({ length: starCount }).map((_, i) => ({
     id: i,
@@ -45,12 +45,14 @@ export default function AnimatedBackgroundPremium() {
   return (
     <div className="chp-bg" aria-hidden="true">
       <div className="chp-bg__gradient" />
+      <div className="chp-bg__bloom" />
       <div className="chp-bg__vignette" />
 
       {tier !== 'mobile' && (
         <>
-          <GlowRing size={520} duration={70} opacity={0.14} className="chp-bg__ring chp-bg__ring--1" />
-          <GlowRing size={380} duration={54} reverse opacity={0.1} className="chp-bg__ring chp-bg__ring--2" />
+          <GlowRing size={560} duration={75} opacity={0.13} className="chp-bg__ring chp-bg__ring--1" />
+          <GlowRing size={420} duration={58} reverse opacity={0.11} className="chp-bg__ring chp-bg__ring--2" />
+          <GlowRing size={300} duration={42} opacity={0.09} className="chp-bg__ring chp-bg__ring--3" />
         </>
       )}
 
