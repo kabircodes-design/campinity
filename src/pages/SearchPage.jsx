@@ -4,19 +4,32 @@ import { ArrowLeft, Clock, X } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import StudentCard from '../components/StudentCard.jsx'
 import CollegeResultCard from '../components/CollegeResultCard.jsx'
+import CommunityCard from '../components/CommunityCard.jsx'
 import SearchSkeleton from '../components/SearchSkeleton.jsx'
 import SearchEmptyState from '../components/SearchEmptyState.jsx'
 import { searchAll } from '../firebase/searchService.js'
+import { searchCommunitiesByName } from '../firebase/communityService.js'
 import { addRecentSearch, clearRecentSearches, getRecentSearches, removeRecentSearch } from '../utils/recentSearches.js'
 
 const tabs = [
   { label: 'All', key: 'all' },
   { label: 'Students', key: 'students' },
-  { label: 'Colleges', key: 'colleges' }
+  { label: 'Colleges', key: 'colleges' },
+  { label: 'Communities', key: 'communities' }
 ]
 
 const DEBOUNCE_MS = 300
 
+/**
+ * Extended to include communities alongside the existing students/
+ * colleges search — this file previously had zero community
+ * integration despite being reported as complete. searchAll() (from
+ * searchService.js, which I don't have) is left completely untouched;
+ * communities are fetched as a SEPARATE call
+ * (searchCommunitiesByName, new in communityService.js) run in
+ * parallel with it, not merged into searchAll's own result shape,
+ * since I can't safely modify a service file I've never seen.
+ */
 export default function SearchPage() {
   const navigate = useNavigate()
   const inputRef = useRef(null)
@@ -28,6 +41,7 @@ export default function SearchPage() {
 
   const [students, setStudents] = useState([])
   const [colleges, setColleges] = useState([])
+  const [communities, setCommunities] = useState([])
   const [status, setStatus] = useState('idle') // 'idle' | 'loading' | 'success' | 'error'
 
   useEffect(() => {
@@ -42,6 +56,7 @@ export default function SearchPage() {
       setStatus('idle')
       setStudents([])
       setColleges([])
+      setCommunities([])
       return undefined
     }
 
@@ -50,10 +65,14 @@ export default function SearchPage() {
 
     const timer = window.setTimeout(async () => {
       try {
-        const result = await searchAll(trimmed)
+        const [result, communityResults] = await Promise.all([
+          searchAll(trimmed),
+          searchCommunitiesByName(trimmed).catch(() => [])
+        ])
         if (requestIdRef.current !== requestId) return // a newer keystroke superseded this search
         setStudents(result.students)
         setColleges(result.colleges)
+        setCommunities(communityResults)
         setStatus('success')
       } catch {
         if (requestIdRef.current !== requestId) return
@@ -65,10 +84,11 @@ export default function SearchPage() {
   }, [query])
 
   const isSearching = query.trim().length > 0
-  const hasResults = students.length > 0 || colleges.length > 0
+  const hasResults = students.length > 0 || colleges.length > 0 || communities.length > 0
 
   const showStudents = activeTab === 'all' || activeTab === 'students'
   const showColleges = activeTab === 'all' || activeTab === 'colleges'
+  const showCommunities = activeTab === 'all' || activeTab === 'communities'
 
   const runSearch = (value) => {
     setQuery(value)
@@ -89,11 +109,12 @@ export default function SearchPage() {
     setStatus('loading')
     requestIdRef.current += 1
     const requestId = requestIdRef.current
-    searchAll(query.trim())
-      .then((result) => {
+    Promise.all([searchAll(query.trim()), searchCommunitiesByName(query.trim()).catch(() => [])])
+      .then(([result, communityResults]) => {
         if (requestIdRef.current !== requestId) return
         setStudents(result.students)
         setColleges(result.colleges)
+        setCommunities(communityResults)
         setStatus('success')
       })
       .catch(() => {
@@ -130,7 +151,7 @@ export default function SearchPage() {
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') commitSearch()
                 }}
-                placeholder="Search students or colleges"
+                placeholder="Search students, colleges or communities"
                 className="w-full rounded-full border border-gray-200 bg-gray-50 pl-4 pr-9 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
               />
               {query && (
@@ -208,7 +229,7 @@ export default function SearchPage() {
 
               {recent.length === 0 && (
                 <div className="px-6 py-16 text-center">
-                  <p className="text-sm text-gray-400">Search for students or colleges to get started.</p>
+                  <p className="text-sm text-gray-400">Search for students, colleges or communities to get started.</p>
                 </div>
               )}
             </div>
@@ -261,6 +282,21 @@ export default function SearchPage() {
                   {colleges.map((college) => (
                     <CollegeResultCard key={college.id} college={college} />
                   ))}
+                </section>
+              )}
+
+              {showCommunities && communities.length > 0 && (
+                <section className="px-4">
+                  {activeTab === 'all' && (
+                    <p className="pt-3 pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Communities
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-3">
+                    {communities.map((community) => (
+                      <CommunityCard key={community.id} community={community} />
+                    ))}
+                  </div>
                 </section>
               )}
             </div>

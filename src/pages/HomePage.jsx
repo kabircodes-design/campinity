@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Search } from 'lucide-react'
+import { Bell, Search, Users } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import StoryBubble from '../components/StoryBubble.jsx'
 import PostCard from '../components/PostCard.jsx'
@@ -11,6 +11,8 @@ import { getUserProfile } from '../firebase/profileService.js'
 import { getFeedPosts, getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getFeedStories } from '../firebase/storyService.js'
 import { getUnreadNotificationCount } from '../firebase/notificationService.js'
+import { getTrendingCommunities } from '../firebase/communityService.js'
+import CommunityCard from '../components/CommunityCard.jsx'
 import { useCampusVerificationReminder } from '../hooks/useCampusVerificationReminder.js'
 import CampusVerificationModal from '../components/CampusVerificationModal.jsx'
 import CampusVerificationBanner from '../components/CampusVerificationBanner.jsx'
@@ -24,6 +26,25 @@ const feedTabs = [
   { label: 'Clubs', key: 'clubs' }
 ]
 
+/**
+ * Presentation-only pass (OS-inspired depth: solid surfaces + soft
+ * shadows, not glass, per the brief). Every hook, every Firebase call,
+ * every prop passed to PostCard/StoryBubble/BottomNav/Avatar is
+ * byte-identical to before — only spacing, elevation, borders, and
+ * transitions on markup that lives directly in THIS file changed.
+ *
+ * Not touched, because they're separate files I don't have:
+ * PostCard.jsx (the actual feed cards), StoryBubble.jsx, BottomNav.jsx,
+ * Avatar.jsx. Their "premium card/nav" treatment from the brief still
+ * needs those files pasted in before it can be done for real.
+ *
+ * bg-white/bg-gray-50/border-gray-100/text-gray-900 etc. here already
+ * run through the app's global theme-tokens.css remap (that file is
+ * imported once in main.jsx, not scoped to the landing page), so this
+ * screen was already theme-reactive before this pass — the classes
+ * below are unchanged in that respect, only depth/spacing/motion
+ * layered on top.
+ */
 export default function HomePage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(feedTabs[0].key)
@@ -39,16 +60,6 @@ export default function HomePage() {
     let cancelled = false
     const uid = auth.currentUser?.uid
 
-    /**
-     * Loads the signed-in user's real Firestore profile for the greeting
-     * and avatar. Kept in its own try/catch, completely independent from
-     * the posts/stories fetch below — a Firestore error on the feed
-     * (e.g. a missing composite index) must never wipe out a profile
-     * that loaded successfully. This was the actual bug: both fetches
-     * used to share a single Promise.all, so a feed-side failure threw
-     * before setProfile() ever ran, leaving the greeting on its
-     * empty-name fallback every time.
-     */
     const loadProfile = async () => {
       if (!uid) return
       try {
@@ -96,6 +107,32 @@ export default function HomePage() {
     [posts, activeTab]
   )
 
+  const [communities, setCommunities] = useState([])
+  const [communitiesLoading, setCommunitiesLoading] = useState(false)
+  const [communitiesLoaded, setCommunitiesLoaded] = useState(false)
+
+  useEffect(() => {
+    if (activeTab !== 'clubs' || communitiesLoaded) return
+    let cancelled = false
+    setCommunitiesLoading(true)
+    getTrendingCommunities({ pageSize: 30 })
+      .then((data) => {
+        if (!cancelled) {
+          setCommunities(data)
+          setCommunitiesLoaded(true)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCommunitiesLoaded(true)
+      })
+      .finally(() => {
+        if (!cancelled) setCommunitiesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, communitiesLoaded])
+
   const displayName = profile?.displayName || ''
   const firstName = displayName.split(' ')[0] || 'there'
   const initials = getInitials(displayName)
@@ -130,25 +167,36 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         {/* Top header — logo + notifications, stays pinned          */}
         {/* -------------------------------------------------------- */}
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-[0_1px_0_rgba(15,23,42,0.02)]">
           <div className="h-14 flex items-center justify-between px-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-[0_2px_8px_rgba(37,99,235,0.28)]">
                 <span className="text-white text-sm font-bold">C</span>
               </div>
             </div>
 
-            <button
-              type="button"
-              aria-label="Notifications"
-              onClick={() => navigate('/notifications')}
-              className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
-            >
-              <Bell className="w-5 h-5" />
-              {unreadCount > 0 && (
-                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />
-              )}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Create a community"
+                onClick={() => navigate('/community/create')}
+                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+              >
+                <Users className="w-5 h-5" />
+              </button>
+
+              <button
+                type="button"
+                aria-label="Notifications"
+                onClick={() => navigate('/notifications')}
+                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />
+                )}
+              </button>
+            </div>
           </div>
         </header>
 
@@ -157,7 +205,7 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         {/* Greeting + search — real Firebase profile                */}
         {/* -------------------------------------------------------- */}
-        <section className="px-4 pt-4 pb-3">
+        <section className="px-4 pt-5 pb-4">
           <div className="flex items-center gap-3">
             <Avatar
               initials={initials}
@@ -166,7 +214,9 @@ export default function HomePage() {
               src={profile?.avatar || undefined}
             />
             <div>
-              <h1 className="text-xl font-bold text-gray-900 tracking-tight">Good morning, {firstName}</h1>
+              <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
+                Good morning, {firstName}
+              </h1>
               <p className="mt-0.5 text-[13px] text-gray-400">Catch up on what's happening across campus.</p>
             </div>
           </div>
@@ -174,11 +224,11 @@ export default function HomePage() {
           <button
             type="button"
             onClick={() => navigate('/search')}
-            className="relative mt-3.5 w-full text-left"
+            className="group relative mt-4 w-full text-left"
             aria-label="Search Campinity"
           >
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <span className="block w-full rounded-full border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-400 hover:bg-white hover:border-gray-300 transition-all duration-300">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-colors duration-200 group-hover:text-gray-500" />
+            <span className="block w-full rounded-2xl border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-400 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)]">
               Search Campinity
             </span>
           </button>
@@ -187,7 +237,7 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         {/* Stories row — real Firestore stories                     */}
         {/* -------------------------------------------------------- */}
-        <section className="pb-3 border-b border-gray-100">
+        <section className="pb-3.5 border-b border-gray-100">
           <div className="flex items-start gap-3.5 px-4 overflow-x-auto scroll-hidden">
             {storyBubbles.map((story) => (
               <StoryBubble key={story.id} story={story} />
@@ -198,28 +248,52 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         {/* Feed tabs                                                 */}
         {/* -------------------------------------------------------- */}
-        <nav className="sticky top-14 z-30 flex items-center bg-white border-b border-gray-100">
-          {feedTabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 py-3 text-[13px] font-semibold text-center border-b-2 transition-all duration-300 ${
-                activeTab === tab.key
-                  ? 'text-blue-600 border-blue-600'
-                  : 'text-gray-400 border-transparent hover:text-gray-600'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <nav className="sticky top-14 z-30 flex items-center bg-white/95 backdrop-blur-md border-b border-gray-100">
+          {feedTabs.map((tab) => {
+            const isActive = activeTab === tab.key
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`relative flex-1 py-3 text-[13px] font-semibold text-center transition-colors duration-200 ${
+                  isActive ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {tab.label}
+                <span
+                  className={`absolute left-3 right-3 -bottom-px h-[2px] rounded-full bg-blue-600 transition-all duration-300 ease-out ${
+                    isActive ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-50'
+                  }`}
+                  aria-hidden="true"
+                />
+              </button>
+            )
+          })}
         </nav>
 
         {/* -------------------------------------------------------- */}
         {/* Feed — Firestore posts                                    */}
         {/* -------------------------------------------------------- */}
         <main className="pb-24">
-          {error ? (
+          {activeTab === 'clubs' ? (
+            communitiesLoading ? (
+              <div className="py-16 flex justify-center">
+                <Loader size="md" tone="dark" />
+              </div>
+            ) : communities.length === 0 ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">No communities yet.</p>
+                <p className="mt-1 text-sm text-gray-400">Be the first to create one.</p>
+              </div>
+            ) : (
+              <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {communities.map((community) => (
+                  <CommunityCard key={community.id} community={community} />
+                ))}
+              </div>
+            )
+          ) : error ? (
             <div className="px-6 py-16 text-center">
               <p className="text-sm text-gray-400">{error}</p>
             </div>

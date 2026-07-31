@@ -31,6 +31,9 @@ const AddCollegePage = lazy(() => import('./pages/AddCollegePage.jsx'))
 const CollegePage = lazy(() => import('./pages/CollegePage.jsx'))
 const FollowersPage = lazy(() => import('./pages/FollowersPage.jsx'))
 const FollowingPage = lazy(() => import('./pages/FollowingPage.jsx'))
+const CreateCommunityPage = lazy(() => import('./pages/CreateCommunityPage.jsx'))
+const CommunityDetailPage = lazy(() => import('./pages/CommunityDetailPage.jsx'))
+const CommunitySettingsPage = lazy(() => import('./pages/CommunitySettingsPage.jsx'))
 
 export default function App() {
   return (
@@ -180,6 +183,46 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Marketplace — bottom nav entry added ahead of the real feature.
+            Placeholder only, same ComingSoon convention already used
+            below for /settings/notifications, /settings/privacy, etc. */}
+        <Route
+          path="/marketplace"
+          element={
+            <ProtectedRoute stage="home">
+              <ComingSoon title="Marketplace" />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Communities — Phase 2. /community/create must come before the
+            dynamic /community/:communityId route, or "create" would be
+            matched as a communityId param instead. */}
+        <Route
+          path="/community/create"
+          element={
+            <ProtectedRoute stage="home">
+              <CreateCommunityPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/community/:communityId/settings"
+          element={
+            <ProtectedRoute stage="home">
+              <CommunitySettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/community/:communityId"
+          element={
+            <ProtectedRoute stage="home">
+              <CommunityDetailPage />
             </ProtectedRoute>
           }
         />

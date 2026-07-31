@@ -13,7 +13,8 @@ import {
   MoreHorizontal,
   PackageSearch,
   Share,
-  ShoppingBag
+  ShoppingBag,
+  Users
 } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { postTypeConfig } from '../data/dummyFeed.js'
@@ -46,6 +47,10 @@ export default function PostCard({ post }) {
 
   const goToProfile = () => navigate(`/student/${post.username}`)
   const goToPost = () => navigate(`/post/${post.id}`)
+  const goToCommunity = (event) => {
+    event.stopPropagation()
+    navigate(`/community/${post.communityId}`)
+  }
 
   const toggleLike = async () => {
     const nextLiked = !liked
@@ -75,7 +80,24 @@ export default function PostCard({ post }) {
 
   return (
     <article className="border-b border-gray-100 hover:bg-gray-50/40 transition-all duration-300">
-      <div className="flex items-start gap-3 px-4 pt-4">
+      {/* "Posted in X" — only when this post has a communityId (community
+          posts now live in the same posts/ collection as everything
+          else, distinguished only by this field). Deliberately placed
+          ABOVE the author row, matching "Posted in Coding Club" appearing
+          above the post per the brief, and stops click propagation so
+          tapping the badge opens the community, not the post. */}
+      {post.communityId && (
+        <button
+          type="button"
+          onClick={goToCommunity}
+          className="flex items-center gap-1.5 px-4 pt-3 text-[12px] font-medium text-blue-600 hover:text-blue-700 transition-all duration-300"
+        >
+          <Users className="w-3.5 h-3.5" />
+          Posted in {post.communityName || 'a community'}
+        </button>
+      )}
+
+      <div className={`flex items-start gap-3 px-4 ${post.communityId ? 'pt-2' : 'pt-4'}`}>
         <button type="button" onClick={goToProfile} aria-label={`Open ${post.name}'s profile`}>
           <Avatar initials={post.initials} colorClass={post.avatarColor} size="md" />
         </button>

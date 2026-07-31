@@ -6,6 +6,7 @@ import Switch from '../components/Switch.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { createPost, getAvatarColor, getInitials, uploadPostImage } from '../firebase/postService.js'
+import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
 
 const categories = ['general', 'study', 'notes', 'event', 'club', 'marketplace']
 
@@ -20,6 +21,20 @@ const categoryLabels = {
 
 const MAX_LENGTH = 500
 
+/**
+ * Post-To-Community assumption, stated plainly: createPost's `extra`
+ * param already accepts arbitrary fields (category/isAnonymous were
+ * already being passed through it before this change), so
+ * communityId/communityName are added the same way rather than
+ * changing createPost's signature. This assumes postService.js spreads
+ * `extra` directly onto the created post document — I don't have that
+ * file's real implementation to confirm it does. If it instead nests
+ * `extra` under its own field, or only recognizes specific known keys,
+ * communityId/communityName won't land on the post document as flat
+ * fields, and every downstream query in this pass
+ * (getCommunityFeedPosts, getCommunityMediaPosts) that filters posts
+ * by a flat `communityId` field would return nothing.
+ */
 function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -42,6 +57,10 @@ export default function CreatePostPage() {
   const [error, setError] = useState('')
   const [isPublishing, setIsPublishing] = useState(false)
 
+  const [postTarget, setPostTarget] = useState('public')
+  const [myCommunities, setMyCommunities] = useState([])
+  const [communitiesLoading, setCommunitiesLoading] = useState(true)
+
   useEffect(() => {
     let cancelled = false
 
@@ -58,6 +77,34 @@ export default function CreatePostPage() {
     }
 
     loadProfile()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const uid = auth.currentUser?.uid
+
+    const loadMyCommunities = async () => {
+      if (!uid) {
+        setCommunitiesLoading(false)
+        return
+      }
+      try {
+        const memberships = await getUserCommunityMemberships(uid)
+        const communities = await Promise.all(
+          memberships.map((membership) => getCommunityById(membership.communityId))
+        )
+        if (!cancelled) setMyCommunities(communities.filter(Boolean))
+      } catch {
+        // Post-To selector just falls back to "Public Feed only" if this fails.
+      } finally {
+        if (!cancelled) setCommunitiesLoading(false)
+      }
+    }
+
+    loadMyCommunities()
     return () => {
       cancelled = true
     }
@@ -128,12 +175,22 @@ export default function CreatePostPage() {
         ? { displayName: 'Anonymous', username: 'anonymous', profilePhoto: '' }
         : { displayName, username, profilePhoto: profile?.avatar || '' }
 
+      const selectedCommunity =
+        postTarget !== 'public' ? myCommunities.find((c) => c.id === postTarget) : null
+
       await createPost({
         uid,
         text: postText.trim(),
         imageUrl,
         author,
-        extra: { category, isAnonymous }
+        extra: {
+          category,
+          isAnonymous,
+          ...(selectedCommunity && {
+            communityId: selectedCommunity.id,
+            communityName: selectedCommunity.name
+          })
+        }
       })
 
       navigate('/home')
@@ -283,6 +340,54 @@ export default function CreatePostPage() {
               ))}
             </div>
           </div>
+
+          {!communitiesLoading && myCommunities.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Post to</p>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setPostTarget('public')}
+                  className={`w-full flex items-center gap-3 text-left rounded-xl border px-4 py-3 transition-all duration-300 ${
+                    postTarget === 'public' ? 'border-blue-500 bg-blue-50/60' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${
+                      postTarget === 'public' ? 'border-blue-600 bg-blue-600' : 'border-gray-300'
+                    }`}
+                  />
+                  <span className={`text-sm font-medium ${postTarget === 'public' ? 'text-blue-600' : 'text-gray-700'}`}>
+                    Public Feed
+                  </span>
+                </button>
+
+                {myCommunities.map((community) => (
+                  <button
+                    key={community.id}
+                    type="button"
+                    onClick={() => setPostTarget(community.id)}
+                    className={`w-full flex items-center gap-3 text-left rounded-xl border px-4 py-3 transition-all duration-300 ${
+                      postTarget === community.id ? 'border-blue-500 bg-blue-50/60' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${
+                        postTarget === community.id ? 'border-blue-600 bg-blue-600' : 'border-gray-300'
+                      }`}
+                    />
+                    <span
+                      className={`text-sm font-medium truncate ${
+                        postTarget === community.id ? 'text-blue-600' : 'text-gray-700'
+                      }`}
+                    >
+                      {community.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && (
             <p role="alert" className="rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
