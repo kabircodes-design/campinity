@@ -6,7 +6,7 @@ import { journeySteps } from '../data/journey.js'
 
 export default function JourneyTimeline() {
   return (
-    <section id="journey" className="py-20 sm:py-28 bg-surface border-y border-lineSoft">
+    <section id="journey" className="py-20 sm:py-28 theme-bg-surface border-y theme-divider theme-section-glow">
       <Container>
         <SectionHeading
           eyebrow="Why Campinity"
@@ -16,7 +16,8 @@ export default function JourneyTimeline() {
 
         <div className="mt-12 relative">
           <div
-            className="absolute left-[19px] top-2 bottom-2 w-px bg-line sm:left-1/2"
+            className="absolute left-[19px] top-2 bottom-2 w-px sm:left-1/2"
+            style={{ backgroundColor: 'var(--theme-border)' }}
             aria-hidden="true"
           />
 
@@ -54,15 +55,15 @@ function StepCard({ step, index, align, mobile = false }) {
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       className={`relative flex gap-4 ${align === 'right' ? 'sm:flex-row-reverse sm:text-right' : ''}`}
     >
-      <div className="relative z-10 flex-shrink-0 w-10 h-10 rounded-full bg-surface border-2 border-accent flex items-center justify-center text-accent">
+      <div className="relative z-10 flex-shrink-0 w-10 h-10 rounded-full theme-bg-surface border-2 flex items-center justify-center theme-accent" style={{ borderColor: 'var(--theme-accent)' }}>
         <Icon name={step.icon} className="w-[18px] h-[18px]" strokeWidth={1.7} />
       </div>
       <div className="pt-1">
-        <span className="font-mono text-2xs text-ink-faint tracking-[0.1em]">
+        <span className="font-mono text-2xs theme-text-muted tracking-[0.1em]">
           {String(index + 1).padStart(2, '0')}
         </span>
-        <h3 className="font-display font-semibold text-[15px] sm:text-base mt-0.5">{step.title}</h3>
-        <p className="mt-1 text-[13.5px] sm:text-sm text-ink-soft leading-relaxed max-w-xs">
+        <h3 className="font-display font-semibold text-[15px] sm:text-base mt-0.5 theme-text-primary">{step.title}</h3>
+        <p className="mt-1 text-[13.5px] sm:text-sm theme-text-secondary leading-relaxed max-w-xs">
           {step.description}
         </p>
       </div>

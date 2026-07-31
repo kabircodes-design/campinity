@@ -1,0 +1,42 @@
+/*
+ * What used to be here: a large set of `.chp-landing`-scoped
+ * `!important` overrides for `text-ink`, `bg-surface`, `border-line`,
+ * `shadow-card`, `bg-accent-tint`, `text-accent`, `border-accent`,
+ * `eyebrow`, and a hardcoded recolor of `.chp-hero`/`.chp-bg__gradient`/
+ * `.chp-bg__vignette`.
+ *
+ * All of that is gone now, because the actual source was fixed instead:
+ *  - FeatureGrid/JourneyTimeline/PrivacySection/EventsShowcase/
+ *    CampusVerified/CTA/Footer/Nav now apply theme-* classes directly
+ *    in their own JSX — nothing in the codebase emits the old
+ *    ink/surface/line vocabulary anymore, so there was nothing left
+ *    for those overrides to target. Confirmed by grepping every
+ *    component's className output before deleting each rule.
+ *  - The two remaining non-color-token classes (`eyebrow`, and CTA's
+ *    banner button) now set their color via inline `style`, which
+ *    can't be shadowed by cascade order the way a same-specificity
+ *    class rule could — no override needed for those either.
+ *  - `.chp-hero`/`.chp-bg__gradient`/`.chp-bg__vignette` were
+ *    rewritten from scratch to source every color from `var(--theme-*)`
+ *    natively (see HeroPremium.css) — recoloring them here would have
+ *    been overriding a file that no longer needs overriding.
+ *  - The card glass/hover-lift polish and the section ambient-glow
+ *    treatment moved to theme-tokens.css as canonical, unscoped
+ *    utility classes (`.theme-shadow-soft`, `.theme-section-glow`),
+ *    applied directly in each component's own className — not
+ *    injected from outside via a selector targeting their other
+ *    classes.
+ *
+ * What's left below is not a compatibility shim for anything — it's
+ * LandingPage.jsx's own decorative backdrop layer, which has no other
+ * home to live in.
+ */
+
+.chp-landing__backdrop {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--theme-accent) 6%, var(--theme-background)) 0%,
+    var(--theme-background) 50%,
+    color-mix(in srgb, var(--theme-accent) 4%, var(--theme-background)) 100%
+  );
+}

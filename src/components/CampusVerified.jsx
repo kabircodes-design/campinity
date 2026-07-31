@@ -23,28 +23,28 @@ export default function CampusVerified() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-60px' }}
             transition={{ duration: 0.5, ease }}
-            className="rounded-xl2 border border-line bg-surface p-5 shadow-card"
+            className="rounded-xl2 border theme-border theme-bg-surface p-5 theme-shadow-soft"
           >
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-accent-tint flex items-center justify-center font-mono text-2xs font-semibold text-accent">
+              <div className="w-9 h-9 rounded-full theme-bg-accent-tint flex items-center justify-center font-mono text-2xs font-semibold theme-accent">
                 AR
               </div>
               <div>
-                <p className="flex items-center gap-1.5 text-[13.5px] font-semibold text-ink">
+                <p className="flex items-center gap-1.5 text-[13.5px] font-semibold theme-text-primary">
                   Ananya Rao
-                  <Icon name="shield" className="w-3 h-3 text-accent" strokeWidth={2} />
+                  <Icon name="shield" className="w-3 h-3 theme-accent" strokeWidth={2} />
                 </p>
-                <p className="text-2xs text-ink-faint font-mono">CS · FY B</p>
+                <p className="text-2xs theme-text-muted font-mono">CS · FY B</p>
               </div>
-              <span className="ml-auto rounded-full bg-accent-tint text-accent text-2xs font-semibold px-2.5 py-1">
+              <span className="ml-auto rounded-full theme-bg-accent-tint theme-accent text-2xs font-semibold px-2.5 py-1">
                 Achievement
               </span>
             </div>
-            <p className="mt-4 text-[13.5px] text-ink-soft leading-relaxed">
+            <p className="mt-4 text-[13.5px] theme-text-secondary leading-relaxed">
               Selected for a summer internship at a fintech startup — grateful
               to the placement cell for every prep session.
             </p>
-            <div className="mt-4 flex items-center gap-4 text-ink-faint">
+            <div className="mt-4 flex items-center gap-4 theme-text-muted">
               <span className="flex items-center gap-1.5 text-2xs">
                 <Icon name="heart" className="w-3.5 h-3.5" strokeWidth={1.7} />
                 128
@@ -61,23 +61,23 @@ export default function CampusVerified() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-60px' }}
             transition={{ duration: 0.5, delay: 0.08, ease }}
-            className="rounded-xl2 border border-line bg-surface p-5 shadow-card"
+            className="rounded-xl2 border theme-border theme-bg-surface p-5 theme-shadow-soft"
           >
             <div className="flex items-center justify-between">
-              <span className="eyebrow">Notes hub</span>
-              <Icon name="book" className="w-4 h-4 text-accent" strokeWidth={1.7} />
+              <span className="eyebrow" style={{ color: 'var(--theme-accent)' }}>Notes hub</span>
+              <Icon name="book" className="w-4 h-4 theme-accent" strokeWidth={1.7} />
             </div>
-            <h3 className="mt-3 font-display font-semibold text-[15px]">
+            <h3 className="mt-3 font-display font-semibold text-[15px] theme-text-primary">
               OS Scheduling Algorithms — Complete
             </h3>
-            <p className="mt-1 text-[12.5px] text-ink-faint">26 pages · Operating Systems</p>
-            <div className="mt-4 h-px bg-lineSoft" />
-            <div className="mt-4 flex items-center justify-between text-[12.5px] text-ink-soft">
+            <p className="mt-1 text-[12.5px] theme-text-muted">26 pages · Operating Systems</p>
+            <div className="mt-4 h-px" style={{ backgroundColor: 'var(--theme-divider)' }} />
+            <div className="mt-4 flex items-center justify-between text-[12.5px] theme-text-secondary">
               <span className="flex items-center gap-1.5">
                 <Icon name="heart" className="w-3.5 h-3.5" strokeWidth={1.7} />
                 Liked by classmates
               </span>
-              <span className="font-semibold text-accent">Download</span>
+              <span className="font-semibold theme-accent">Download</span>
             </div>
           </motion.div>
         </div>

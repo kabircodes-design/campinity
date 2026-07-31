@@ -1,41 +1,29 @@
 /*
  * Theme token variables + GLOBAL mappings from the app's existing
- * Tailwind class vocabulary onto those variables.
- *
- * This is the mechanism that makes "the whole app recolors instantly"
- * true for every page already built (Home, Search, Profile, Posts,
- * Messages, Notifications, Settings, buttons, inputs, borders) WITHOUT
- * editing any of those component files: every one of them already uses
+ * Tailwind class vocabulary onto those variables. This is the
+ * mechanism that makes every existing page/component theme-aware
+ * without editing them individually — every one of them already uses
  * a small, consistent Tailwind vocabulary (bg-white, bg-gray-50/100,
  * text-gray-900/700/500/400/300, border-gray-100/200/300, bg-blue-600,
- * text-blue-600, etc.) — this file redefines what those class names
- * resolve to, GLOBALLY, in terms of CSS custom properties that
- * ThemeProvider.jsx sets on <html>.
+ * text-blue-600, etc.), and this file redefines what those class names
+ * resolve to, globally, in terms of the CSS custom properties below.
  *
- * Future-proofing: nothing here is keyed to a specific theme's id or
- * name. Any theme object in themes.js that has a `tokens` field
- * automatically works the moment ThemeProvider applies it — Ocean,
- * Forest, Lavender, Halloween, Christmas all "just work" the instant
- * someone flips `locked: false` and fills in their palette, with zero
- * changes to this file or any component.
- *
- * Two colors are handled with color-mix() instead of their own token,
- * so every theme (including future ones) automatically gets a
- * correctly-related shade without themes.js needing extra fields:
- *   - the "one step up from surface" shade used for gray-100/pills/
- *     input fills — derived from the theme's own surface + textPrimary
- *   - every /50 tint background (blue-50, red-50, emerald-50, etc.) —
- *     derived from the relevant semantic color (accent/danger/success)
- *     mixed into the theme's own surface
+ * Extended this pass with the full design-token set requested
+ * (surface-elevated, glass/glass-border, primary-hover, secondary,
+ * divider, muted, warning, gradient-primary/secondary, shadow-soft/
+ * strong, glow, overlay, backdrop, focus-ring) for both the light
+ * (:root) and dark (html.dark) palettes — additive to the existing
+ * token names, nothing renamed or removed.
  */
 
 :root {
-  --theme-background: #f9fafb;
+  /* ---- Core tokens (existing) ---- */
+  --theme-background: #f7f9fc;
   --theme-surface: #ffffff;
   --theme-card: #ffffff;
-  --theme-border: #f3f4f6;
-  --theme-textPrimary: #111827;
-  --theme-textSecondary: #6b7280;
+  --theme-border: #eef1f6;
+  --theme-textPrimary: #10131a;
+  --theme-textSecondary: #4a5568;
   --theme-accent: #2563eb;
   --theme-accentText: #ffffff;
   --theme-danger: #ef4444;
@@ -43,26 +31,61 @@
   --theme-notification: #2563eb;
   --theme-button: #2563eb;
   --theme-buttonText: #ffffff;
+
+  /* ---- Extended design-system tokens (new this pass) ---- */
+  --theme-backgroundSecondary: #eef2f9;
+  --theme-surfaceElevated: #ffffff;
+  --theme-glass: rgba(255, 255, 255, 0.6);
+  --theme-glassBorder: rgba(15, 23, 42, 0.08);
+  --theme-primaryHover: #1d4ed8;
+  --theme-secondary: #eef2ff;
+  --theme-divider: #e5e9f0;
+  --theme-muted: #8891a0;
+  --theme-warning: #d97706;
+  --theme-gradientPrimary: linear-gradient(135deg, #2563eb, #4f7cf6);
+  --theme-gradientSecondary: linear-gradient(135deg, #eef2ff, #dbe6ff);
+  --theme-shadowSoft: 0 8px 24px rgba(15, 23, 42, 0.06);
+  --theme-shadowStrong: 0 20px 48px rgba(15, 23, 42, 0.12);
+  --theme-glow: 0 0 40px rgba(37, 99, 235, 0.16);
+  --theme-overlay: rgba(15, 23, 42, 0.45);
+  --theme-backdrop: rgba(247, 249, 252, 0.75);
+  --theme-focusRing: 0 0 0 3px rgba(37, 99, 235, 0.35);
 }
 
 /*
- * The 'default' pack's dark values — this is the one pack that's
- * expected to react to the Light/Dark/System mode toggle rather than
- * being a fixed palette (every other pack, including Midnight, sets
- * its own inline overrides via ThemeProvider regardless of mode — see
- * ThemeProvider.jsx). Accent/danger/success/notification/button are
- * deliberately NOT redefined here: Campinity blue (and the semantic
- * colors) stay the same vivid color in both light and dark, only the
- * surfaces and text shift.
+ * The 'default' pack's dark values — this is the one pack expected to
+ * react to the Light/Dark/System mode toggle rather than being a fixed
+ * palette (every other pack sets its own inline overrides via
+ * ThemeProvider regardless of mode). Accent/danger/success stay the
+ * same vivid color in both light and dark; only surfaces/text/the new
+ * extended tokens shift.
  */
 html.dark {
   color-scheme: dark;
-  --theme-background: #000000;
-  --theme-surface: #000000;
-  --theme-card: #000000;
-  --theme-border: #1a1a1a;
-  --theme-textPrimary: #f5f5f5;
-  --theme-textSecondary: #9a9a9a;
+  --theme-background: #05070f;
+  --theme-surface: #0a0d18;
+  --theme-card: #0a0d18;
+  --theme-border: #1a2032;
+  --theme-textPrimary: #f4f6fb;
+  --theme-textSecondary: #d8dce6;
+
+  --theme-backgroundSecondary: #070a14;
+  --theme-surfaceElevated: #10141f;
+  --theme-glass: rgba(16, 20, 31, 0.55);
+  --theme-glassBorder: rgba(255, 255, 255, 0.1);
+  --theme-primaryHover: #3b82f6;
+  --theme-secondary: #131a2c;
+  --theme-divider: #1a2032;
+  --theme-muted: #7c8494;
+  --theme-warning: #f59e0b;
+  --theme-gradientPrimary: linear-gradient(135deg, #2563eb, #6366f1);
+  --theme-gradientSecondary: linear-gradient(135deg, #0f1526, #131a2c);
+  --theme-shadowSoft: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --theme-shadowStrong: 0 24px 56px rgba(0, 0, 0, 0.55);
+  --theme-glow: 0 0 48px rgba(59, 130, 246, 0.3);
+  --theme-overlay: rgba(2, 4, 10, 0.65);
+  --theme-backdrop: rgba(5, 7, 15, 0.75);
+  --theme-focusRing: 0 0 0 3px rgba(96, 165, 250, 0.45);
 }
 
 html,
@@ -70,180 +93,179 @@ html * {
   transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease, box-shadow 300ms ease;
 }
 
-html.dark body {
+html.dark body,
+html:not(.dark) body {
   background-color: var(--theme-background);
 }
 
-/* ---- Token utility classes (used by the Appearance UI itself) ---- */
+/* ---- Token utility classes ---- */
 
-.theme-bg-background {
-  background-color: var(--theme-background);
+.theme-bg-background { background-color: var(--theme-background); }
+.theme-bg-background-secondary { background-color: var(--theme-backgroundSecondary); }
+.theme-bg-surface { background-color: var(--theme-surface); }
+.theme-bg-surface-elevated { background-color: var(--theme-surfaceElevated); box-shadow: var(--theme-shadowSoft); }
+.theme-bg-card { background-color: var(--theme-card); }
+.theme-border { border-color: var(--theme-border); }
+.theme-divider { border-color: var(--theme-divider); }
+.theme-text-primary { color: var(--theme-textPrimary); }
+.theme-text-secondary { color: var(--theme-textSecondary); }
+.theme-text-muted { color: var(--theme-muted); }
+.theme-accent { color: var(--theme-accent); }
+.theme-bg-accent { background-color: var(--theme-accent); }
+.theme-bg-accent-hover:hover { background-color: var(--theme-primaryHover); }
+.theme-bg-secondary { background-color: var(--theme-secondary); }
+.theme-bg-danger { background-color: var(--theme-danger); }
+.theme-bg-success { background-color: var(--theme-success); }
+.theme-bg-warning { background-color: var(--theme-warning); }
+.theme-bg-button { background-color: var(--theme-button); }
+.theme-text-button { color: var(--theme-buttonText); }
+.theme-text-danger { color: var(--theme-danger); }
+.theme-bg-accent-tint { background-color: color-mix(in srgb, var(--theme-accent) 12%, var(--theme-surface)); }
+.theme-bg-danger-tint { background-color: color-mix(in srgb, var(--theme-danger) 12%, var(--theme-surface)); }
+.theme-gradient-primary { background: var(--theme-gradientPrimary); }
+.theme-gradient-secondary { background: var(--theme-gradientSecondary); }
+/*
+ * .theme-shadow-soft — the canonical "premium card surface" utility.
+ * Every card across the landing page (PrivacySection, CampusVerified,
+ * EventsShowcase) applies this class directly in its own JSX; this is
+ * its complete definition, not a page-scoped override, so it applies
+ * identically everywhere it's used with no `.chp-landing` prefix and
+ * no `!important` needed. Glass surface + hover lift + light-sweep,
+ * matching Hero's own glass treatment.
+ */
+.theme-shadow-soft {
+  box-shadow: var(--theme-shadowSoft);
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  position: relative;
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 300ms ease, border-color 300ms ease;
 }
-.theme-bg-surface {
-  background-color: var(--theme-surface);
+.theme-shadow-soft:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--theme-shadowStrong);
+  border-color: color-mix(in srgb, var(--theme-accent) 30%, var(--theme-border));
 }
-.theme-bg-card {
-  background-color: var(--theme-card);
+.theme-shadow-soft::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(120deg, transparent 30%, color-mix(in srgb, var(--theme-textPrimary) 6%, transparent) 45%, transparent 60%);
+  background-size: 220% 220%;
+  background-position: -40% -40%;
+  opacity: 0;
+  transition: opacity 400ms ease, background-position 700ms ease;
+  pointer-events: none;
 }
-.theme-border {
-  border-color: var(--theme-border);
+.theme-shadow-soft:hover::before {
+  opacity: 1;
+  background-position: 40% 40%;
 }
-.theme-text-primary {
-  color: var(--theme-textPrimary);
+
+/*
+ * .theme-section-glow — canonical ambient depth for banded sections,
+ * matching Hero's own background language at low enough opacity to
+ * read as atmosphere, not a second Hero. Applied directly in
+ * JourneyTimeline.jsx and EventsShowcase.jsx's own className, not via
+ * a blind selector targeting their other classes.
+ */
+.theme-section-glow {
+  position: relative;
+  overflow: hidden;
 }
-.theme-text-secondary {
-  color: var(--theme-textSecondary);
+.theme-section-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 50% 60% at 8% 0%, color-mix(in srgb, var(--theme-accent) 5%, transparent), transparent 60%),
+    radial-gradient(ellipse 45% 55% at 95% 100%, color-mix(in srgb, var(--theme-accent) 4%, transparent), transparent 60%);
+  pointer-events: none;
+  z-index: 0;
 }
-.theme-accent {
-  color: var(--theme-accent);
+.theme-section-glow > * {
+  position: relative;
+  z-index: 1;
 }
-.theme-bg-accent {
-  background-color: var(--theme-accent);
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-shadow-soft {
+    transition: none !important;
+  }
+  .theme-shadow-soft:hover {
+    transform: none !important;
+  }
 }
-.theme-bg-danger {
-  background-color: var(--theme-danger);
+.theme-shadow-strong { box-shadow: var(--theme-shadowStrong); }
+.theme-glow { box-shadow: var(--theme-glow); }
+.theme-overlay { background-color: var(--theme-overlay); }
+
+.theme-glass {
+  background-color: var(--theme-glass);
+  border: 1px solid var(--theme-glassBorder);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
 }
-.theme-bg-success {
-  background-color: var(--theme-success);
-}
-.theme-bg-button {
-  background-color: var(--theme-button);
-}
-.theme-text-button {
-  color: var(--theme-buttonText);
-}
-.theme-text-danger {
-  color: var(--theme-danger);
-}
-.theme-bg-accent-tint {
-  background-color: color-mix(in srgb, var(--theme-accent) 12%, var(--theme-surface));
-}
-.theme-bg-danger-tint {
-  background-color: color-mix(in srgb, var(--theme-danger) 12%, var(--theme-surface));
+
+.theme-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--theme-focusRing);
 }
 
 /* ==========================================================================
-   Global mappings — the rest of the app's EXISTING Tailwind classes,
-   redefined to resolve to the theme tokens above. No component file
-   needs to change for these to take effect.
+   Global mappings — the app's EXISTING Tailwind classes, redefined to
+   resolve to the theme tokens above. No component file needs to
+   change for these to take effect.
    ========================================================================== */
 
-/* Surfaces */
 .bg-white,
-.bg-gray-50 {
-  background-color: var(--theme-surface);
-}
-.bg-gray-100 {
-  background-color: color-mix(in srgb, var(--theme-textPrimary) 6%, var(--theme-surface));
-}
-.bg-gray-50\/50 {
-  background-color: color-mix(in srgb, var(--theme-textPrimary) 3%, var(--theme-surface));
-}
+.bg-gray-50 { background-color: var(--theme-surface); }
+.bg-gray-100 { background-color: color-mix(in srgb, var(--theme-textPrimary) 6%, var(--theme-surface)); }
+.bg-gray-50\/50 { background-color: color-mix(in srgb, var(--theme-textPrimary) 3%, var(--theme-surface)); }
 .hover\:bg-gray-50:hover,
-.hover\:bg-gray-100:hover {
-  background-color: color-mix(in srgb, var(--theme-textPrimary) 6%, var(--theme-surface));
-}
-.hover\:bg-gray-200:hover {
-  background-color: color-mix(in srgb, var(--theme-textPrimary) 10%, var(--theme-surface));
-}
-.focus\:bg-white:focus {
-  background-color: var(--theme-surface);
-}
+.hover\:bg-gray-100:hover { background-color: color-mix(in srgb, var(--theme-textPrimary) 6%, var(--theme-surface)); }
+.hover\:bg-gray-200:hover { background-color: color-mix(in srgb, var(--theme-textPrimary) 10%, var(--theme-surface)); }
+.focus\:bg-white:focus { background-color: var(--theme-surface); }
 
-/* Text */
 .text-gray-900,
-.text-gray-800 {
-  color: var(--theme-textPrimary);
-}
+.text-gray-800 { color: var(--theme-textPrimary); }
 .text-gray-700,
 .text-gray-600,
 .text-gray-500,
-.text-gray-400 {
-  color: var(--theme-textSecondary);
-}
-.text-gray-300 {
-  color: color-mix(in srgb, var(--theme-textSecondary) 60%, var(--theme-surface));
-}
+.text-gray-400 { color: var(--theme-textSecondary); }
+.text-gray-300 { color: color-mix(in srgb, var(--theme-textSecondary) 60%, var(--theme-surface)); }
 .hover\:text-gray-600:hover,
-.hover\:text-gray-800:hover {
-  color: var(--theme-textPrimary);
-}
+.hover\:text-gray-800:hover { color: var(--theme-textPrimary); }
 .placeholder\:text-gray-400::placeholder,
-.placeholder\:text-gray-300::placeholder {
-  color: var(--theme-textSecondary);
-}
+.placeholder\:text-gray-300::placeholder { color: var(--theme-textSecondary); }
 
-/* Borders / dividers — one color everywhere, as already established */
 .border-gray-100,
-.border-gray-200 {
-  border-color: var(--theme-border);
-}
-.border-gray-300 {
-  border-color: color-mix(in srgb, var(--theme-textPrimary) 16%, var(--theme-surface));
-}
-.hover\:border-gray-300:hover {
-  border-color: color-mix(in srgb, var(--theme-textPrimary) 16%, var(--theme-surface));
-}
-.divide-gray-100 > * + * {
-  border-color: var(--theme-border);
-}
+.border-gray-200 { border-color: var(--theme-border); }
+.border-gray-300 { border-color: color-mix(in srgb, var(--theme-textPrimary) 16%, var(--theme-surface)); }
+.hover\:border-gray-300:hover { border-color: color-mix(in srgb, var(--theme-textPrimary) 16%, var(--theme-surface)); }
+.divide-gray-100 > * + * { border-color: var(--theme-border); }
 
-/* Accent — Campinity's primary action color, now theme-driven */
-.bg-blue-600 {
-  background-color: var(--theme-accent);
-}
-.text-blue-600 {
-  color: var(--theme-accent);
-}
+.bg-blue-600 { background-color: var(--theme-accent); }
+.text-blue-600 { color: var(--theme-accent); }
 .hover\:bg-blue-700:hover,
 .hover\:text-blue-700:hover,
-.hover\:text-blue-800:hover {
-  filter: brightness(0.88);
-}
-.border-blue-600 {
-  border-color: var(--theme-accent);
-}
-.focus\:border-blue-500:focus {
-  border-color: var(--theme-accent);
-}
-.focus\:ring-blue-50:focus {
-  --tw-ring-color: color-mix(in srgb, var(--theme-accent) 18%, transparent);
-}
-.bg-blue-50 {
-  background-color: color-mix(in srgb, var(--theme-accent) 12%, var(--theme-surface));
-}
+.hover\:text-blue-800:hover { filter: brightness(0.88); }
+.border-blue-600 { border-color: var(--theme-accent); }
+.focus\:border-blue-500:focus { border-color: var(--theme-accent); }
+.focus\:ring-blue-50:focus { --tw-ring-color: color-mix(in srgb, var(--theme-accent) 18%, transparent); }
+.bg-blue-50 { background-color: color-mix(in srgb, var(--theme-accent) 12%, var(--theme-surface)); }
 
-/* Semantic tints — danger / success / notification */
-.bg-red-50 {
-  background-color: color-mix(in srgb, var(--theme-danger) 12%, var(--theme-surface));
-}
+.bg-red-50 { background-color: color-mix(in srgb, var(--theme-danger) 12%, var(--theme-surface)); }
 .text-red-500,
-.text-red-600 {
-  color: var(--theme-danger);
-}
-.border-red-200 {
-  border-color: color-mix(in srgb, var(--theme-danger) 30%, var(--theme-surface));
-}
-.bg-emerald-50 {
-  background-color: color-mix(in srgb, var(--theme-success) 12%, var(--theme-surface));
-}
-.text-emerald-600 {
-  color: var(--theme-success);
-}
-.bg-amber-50 {
-  background-color: color-mix(in srgb, #f59e0b 12%, var(--theme-surface));
-}
-.bg-pink-50 {
-  background-color: color-mix(in srgb, #ec4899 12%, var(--theme-surface));
-}
+.text-red-600 { color: var(--theme-danger); }
+.border-red-200 { border-color: color-mix(in srgb, var(--theme-danger) 30%, var(--theme-surface)); }
+.bg-emerald-50 { background-color: color-mix(in srgb, var(--theme-success) 12%, var(--theme-surface)); }
+.text-emerald-600 { color: var(--theme-success); }
+.bg-amber-50 { background-color: color-mix(in srgb, var(--theme-warning) 12%, var(--theme-surface)); }
+.bg-pink-50 { background-color: color-mix(in srgb, #ec4899 12%, var(--theme-surface)); }
 
-/* Avatar rings */
-.ring-white {
-  --tw-ring-color: var(--theme-surface);
-}
+.ring-white { --tw-ring-color: var(--theme-surface); }
 
-/* Form field fills — one step up from surface, same derivation as
-   bg-gray-100, so an input never disappears into the card behind it. */
 input.bg-gray-50,
 textarea.bg-gray-50,
 select.bg-gray-50 {
@@ -251,58 +273,86 @@ select.bg-gray-50 {
   color: var(--theme-textPrimary);
 }
 input.bg-gray-50::placeholder,
-textarea.bg-gray-50::placeholder {
-  color: var(--theme-textSecondary);
-}
+textarea.bg-gray-50::placeholder { color: var(--theme-textSecondary); }
 
-/* Modals / sheets — one step further up than surface, so a dialog
-   floating over themed content still reads as a distinct layer. */
 [role='dialog'].bg-white,
-[role='status'].bg-white {
-  background-color: color-mix(in srgb, var(--theme-textPrimary) 10%, var(--theme-surface));
-}
+[role='status'].bg-white { background-color: color-mix(in srgb, var(--theme-textPrimary) 10%, var(--theme-surface)); }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modalIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
-
 @keyframes badgePop {
-  0% {
-    transform: scale(0.5);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(1.1);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1);
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes scaleIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  html * {
+    transition-duration: 1ms !important;
   }
 }
 
-@keyframes scaleIn {
-  from {
-    transform: scale(0.5);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
+/* ==========================================================================
+   Brand assets + theme toggle
+   ========================================================================== */
+
+.chp-wordmark-asset {
+  display: block;
+  height: 22px;
+  width: auto;
+  max-width: none;
+  object-fit: contain;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.chp-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+.chp-theme-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--theme-focusRing);
+  border-radius: 9999px;
+}
+
+.chp-theme-toggle__track {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.chp-theme-toggle__thumb {
+  position: absolute;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chp-theme-toggle__thumb,
+  .chp-theme-toggle__track {
+    transition: none !important;
   }
 }

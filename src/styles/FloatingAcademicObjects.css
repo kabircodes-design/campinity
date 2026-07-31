@@ -1,0 +1,62 @@
+/*
+ * Ambient academic-object motion, replacing the mascot. Own namespace
+ * (chp-float-object*), transform/opacity only, GPU-accelerated.
+ */
+
+.chp-float-objects {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  pointer-events: none;
+}
+
+.chp-float-object {
+  position: absolute;
+  color: var(--theme-accent, #2563eb);
+  opacity: var(--chp-obj-opacity, 0.15);
+  will-change: transform, opacity;
+  animation: chp-float-drift var(--chp-obj-duration, 15s) ease-in-out infinite;
+  animation-delay: var(--chp-obj-delay, 0s);
+  transform: translate3d(0, 0, 0) translateY(calc(var(--chp-scroll, 0) * -1px * var(--chp-obj-depth, 0.4)));
+}
+
+.chp-float-object svg {
+  width: 100%;
+  height: 100%;
+}
+
+.chp-float-object--static {
+  animation: none;
+}
+
+@keyframes chp-float-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate3d(6px, -12px, 0) rotate(3deg);
+  }
+  50% {
+    transform: translate3d(-4px, -20px, 0) rotate(-2deg);
+  }
+  75% {
+    transform: translate3d(-8px, -8px, 0) rotate(2deg);
+  }
+}
+
+@media (max-width: 639px) {
+  .chp-float-objects {
+    min-height: 140px;
+  }
+  .chp-float-object {
+    transform: scale(0.85) translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chp-float-object {
+    animation: none !important;
+  }
+}

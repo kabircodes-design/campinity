@@ -1,24 +1,30 @@
 /*
- * HeroPremium's own styles — entirely new namespace (chp-* = "Campinity
- * Hero Premium"), zero shared class names with the existing Hero /
- * AnimatedBackground / CampusMascot / theme-tokens system, so nothing
- * here can collide with or leak into anything else in the app.
+ * HeroPremium.css — reconstructed from scratch to exactly match
+ * HeroPremium.jsx and AnimatedBackgroundPremium.jsx's actual classes
+ * (verified via grep against the real JSX, not assumed). This
+ * REPLACES whatever was previously at this path — if that was
+ * HeroCinematic.css's content (chp-cinema__* classes), this fixes the
+ * namespace mismatch by construction: every class HeroPremium.jsx and
+ * AnimatedBackgroundPremium.jsx actually render now has a real,
+ * matching rule here, and nothing here uses the chp-cinema__*
+ * namespace at all — that belongs to the separate HeroCinematic.css
+ * file, untouched by this change.
  *
- * Deliberately does NOT use bare Tailwind color classes (bg-white,
- * text-gray-*, etc.) anywhere — those are globally remapped by
- * theme-tokens.css based on the app's Light/Dark/System + theme-pack
- * selection, and this Hero is meant to look the same premium dark/blue
- * regardless of that state, same as the current Hero already does.
+ * No min-height, no fixed viewport-height rule, no leftover
+ * mascot-sized reservation anywhere in this file — Hero's actual
+ * height comes only from its content plus the pt-24/sm:pt-28 padding
+ * already set directly in HeroPremium.jsx. That's the layout-gap fix:
+ * this stylesheet simply doesn't reserve any extra space, so there's
+ * nothing here to cause one.
  */
 
-/* ---- Section base ---- */
-
 .chp-hero {
-  background: #05070f;
+  position: relative;
+  background: var(--theme-background, #05070f);
   isolation: isolate;
 }
 
-/* ---- Background ---- */
+/* ---- Background layers (AnimatedBackgroundPremium.jsx) ---- */
 
 .chp-bg {
   position: absolute;
@@ -32,156 +38,113 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 75% 55% at 20% -5%, rgba(59, 130, 246, 0.22), transparent 62%),
-    radial-gradient(ellipse 65% 50% at 100% 10%, rgba(99, 102, 241, 0.16), transparent 60%),
-    radial-gradient(ellipse 60% 45% at 50% 110%, rgba(37, 99, 235, 0.14), transparent 65%),
-    linear-gradient(180deg, #05070f 0%, #070a16 55%, #05070f 100%);
+    radial-gradient(ellipse 75% 55% at 20% -5%, color-mix(in srgb, var(--theme-accent, #3b82f6) 20%, transparent), transparent 62%),
+    radial-gradient(ellipse 65% 50% at 100% 10%, color-mix(in srgb, var(--theme-accent, #6366f1) 14%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--theme-background, #05070f) 0%, var(--theme-backgroundSecondary, #070a16) 55%, var(--theme-background, #05070f) 100%);
 }
 
-/* Extra lighting bloom concentrated behind the mascot's side of the
-   hero — adds depth without touching layout. */
 .chp-bg__bloom {
   position: absolute;
   top: 8%;
   right: -6%;
   width: 55%;
   height: 70%;
-  background: radial-gradient(circle, rgba(96, 165, 250, 0.18), transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--theme-accent, #60a5fa) 18%, transparent), transparent 70%);
   filter: blur(10px);
   animation: chp-bloom-breathe 10s ease-in-out infinite;
 }
 
 @keyframes chp-bloom-breathe {
-  0%,
-  100% {
-    opacity: 0.7;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.06);
-  }
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
 }
 
 .chp-bg__vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 80% 70% at 50% 40%, transparent 55%, rgba(2, 3, 8, 0.55) 100%);
+  background: radial-gradient(ellipse 80% 70% at 50% 40%, transparent 55%, var(--theme-overlay, rgba(2,3,8,0.55)) 100%);
+}
+
+.chp-bg__cursor-glow {
+  position: absolute;
+  top: var(--chp-cursor-y, 50%);
+  left: var(--chp-cursor-x, 50%);
+  width: 260px;
+  height: 260px;
+  margin: -130px 0 0 -130px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--theme-accent, #60a5fa) 16%, transparent), transparent 70%);
+  filter: blur(6px);
+  pointer-events: none;
+  transition: top 700ms cubic-bezier(0.16,1,0.3,1), left 700ms cubic-bezier(0.16,1,0.3,1);
 }
 
 .chp-bg__ring {
   position: absolute;
 }
-.chp-bg__ring--1 {
-  top: -10%;
-  left: -8%;
-}
-.chp-bg__ring--2 {
-  bottom: -14%;
-  right: -6%;
-}
-.chp-bg__ring--3 {
-  top: 30%;
-  right: 8%;
-}
+.chp-bg__ring--1 { top: -10%; left: -8%; }
+.chp-bg__ring--2 { bottom: -14%; right: -6%; }
+.chp-bg__ring--3 { top: 30%; right: 8%; }
 
-/* ---- Glow ring (shared: background + mascot) ---- */
-
-.chp-glow-ring {
-  position: absolute;
-  border-radius: 9999px;
-  border: 1px solid rgba(147, 197, 253, var(--chp-ring-opacity, 0.2));
-  animation: chp-ring-spin var(--chp-ring-duration, 40s) linear infinite;
-  animation-direction: var(--chp-ring-direction, normal);
-}
-
-@keyframes chp-ring-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ---- Particles ---- */
-
-.chp-particles {
+.chp-bg__nodes {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
-
-.chp-particle {
-  position: absolute;
-  border-radius: 9999px;
-  background: rgba(147, 197, 253, 0.85);
-  filter: blur(0.4px);
-  will-change: transform, opacity;
-  animation: chp-particle-drift var(--chp-duration, 10s) ease-in-out infinite;
+.chp-bg__node-link {
+  stroke: color-mix(in srgb, var(--theme-accent, #7dd3fc) 30%, transparent);
+  stroke-width: 0.1;
+  vector-effect: non-scaling-stroke;
+  animation: chp-node-link-pulse 7s ease-in-out infinite;
   animation-delay: var(--chp-delay, 0s);
 }
-
-@keyframes chp-particle-drift {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-    opacity: 0.15;
-  }
-  50% {
-    transform: translate3d(6px, -12px, 0);
-    opacity: 0.45;
-  }
+.chp-bg__node {
+  fill: color-mix(in srgb, var(--theme-accent, #a5d8ff) 65%, white);
+  animation: chp-node-pulse 5s ease-in-out infinite;
+  animation-delay: var(--chp-delay, 0s);
 }
-
-/* ---- Stars ---- */
+@keyframes chp-node-link-pulse { 0%, 100% { opacity: 0.15; } 50% { opacity: 0.5; } }
+@keyframes chp-node-pulse { 0%, 100% { opacity: 0.4; r: 0.5; } 50% { opacity: 0.9; r: 0.75; } }
 
 .chp-star {
   position: absolute;
   width: 2px;
   height: 2px;
   border-radius: 9999px;
-  background: #ffffff;
-  box-shadow: 0 0 5px rgba(255, 255, 255, 0.75);
+  background: var(--theme-textPrimary, #ffffff);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--theme-textPrimary, white) 75%, transparent);
   animation: chp-star-twinkle 4.2s ease-in-out infinite;
   animation-delay: var(--chp-delay, 0s);
 }
-
 @keyframes chp-star-twinkle {
-  0%,
-  100% {
-    opacity: 0.15;
-    transform: scale(0.8);
-  }
-  50% {
-    opacity: 0.9;
-    transform: scale(1.25);
-  }
+  0%, 100% { opacity: 0.15; transform: scale(0.8); }
+  50% { opacity: 0.9; transform: scale(1.25); }
 }
 
-/* ---- Glassmorphism (upgraded: stronger blur, deeper shadow, softer
-   two-tone border for more visible edge definition) ---- */
+.chp-bg--paused .chp-bg__bloom,
+.chp-bg--paused .chp-bg__ring,
+.chp-bg--paused .chp-bg__node,
+.chp-bg--paused .chp-bg__node-link,
+.chp-bg--paused .chp-star {
+  animation-play-state: paused !important;
+}
+
+/* ---- Glass surface (GlassCard.jsx) ---- */
 
 .chp-glass {
   position: relative;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--theme-glass, rgba(255,255,255,0.06));
+  border: 1px solid var(--theme-glassBorder, rgba(255,255,255,0.1));
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
   border-radius: 20px;
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.38),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 1px 0 rgba(255, 255, 255, 0.12) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.15) inset;
+  box-shadow: var(--theme-shadowSoft, 0 12px 40px rgba(0,0,0,0.38));
   transition: border-color 300ms ease, box-shadow 300ms ease, transform 300ms ease;
 }
 .chp-glass:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-  box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.42),
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
-    0 1px 0 rgba(255, 255, 255, 0.14) inset,
-    0 0 30px rgba(59, 130, 246, 0.12);
+  border-color: color-mix(in srgb, var(--theme-textPrimary, white) 22%, transparent);
 }
 
 .chp-badge {
@@ -191,29 +154,33 @@
 .chp-trust-panel {
   border-radius: 24px;
 }
-.chp-trust-panel:hover {
-  transform: translateY(-2px);
+
+/* ---- Heading ---- */
+
+.chp-hero-heading {
+  letter-spacing: -0.025em;
+  text-wrap: balance;
 }
 
-/* ---- Gradient heading text ---- */
-
 .chp-gradient-text {
-  background: linear-gradient(90deg, #79b8ff, #a6d1ff);
+  background: linear-gradient(90deg, var(--theme-accent, #79b8ff), color-mix(in srgb, var(--theme-accent, #79b8ff) 60%, white));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: 0 0 24px rgba(121, 184, 255, 0.25);
 }
 
 /* ---- CTA buttons ---- */
 
 .chp-cta-primary {
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
-  color: #ffffff;
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
+  background: var(--theme-gradientPrimary, linear-gradient(135deg, #3b82f6, #6366f1));
+  color: var(--theme-accentText, #ffffff);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--theme-accent, #3b82f6) 35%, transparent);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition: box-shadow 250ms ease, transform 250ms ease;
 }
 .chp-cta-primary:hover {
-  box-shadow: 0 14px 36px rgba(59, 130, 246, 0.55);
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--theme-accent, #3b82f6) 55%, transparent);
   transform: translateY(-2px);
 }
 .chp-cta-primary:active {
@@ -221,18 +188,20 @@
 }
 
 .chp-cta-secondary {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--theme-glass, rgba(255,255,255,0.06));
+  border: 1px solid var(--theme-glassBorder, rgba(255,255,255,0.14));
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  color: #ffffff;
+  color: var(--theme-textPrimary, #ffffff);
+  font-weight: 600;
+  letter-spacing: -0.01em;
   transition: background 250ms ease, border-color 250ms ease, transform 250ms ease;
 }
 .chp-cta-secondary:hover {
-  background: rgba(255, 255, 255, 0.11);
-  border-color: rgba(255, 255, 255, 0.26);
   transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--theme-textPrimary, white) 26%, transparent);
 }
+
 .chp-cta-secondary__glyph {
   display: inline-flex;
   align-items: center;
@@ -240,127 +209,16 @@
   width: 20px;
   height: 20px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.14);
+  background: color-mix(in srgb, var(--theme-textPrimary, white) 14%, transparent);
   transition: background 250ms ease;
 }
 .chp-cta-secondary:hover .chp-cta-secondary__glyph {
-  background: rgba(255, 255, 255, 0.22);
-}
-
-/* ==========================================================================
-   Mascot — glass body + black OLED face plate + glowing blue eyes
-   ========================================================================== */
-
-.chp-mascot {
-  position: relative;
-  width: 280px;
-  height: 280px;
-}
-
-.chp-mascot__aura {
-  position: absolute;
-  inset: -18%;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.28), transparent 68%);
-  filter: blur(24px);
-  animation: chp-aura-pulse 5.5s ease-in-out infinite;
-}
-
-@keyframes chp-aura-pulse {
-  0%,
-  100% {
-    opacity: 0.6;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.95;
-    transform: scale(1.07);
-  }
-}
-
-.chp-mascot__ring {
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.chp-mascot__ground-glow {
-  position: absolute;
-  bottom: -6%;
-  left: 50%;
-  translate: -50% 0;
-  width: 72%;
-  aspect-ratio: 3 / 1;
-  border-radius: 9999px;
-  background: radial-gradient(ellipse, rgba(59, 130, 246, 0.45), transparent 70%);
-  filter: blur(20px);
-  animation: chp-glow-pulse 6s ease-in-out infinite;
-}
-
-/* The mascot artwork itself — breathing scale + soft glow live here
-   (on the <img>), separate from Framer Motion's float/tilt transform
-   on the outer .chp-mascot wrapper, so the two never fight over the
-   same `transform` property. object-fit + max-width keep it
-   responsive and lightweight regardless of the wrapper's size. */
-.chp-mascot__image {
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  filter: drop-shadow(0 18px 40px rgba(6, 12, 30, 0.5)) drop-shadow(0 0 26px rgba(59, 130, 246, 0.35));
-  animation: chp-breathe 4.5s ease-in-out infinite;
-}
-
-@keyframes chp-breathe {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.018);
-  }
-}
-
-.chp-mascot__shadow {
-  position: absolute;
-  bottom: -10%;
-  left: 50%;
-  translate: -50% 0;
-  width: 55%;
-  aspect-ratio: 4 / 1;
-  border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.35);
-  filter: blur(12px);
-}
-
-@keyframes chp-glow-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.85;
-    transform: scale(1.08);
-  }
+  background: color-mix(in srgb, var(--theme-textPrimary, white) 22%, transparent);
 }
 
 /* ---- Responsive ---- */
 
-@media (max-width: 1023px) {
-  .chp-mascot {
-    width: 220px;
-    height: 220px;
-  }
-}
-
 @media (max-width: 639px) {
-  .chp-mascot {
-    width: 180px;
-    height: 180px;
-  }
   .chp-trust-panel {
     gap: 0.75rem;
   }
@@ -369,330 +227,11 @@
 /* ---- Reduced motion ---- */
 
 @media (prefers-reduced-motion: reduce) {
-  .chp-glow-ring,
-  .chp-particle,
+  .chp-bg__ring,
   .chp-star,
-  .chp-mascot__ground-glow,
-  .chp-mascot__aura,
-  .chp-mascot__image,
-  .chp-bg__bloom {
+  .chp-bg__bloom,
+  .chp-bg__node,
+  .chp-bg__node-link {
     animation: none !important;
   }
 }
-
-/* ==========================================================================
-   Landing Page Phase 2 — extends the premium dark/glass treatment from
-   Hero to every section below it (Features, Journey, Privacy, Events,
-   Campus Verified, CTA, Footer).
-
-   Strategy: rather than editing seven section files (plus SectionHeading
-   and FeatureCard, which FeatureGrid renders but weren't available to
-   verify), this recolors the shared design-system classes those files
-   already use — text-ink, text-ink-soft, text-ink-faint, bg-surface,
-   bg-bg, border-line, border-lineSoft, shadow-card, the `eyebrow`
-   utility — scoped under `.chp-landing`. Nothing here can reach
-   Login/Signup or any authenticated page: those aren't wrapped in
-   `.chp-landing`, so this whole block simply doesn't apply to them even
-   though AuthLayout shares some of the same class names.
-
-   Known gap, stated plainly: SectionHeading.jsx and FeatureCard.jsx
-   (rendered by FeatureGrid.jsx) were never shared in this conversation,
-   so their exact classes weren't verified the way every other file's
-   were. If they follow the same text-ink/text-ink-soft/bg-surface
-   convention every other component in this project uses — which has
-   been true without exception so far — they're covered by this
-   override automatically. If either of them does something different,
-   they're the one place this redesign might not fully reach, and I'd
-   need their actual source to close that gap with the same certainty
-   as everything else here.
-   ========================================================================== */
-
-.chp-landing {
-  position: relative;
-  background: #05070f;
-  color: #f5f7ff;
-}
-
-.chp-landing__backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 70% 40% at 15% 0%, rgba(59, 130, 246, 0.1), transparent 60%),
-    radial-gradient(ellipse 60% 35% at 85% 100%, rgba(99, 102, 241, 0.08), transparent 60%),
-    linear-gradient(180deg, #05070f 0%, #070a16 50%, #05070f 100%);
-}
-
-/* Every section sits above the fixed backdrop via position + z-index —
-   sections without their own explicit background class inherit the
-   dark backdrop naturally, so no blanket background override is
-   needed (or wanted: Hero's own .chp-hero background, declared earlier
-   in this file, must be left completely alone). */
-.chp-landing main,
-.chp-landing main > section {
-  position: relative;
-  z-index: 1;
-}
-
-/* ---- Surfaces ---- */
-
-.chp-landing .bg-surface,
-.chp-landing .bg-bg {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)) !important;
-}
-
-/* Cards: any element using shadow-card becomes a real glass card —
-   this is the single rule that makes "translucent glass, blur, blue
-   border glow, hover lift" apply to the campus radar card, event
-   cards, and campus-verified feed cards without touching their JSX. */
-.chp-landing .shadow-card {
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 1px 0 rgba(255, 255, 255, 0.1) inset !important;
-  transition: transform 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
-}
-.chp-landing .shadow-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(96, 165, 250, 0.35) !important;
-  box-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
-    0 1px 0 rgba(255, 255, 255, 0.12) inset,
-    0 0 24px rgba(59, 130, 246, 0.15) !important;
-}
-
-/* ---- Text ---- */
-
-.chp-landing .text-ink {
-  color: #ffffff !important;
-}
-.chp-landing .text-ink-soft {
-  color: rgba(255, 255, 255, 0.75) !important;
-}
-.chp-landing .text-ink-faint {
-  color: rgba(255, 255, 255, 0.55) !important;
-}
-.chp-landing .eyebrow {
-  color: #79b8ff !important;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-}
-
-/* ---- Borders ---- */
-
-.chp-landing .border-line {
-  border-color: rgba(255, 255, 255, 0.12) !important;
-}
-.chp-landing .border-lineSoft {
-  border-color: rgba(255, 255, 255, 0.07) !important;
-}
-.chp-landing .divide-lineSoft > * + * {
-  border-color: rgba(255, 255, 255, 0.07) !important;
-}
-.chp-landing .bg-line {
-  background-color: rgba(255, 255, 255, 0.12) !important;
-}
-
-/* ---- Accent tints ---- */
-
-.chp-landing .bg-accent-tint {
-  background: rgba(59, 130, 246, 0.16) !important;
-}
-
-/* ---- Hover states already present in the markup ---- */
-
-.chp-landing .hover\:border-ink\/30:hover {
-  border-color: rgba(255, 255, 255, 0.28) !important;
-}
-.chp-landing .hover\:border-accent\/30:hover {
-  border-color: rgba(96, 165, 250, 0.4) !important;
-}
-
-/* ---- Buttons: align the two hard-coded light buttons (FeatureGrid's
-   "show all" toggle, CTA's white pill) with the Hero's glass button
-   language, without changing their markup or behavior. ---- */
-
-.chp-landing button.border-line,
-.chp-landing a.border-line {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-/* CTA.jsx's own bg-ink block was already dark before this pass — left
-   alone structurally, just letting its existing blue blur accents read
-   consistently against the now-also-dark sections around it. No rule
-   needed here; noted for completeness. */
-
-/* ---- Section dividers (bg-surface border-y border-lineSoft bands used
-   by Journey/Events) — soften into the continuous background instead
-   of reading as a distinct lighter stripe. ---- */
-
-.chp-landing .border-y.border-lineSoft {
-  border-color: rgba(255, 255, 255, 0.06) !important;
-  background: rgba(255, 255, 255, 0.015) !important;
-}
-
-/* ---- Footer ---- */
-
-.chp-landing footer {
-  background: rgba(255, 255, 255, 0.02) !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-.chp-landing footer a.border-line {
-  background: rgba(255, 255, 255, 0.04);
-}
-.chp-landing footer a.border-line:hover {
-  border-color: rgba(96, 165, 250, 0.4) !important;
-}
-
-/* ---- Lightweight per-section ambient touches (floating particles /
-   orbit lines) — pure CSS, no new DOM nodes, no duplicated JS particle
-   system running underneath the whole page. Kept sparse and subtle. ---- */
-
-.chp-landing main > section:not(.chp-hero) {
-  overflow: hidden;
-}
-
-.chp-landing main > section:not(.chp-hero)::before {
-  content: '';
-  position: absolute;
-  top: 10%;
-  left: -4%;
-  width: 220px;
-  height: 220px;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.08), transparent 70%);
-  filter: blur(20px);
-  pointer-events: none;
-  z-index: 0;
-}
-.chp-landing main > section:not(.chp-hero)::after {
-  content: '';
-  position: absolute;
-  bottom: 8%;
-  right: -4%;
-  width: 260px;
-  height: 260px;
-  border-radius: 9999px;
-  border: 1px solid rgba(147, 197, 253, 0.08);
-  pointer-events: none;
-  z-index: 0;
-  animation: chp-ring-spin 60s linear infinite;
-}
-
-.chp-landing main > section:not(.chp-hero) > * {
-  position: relative;
-  z-index: 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .chp-landing main > section:not(.chp-hero)::after {
-    animation: none !important;
-  }
-}
-
-@media (max-width: 639px) {
-  .chp-landing main > section:not(.chp-hero)::before,
-  .chp-landing main > section:not(.chp-hero)::after {
-    display: none;
-  }
-}
-
-/* ==========================================================================
-   Final typography & readability polish
-   ========================================================================== */
-
-
-
-/* ---- Navbar / Footer wordmark ----
-   Different typeface from the hero heading (Manrope ExtraBold, loaded
-   above) — "Camp" stays pure white, "inity" carries a soft blue
-   gradient with a very subtle glow, never flashy. */
-.chp-wordmark {
-  font-family: 'Manrope', 'Inter', system-ui, sans-serif;
-  font-weight: 800;
-  font-size: 1.25rem;
-  letter-spacing: -0.02em;
-  color: #ffffff;
-  margin-left: 0.125rem;
-}
-.chp-wordmark__accent {
-  background: linear-gradient(90deg, #79b8ff, #a6d1ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 0 18px rgba(121, 184, 255, 0.22);
-}
-
-/* ---- Hero heading — same text, same responsive sizes, tighter
-   premium kerning and refined optical line-height only. ---- */
-.chp-hero-heading {
-  letter-spacing: -0.025em;
-  text-wrap: balance;
-}
-
-/* ---- Button typography refinement (Hero's own CTAs + the two
-   landing-page buttons touched by the Phase 2 pass: FeatureGrid's
-   "show all" toggle, CTA.jsx's white pill) — weight, spacing, and
-   transition polish only, no layout change. ---- */
-.chp-cta-primary,
-.chp-cta-secondary {
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.chp-landing button.border-line,
-.chp-landing a.border-line,
-.chp-landing .bg-white.text-ink {
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  transition: transform 250ms ease, box-shadow 250ms ease, background-color 250ms ease, border-color 250ms ease;
-}
-.chp-landing a.bg-white.text-ink:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 28px rgba(121, 184, 255, 0.25);
-}
-
-/* ---- Card heading/body typography refinement — reuses the existing
-   .shadow-card glass treatment from Phase 2, adds premium type scale
-   only (no border/shadow/blur redesign, no spacing change). ---- */
-.chp-landing .shadow-card h3,
-.chp-landing .shadow-card h2 {
-  letter-spacing: -0.01em;
-}
-
-/* ---- Icon accent color consistency — any icon still on the old
-   text-accent utility (JourneyTimeline's step markers, PrivacySection's
-   check icons, CampusVerified's icons) now matches the exact accent
-   spec used everywhere else on this page. ---- */
-.chp-landing .text-accent {
-  color: #79b8ff !important;
-}
-.chp-landing .border-accent {
-  border-color: #79b8ff !important;
-}
-
-/* ==========================================================================
-   Wordmark v2 — custom SVG signature mark (Logo.jsx, premium prop)
-   ========================================================================== */
-
-   
-
-.chp-wordmark-svg {
-  display: block;
-  width: auto;
-  filter: drop-shadow(0 0 6px rgba(121, 184, 255, 0.18));
-}
-
-/* Note: the Poppins @import above was used by the previous wordmark
-   iteration (SVG <text> styled with Poppins). The current wordmark
-   (Logo.jsx) uses zero <text> elements and zero fonts, so that import
-   is no longer doing anything for the wordmark — left in place per
-   "do not remove any existing styles" rather than deleted. The
-   .chp-wordmark-svg rule above it (display/width/glow) still applies
-   correctly to the new SVG and needs no changes. */

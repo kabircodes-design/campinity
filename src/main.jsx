@@ -6,26 +6,23 @@ import { PostsProvider } from './hooks/usePosts.jsx'
 import { ThemeProvider } from './theme/ThemeProvider.jsx'
 import { getThemeById } from './theme/themes.js'
 import './index.css'
-import './theme.css'
 import './theme/theme-tokens.css'
 
 // Pre-render flash prevention — mirrors ThemeProvider's own initial
 // resolution (mode + theme pack, including the legacy campinity:theme
 // migration) so the very first paint already has the right .dark class
-// AND the right theme pack colors, before React mounts and
-// ThemeProvider's effect would otherwise apply them a frame later.
+// AND the right theme pack colors, before React mounts.
 try {
   const storedMode = window.localStorage.getItem('campinity:appearanceMode')
   const legacy = window.localStorage.getItem('campinity:theme')
-  const systemPrefersDark =
-    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+  const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
 
   let shouldBeDark = false
   if (storedMode === 'dark') shouldBeDark = true
   else if (storedMode === 'light') shouldBeDark = false
   else if (storedMode === 'system') shouldBeDark = systemPrefersDark
   else if (legacy === 'dark') shouldBeDark = true
-  else shouldBeDark = false
+  else shouldBeDark = systemPrefersDark
 
   if (shouldBeDark) {
     document.documentElement.classList.add('dark')
@@ -42,7 +39,7 @@ try {
     }
   }
 } catch {
-  // Storage unavailable — defaults to light theme / default pack for this load.
+  // Storage unavailable — defaults to system preference for this load.
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(

@@ -45,7 +45,7 @@ export default function FeatureGrid() {
         <div className="mt-9 flex justify-center">
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="inline-flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-ink hover:border-ink/30 transition-colors duration-200"
+            className="inline-flex items-center gap-2 rounded-full border theme-border px-5 py-2.5 text-sm font-semibold theme-text-primary hover:theme-accent transition-colors duration-200"
           >
             {expanded ? 'Show less' : `Show all ${primaryFeatures.length + secondaryFeatures.length} tools`}
             <motion.span animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.3 }}>
