@@ -34,6 +34,7 @@ const FollowingPage = lazy(() => import('./pages/FollowingPage.jsx'))
 const CreateCommunityPage = lazy(() => import('./pages/CreateCommunityPage.jsx'))
 const CommunityDetailPage = lazy(() => import('./pages/CommunityDetailPage.jsx'))
 const CommunitySettingsPage = lazy(() => import('./pages/CommunitySettingsPage.jsx'))
+const DiscoverCommunitiesPage = lazy(() => import('./pages/DiscoverCommunitiesPage.jsx'))
 
 export default function App() {
   return (
@@ -202,6 +203,14 @@ export default function App() {
         {/* Communities — Phase 2. /community/create must come before the
             dynamic /community/:communityId route, or "create" would be
             matched as a communityId param instead. */}
+        <Route
+          path="/communities"
+          element={
+            <ProtectedRoute stage="home">
+              <DiscoverCommunitiesPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/community/create"
           element={

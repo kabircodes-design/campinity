@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Search, Users } from 'lucide-react'
+import { Bell, Search } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import StoryBubble from '../components/StoryBubble.jsx'
 import PostCard from '../components/PostCard.jsx'
@@ -13,6 +13,7 @@ import { getFeedStories } from '../firebase/storyService.js'
 import { getUnreadNotificationCount } from '../firebase/notificationService.js'
 import { getTrendingCommunities } from '../firebase/communityService.js'
 import CommunityCard from '../components/CommunityCard.jsx'
+import SwipeablePage from '../components/SwipeablePage.jsx'
 import { useCampusVerificationReminder } from '../hooks/useCampusVerificationReminder.js'
 import CampusVerificationModal from '../components/CampusVerificationModal.jsx'
 import CampusVerificationBanner from '../components/CampusVerificationBanner.jsx'
@@ -161,6 +162,8 @@ export default function HomePage() {
   }
 
   return (
+    <>
+    <SwipeablePage>
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
       {/* Centered mobile-first column — desktop simply centers this same layout */}
       <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
@@ -176,15 +179,6 @@ export default function HomePage() {
             </div>
 
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                aria-label="Create a community"
-                onClick={() => navigate('/community/create')}
-                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
-              >
-                <Users className="w-5 h-5" />
-              </button>
-
               <button
                 type="button"
                 aria-label="Notifications"
@@ -307,13 +301,21 @@ export default function HomePage() {
           )}
         </main>
       </div>
+    </div>
+    </SwipeablePage>
 
       {/* -------------------------------------------------------- */}
-      {/* Bottom mobile navigation — sticky, centered to match column */}
+      {/* Bottom mobile navigation — sticky, centered to match column.
+          Deliberately OUTSIDE SwipeablePage: that wrapper applies a
+          CSS transform during drag, and a transformed ancestor becomes
+          the containing block for any position:fixed descendant — left
+          inside, BottomNav would drag along with the page instead of
+          staying pinned to the viewport. Same reasoning for the
+          verification modal below it. */}
       {/* -------------------------------------------------------- */}
       <BottomNav />
 
       <CampusVerificationModal open={showModal} onRemindLater={closeModal} />
-    </div>
+    </>
   )
 }
