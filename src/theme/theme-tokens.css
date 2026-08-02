@@ -18,38 +18,46 @@
 
 :root {
   /* ---- Core tokens (existing) ---- */
-  --theme-background: #f7f9fc;
+  --theme-background: #f7f8fc;
   --theme-surface: #ffffff;
   --theme-card: #ffffff;
   --theme-border: #eef1f6;
   --theme-textPrimary: #10131a;
   --theme-textSecondary: #4a5568;
-  --theme-accent: #2563eb;
+  --theme-accent: #5b4dff;
   --theme-accentText: #ffffff;
   --theme-danger: #ef4444;
   --theme-success: #10b981;
-  --theme-notification: #2563eb;
-  --theme-button: #2563eb;
+  --theme-notification: #5b4dff;
+  --theme-button: #5b4dff;
   --theme-buttonText: #ffffff;
 
+  /* ---- Royal Indigo palette — brand-specific tokens, not part of the
+     generic design-system set above. accentDeep/accentSecondary are
+     new this pass (the brief's "Deep Accent" and "Secondary Violet")
+     — used for gradient stops and pressed/emphasis states, not meant
+     to be picked as a primary color anywhere on their own. ---- */
+  --theme-accentDeep: #4a38d6;
+  --theme-accentSecondary: #7b61ff;
+
   /* ---- Extended design-system tokens (new this pass) ---- */
-  --theme-backgroundSecondary: #eef2f9;
+  --theme-backgroundSecondary: #eef0fb;
   --theme-surfaceElevated: #ffffff;
-  --theme-glass: rgba(255, 255, 255, 0.6);
-  --theme-glassBorder: rgba(15, 23, 42, 0.08);
-  --theme-primaryHover: #1d4ed8;
-  --theme-secondary: #eef2ff;
+  --theme-glass: rgba(91, 77, 255, 0.06);
+  --theme-glassBorder: rgba(91, 77, 255, 0.12);
+  --theme-primaryHover: #6e61ff;
+  --theme-secondary: #eeecff;
   --theme-divider: #e5e9f0;
   --theme-muted: #8891a0;
   --theme-warning: #d97706;
-  --theme-gradientPrimary: linear-gradient(135deg, #2563eb, #4f7cf6);
-  --theme-gradientSecondary: linear-gradient(135deg, #eef2ff, #dbe6ff);
+  --theme-gradientPrimary: linear-gradient(135deg, #5b4dff, #7b61ff);
+  --theme-gradientSecondary: linear-gradient(135deg, #eeecff, #dfe0fc);
   --theme-shadowSoft: 0 8px 24px rgba(15, 23, 42, 0.06);
-  --theme-shadowStrong: 0 20px 48px rgba(15, 23, 42, 0.12);
-  --theme-glow: 0 0 40px rgba(37, 99, 235, 0.16);
+  --theme-shadowStrong: 0 20px 48px rgba(74, 56, 214, 0.12);
+  --theme-glow: 0 0 40px rgba(91, 77, 255, 0.18);
   --theme-overlay: rgba(15, 23, 42, 0.45);
-  --theme-backdrop: rgba(247, 249, 252, 0.75);
-  --theme-focusRing: 0 0 0 3px rgba(37, 99, 235, 0.35);
+  --theme-backdrop: rgba(247, 248, 252, 0.75);
+  --theme-focusRing: 0 0 0 3px rgba(91, 77, 255, 0.35);
 }
 
 /*
@@ -62,30 +70,34 @@
  */
 html.dark {
   color-scheme: dark;
-  --theme-background: #05070f;
-  --theme-surface: #0a0d18;
-  --theme-card: #0a0d18;
-  --theme-border: #1a2032;
+  --theme-background: #09090f;
+  --theme-surface: #11131a;
+  --theme-card: #11131a;
+  --theme-border: rgba(255, 255, 255, 0.08);
   --theme-textPrimary: #f4f6fb;
   --theme-textSecondary: #d8dce6;
 
-  --theme-backgroundSecondary: #070a14;
-  --theme-surfaceElevated: #10141f;
-  --theme-glass: rgba(16, 20, 31, 0.55);
-  --theme-glassBorder: rgba(255, 255, 255, 0.1);
-  --theme-primaryHover: #3b82f6;
-  --theme-secondary: #131a2c;
-  --theme-divider: #1a2032;
+  --theme-accent: #5b4dff;
+  --theme-accentDeep: #4a38d6;
+  --theme-accentSecondary: #7b61ff;
+
+  --theme-backgroundSecondary: #0d0e15;
+  --theme-surfaceElevated: #15171f;
+  --theme-glass: rgba(91, 77, 255, 0.08);
+  --theme-glassBorder: rgba(255, 255, 255, 0.08);
+  --theme-primaryHover: #6e61ff;
+  --theme-secondary: #171526;
+  --theme-divider: rgba(255, 255, 255, 0.08);
   --theme-muted: #7c8494;
   --theme-warning: #f59e0b;
-  --theme-gradientPrimary: linear-gradient(135deg, #2563eb, #6366f1);
-  --theme-gradientSecondary: linear-gradient(135deg, #0f1526, #131a2c);
+  --theme-gradientPrimary: linear-gradient(135deg, #5b4dff, #7b61ff);
+  --theme-gradientSecondary: linear-gradient(135deg, #0d0e15, #171526);
   --theme-shadowSoft: 0 8px 24px rgba(0, 0, 0, 0.4);
   --theme-shadowStrong: 0 24px 56px rgba(0, 0, 0, 0.55);
-  --theme-glow: 0 0 48px rgba(59, 130, 246, 0.3);
+  --theme-glow: 0 0 48px rgba(91, 77, 255, 0.32);
   --theme-overlay: rgba(2, 4, 10, 0.65);
-  --theme-backdrop: rgba(5, 7, 15, 0.75);
-  --theme-focusRing: 0 0 0 3px rgba(96, 165, 250, 0.45);
+  --theme-backdrop: rgba(9, 9, 15, 0.75);
+  --theme-focusRing: 0 0 0 3px rgba(123, 97, 255, 0.45);
 }
 
 html,

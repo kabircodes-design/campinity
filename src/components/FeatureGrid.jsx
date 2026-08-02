@@ -10,7 +10,7 @@ export default function FeatureGrid() {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <section id="product" className="py-20 sm:py-28">
+    <section id="product" className="py-20 sm:py-28 theme-section-glow">
       <Container>
         <SectionHeading
           eyebrow="One app, everything campus"

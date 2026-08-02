@@ -7,7 +7,7 @@ const ease = [0.16, 1, 0.3, 1]
 
 export default function CampusVerified() {
   return (
-    <section className="py-20 sm:py-28">
+    <section className="py-20 sm:py-28 theme-section-glow">
       <Container>
         <SectionHeading
           align="center"

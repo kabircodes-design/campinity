@@ -11,7 +11,7 @@ const rows = [
 
 export default function PrivacySection() {
   return (
-    <section id="privacy" className="py-20 sm:py-28">
+    <section id="privacy" className="py-20 sm:py-28 theme-section-glow">
       <Container className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
         <motion.div
           initial={{ opacity: 0, y: 16 }}

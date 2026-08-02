@@ -16,7 +16,7 @@ import Icon from './Icon.jsx'
  */
 export default function CTA() {
   return (
-    <section id="cta" className="py-20 sm:py-28">
+    <section id="cta" className="py-20 sm:py-28 theme-section-glow">
       <Container>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
