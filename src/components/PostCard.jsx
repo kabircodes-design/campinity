@@ -38,9 +38,12 @@ const typeIcons = {
 
 export default function PostCard({ post }) {
   const navigate = useNavigate()
-  const config = postTypeConfig[post.type]
-  const TypeIcon = typeIcons[post.type]
+  const config = postTypeConfig[post.type] || {
+  label: "Post",
+  color: "bg-gray-100 text-gray-700"
+}
 
+const TypeIcon = typeIcons[post.type] || MessageCircle
   const [liked, setLiked] = useState(post.likedByMe)
   const [likeCount, setLikeCount] = useState(post.likes)
   const [shareCopied, setShareCopied] = useState(false)

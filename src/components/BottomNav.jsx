@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Home, MessageCircle, ShoppingBag, User, Users } from 'lucide-react'
+import { Home, MessageCircle, Orbit, ShoppingBag, User } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 
 const navItems = [
   { id: 'home', label: 'Home', icon: Home, to: '/home' },
   { id: 'messages', label: 'Messages', icon: MessageCircle, to: '/messages' },
   { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag, to: '/marketplace' },
-  { id: 'communities', label: 'Communities', icon: Users, to: '/communities' },
+  { id: 'communities', label: 'Communities', icon: Orbit, to: '/communities' },
   { id: 'profile', label: 'Profile', icon: User, to: '/profile' }
 ]
 

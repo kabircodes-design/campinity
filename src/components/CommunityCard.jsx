@@ -13,22 +13,56 @@ const typeLabels = {
 }
 
 /**
- * Reusable community card — Discover-style layout (cover strip, logo
- * overlapping it, name/handle/type/privacy/member count, short
- * description). Used by HomePage's Clubs tab now; written generically
- * enough that a future Discover/Search page can reuse it without
- * duplicating this markup.
+ * Reusable community card. Structure per the exact spec: cover ->
+ * avatar -> name -> @handle -> description -> category badge / member
+ * count -> Join button.
+ *
+ * Defensive hardening applied even though the existing code already
+ * had the standard-correct pattern (relative parent, fixed height,
+ * absolute+object-cover image, overflow-hidden on the outer element):
+ * added `overflow-hidden` directly on the cover div too (not just the
+ * outer container), and made the outer element explicitly `flex
+ * flex-col`. Neither of these can make anything worse; if a subtler
+ * cause was producing the reported overflow, this closes off the most
+ * likely candidates without touching anything visual.
+ *
+ * Outer element is a `div` with `role="button"`/keyboard handling, not
+ * a real `<button>` — this card now contains a real nested Join
+ * `<button>`, and HTML doesn't allow interactive elements nested
+ * inside a `<button>`. This was actually wrong in an earlier version
+ * of this file (a real `<button>` wrapping everything) before the
+ * Join button existed; fixed as part of adding it.
+ *
+ * Join button deliberately does NOT perform a live per-card membership
+ * check or join/leave action itself — doing that here would mean one
+ * extra Firestore read PER CARD rendered in a grid (N+1 reads just to
+ * decide whether a button says "Join" or "Joined"), which conflicts
+ * with this project's own "avoid unnecessary reads" standard elsewhere.
+ * It navigates to the community page instead, where real membership
+ * state and the actual join/leave/request flow already exist
+ * (CommunityDetailPage.jsx) — same destination as tapping the card,
+ * just with an explicit, stopPropagation'd action for users who expect
+ * a dedicated button.
  */
 export default function CommunityCard({ community }) {
   const navigate = useNavigate()
 
+  const goToCommunity = () => navigate(`/community/${community.id}`)
+
   return (
-    <button
-      type="button"
-      onClick={() => navigate(`/community/${community.id}`)}
-      className="w-full text-left rounded-2xl border border-gray-100 bg-white overflow-hidden hover:border-gray-200 hover:shadow-sm transition-all duration-300"
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={goToCommunity}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          goToCommunity()
+        }
+      }}
+      className="w-full flex flex-col text-left rounded-2xl border border-gray-100 bg-white overflow-hidden hover:border-gray-200 hover:shadow-sm transition-all duration-300 cursor-pointer"
     >
-      <div className="h-20 bg-gradient-to-br from-blue-600 to-indigo-700 relative">
+      <div className="relative h-20 flex-shrink-0 overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700">
         {community.coverImage && (
           <img src={community.coverImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
         )}
@@ -65,7 +99,18 @@ export default function CommunityCard({ community }) {
             {community.membersCount}
           </span>
         </div>
+
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            goToCommunity()
+          }}
+          className="mt-3 w-full text-center rounded-full bg-blue-600 text-white text-xs font-semibold py-2 hover:bg-blue-700 transition-all duration-300"
+        >
+          Join
+        </button>
       </div>
-    </button>
+    </div>
   )
 }

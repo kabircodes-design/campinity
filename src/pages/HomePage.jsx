@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Search } from 'lucide-react'
+import { Bell, Search, UserPlus } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import StoryBubble from '../components/StoryBubble.jsx'
 import PostCard from '../components/PostCard.jsx'
@@ -14,6 +14,7 @@ import { getUnreadNotificationCount } from '../firebase/notificationService.js'
 import { getTrendingCommunities } from '../firebase/communityService.js'
 import CommunityCard from '../components/CommunityCard.jsx'
 import SwipeablePage from '../components/SwipeablePage.jsx'
+import { useFollowingFeed } from '../hooks/useFollowingFeed.js'
 import { useCampusVerificationReminder } from '../hooks/useCampusVerificationReminder.js'
 import CampusVerificationModal from '../components/CampusVerificationModal.jsx'
 import CampusVerificationBanner from '../components/CampusVerificationBanner.jsx'
@@ -108,6 +109,13 @@ export default function HomePage() {
     [posts, activeTab]
   )
 
+  const {
+    posts: followingPosts,
+    loading: followingLoading,
+    error: followingError,
+    isFollowingAnyone
+  } = useFollowingFeed(auth.currentUser?.uid)
+
   const [communities, setCommunities] = useState([])
   const [communitiesLoading, setCommunitiesLoading] = useState(false)
   const [communitiesLoaded, setCommunitiesLoaded] = useState(false)
@@ -172,11 +180,46 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-[0_1px_0_rgba(15,23,42,0.02)]">
           <div className="h-14 flex items-center justify-between px-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-[0_2px_8px_rgba(37,99,235,0.28)]">
-                <span className="text-white text-sm font-bold">C</span>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/home')}
+              aria-label="Campinity — go to Home"
+              className="flex items-center gap-1.5"
+            >
+              {/* Minimal abstract mark — three connected nodes, not a
+                  letter. Deliberately echoes the "network/community"
+                  motif this app is actually about (same idea behind
+                  swapping the bottom-nav Communities icon to Orbit),
+                  rather than a generic lettermark. Royal Indigo
+                  gradient fill, matching the wordmark beside it. */}
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <defs>
+                  <linearGradient id="campinityMarkGradient" x1="0" y1="0" x2="20" y2="20">
+                    <stop offset="0%" stopColor="var(--theme-accentSecondary, #7b61ff)" />
+                    <stop offset="100%" stopColor="var(--theme-accent, #5b4dff)" />
+                  </linearGradient>
+                </defs>
+                <line x1="6" y1="6" x2="14" y2="6" stroke="url(#campinityMarkGradient)" strokeWidth="1.4" />
+                <line x1="6" y1="6" x2="10" y2="15" stroke="url(#campinityMarkGradient)" strokeWidth="1.4" />
+                <line x1="14" y1="6" x2="10" y2="15" stroke="url(#campinityMarkGradient)" strokeWidth="1.4" />
+                <circle cx="6" cy="6" r="2.75" fill="url(#campinityMarkGradient)" />
+                <circle cx="14" cy="6" r="2.75" fill="url(#campinityMarkGradient)" />
+                <circle cx="10" cy="15" r="2.75" fill="url(#campinityMarkGradient)" />
+              </svg>
+              <span
+                className="text-[17px] leading-none tracking-tight"
+                style={{
+                  fontWeight: 650,
+                  backgroundImage:
+                    'linear-gradient(90deg, var(--theme-accent, #5b4dff), var(--theme-accentSecondary, #7b61ff))',
+                  WebkitBackgroundClip: 'text',
+                  backgroundClip: 'text',
+                  color: 'transparent'
+                }}
+              >
+                Campinity
+              </span>
+            </button>
 
             <div className="flex items-center gap-1">
               <button
@@ -286,6 +329,39 @@ export default function HomePage() {
                   <CommunityCard key={community.id} community={community} />
                 ))}
               </div>
+            )
+          ) : activeTab === 'following' ? (
+            followingError ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm text-gray-400">{followingError}</p>
+              </div>
+            ) : followingLoading ? (
+              <div className="py-16 flex justify-center">
+                <Loader size="md" tone="dark" />
+              </div>
+            ) : !isFollowingAnyone ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">Nothing here yet</p>
+                <p className="mt-1 text-sm text-gray-400 max-w-[260px] mx-auto leading-relaxed">
+                  Follow students from your campus to see their latest posts.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/search')}
+                  className="mt-5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
+                >
+                  Discover People
+                </button>
+              </div>
+            ) : followingPosts.length === 0 ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">No posts yet</p>
+                <p className="mt-1 text-sm text-gray-400">
+                  The people you follow haven't posted anything yet.
+                </p>
+              </div>
+            ) : (
+              followingPosts.map((post) => <PostCard key={post.id} post={post} />)
             )
           ) : error ? (
             <div className="px-6 py-16 text-center">
