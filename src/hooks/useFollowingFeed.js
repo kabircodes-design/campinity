@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react'
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  where
-} from 'firebase/firestore'
+import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import { db } from '../firebase/firebase.js'
+import { subscribeToEnrichedPostsQuery } from './postFeedShared.js'
 
 const IN_QUERY_CHUNK_SIZE = 30 // Firestore's `in` operator max array size
 
@@ -19,6 +14,11 @@ const IN_QUERY_CHUNK_SIZE = 30 // Firestore's `in` operator max array size
  * describes, since it never queries by the follow graph at all — it
  * relies on whatever feedCategories a post happened to be tagged with
  * at write time).
+ *
+ * Post mapping/enrichment now lives in postFeedShared.js — this file
+ * used to have its own copy; useForYouFeed.js needed the identical
+ * logic, so it was extracted rather than duplicated. See that file's
+ * own docstring for the mapping details.
  *
  * Two live listeners, layered:
  *  1. follows/{followerId}==uid — gives the current, live list of
@@ -33,21 +33,11 @@ const IN_QUERY_CHUNK_SIZE = 30 // Firestore's `in` operator max array size
  *     followed uids (Firestore's `in` operator hard limit). Multiple
  *     chunks' results are merged and re-sorted client-side ONLY across
  *     chunk boundaries — each individual chunk's results already
- *     arrive sorted from Firestore itself, so this isn't "fetch
- *     everything and filter/sort on the client," it's "combine N
- *     already-correctly-queried, already-sorted result sets."
- *
- * visibility=='public' is required IN the query (not just checked
- * after the fact) because this project's actual Firestore security
- * rule for posts/{postId} only allows reads where
- * resource.data.visibility == 'public' — a query missing that
- * constraint would be rejected by the rules engine outright, not
- * just return fewer results.
+ *     arrive sorted from Firestore itself.
  *
  * Real, concrete requirement this creates: a composite index on
  * posts for (userId ARRAY/IN, visibility ASC, createdAt DESC). Without
- * it, this throws FAILED_PRECONDITION at runtime, same class of issue
- * already flagged in this project's last audit for other queries.
+ * it, this throws FAILED_PRECONDITION at runtime.
  */
 export function useFollowingFeed(uid) {
   const [followingIds, setFollowingIds] = useState(null) // null = not loaded yet, [] = loaded, follows no one
@@ -64,9 +54,7 @@ export function useFollowingFeed(uid) {
     const followsQuery = query(collection(db, 'follows'), where('followerId', '==', uid))
     const unsubscribe = onSnapshot(
       followsQuery,
-      (snap) => {
-        setFollowingIds(snap.docs.map((d) => d.data().followingId))
-      },
+      (snap) => setFollowingIds(snap.docs.map((d) => d.data().followingId)),
       (err) => {
         setError(err?.message || 'Could not load your following list.')
         setFollowingIds([])
@@ -96,21 +84,15 @@ export function useFollowingFeed(uid) {
       chunks.push(followingIds.slice(i, i + IN_QUERY_CHUNK_SIZE))
     }
 
-    // Each chunk keeps its own latest result set; merged and re-sorted
-    // into `posts` state every time ANY chunk updates.
     const chunkResults = chunks.map(() => [])
-    let receivedCount = 0
 
     const mergeAndSet = () => {
       const merged = chunkResults.flat()
-      merged.sort((a, b) => {
-        const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0
-        const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0
-        return bTime - aTime
-      })
+      merged.sort((a, b) => (b._createdAtMs || 0) - (a._createdAtMs || 0))
       setPosts(merged)
     }
 
+    let receivedCount = 0
     const unsubscribes = chunks.map((chunk, index) => {
       const postsQuery = query(
         collection(db, 'posts'),
@@ -118,10 +100,11 @@ export function useFollowingFeed(uid) {
         where('visibility', '==', 'public'),
         orderBy('createdAt', 'desc')
       )
-      return onSnapshot(
+      return subscribeToEnrichedPostsQuery(
         postsQuery,
-        (snap) => {
-          chunkResults[index] = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        uid,
+        (enriched) => {
+          chunkResults[index] = enriched
           receivedCount = Math.min(chunks.length, receivedCount + 1)
           mergeAndSet()
           if (receivedCount >= chunks.length) setLoading(false)

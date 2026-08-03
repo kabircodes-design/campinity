@@ -1,106 +1,316 @@
-import { collection, deleteDoc, doc, getDocs, limit, orderBy, query, updateDoc, where, writeBatch } from 'firebase/firestore'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  startAfter,
+  updateDoc,
+  where,
+  writeBatch
+} from 'firebase/firestore'
 import { db } from './firebase.js'
-import { getAvatarColor, getInitials } from './postService.js'
 
-const USERS_COLLECTION = 'users'
-const NOTIFICATIONS_SUBCOLLECTION = 'notifications'
+/**
+ * Schema, already established by this project's real security rules
+ * (users/{uid}/notifications/{notificationId} — allow create requires
+ * actorUid == requester's own uid and actorUid != uid; read/update/
+ * delete owner-only; update restricted to the `read` field). Document
+ * shape below is new — the rules constrain WHO can write, not what
+ * fields exist — designed to avoid a lookup on render (actor name/
+ * avatar are denormalized onto the notification itself, same pattern
+ * this project already uses elsewhere, e.g. posts storing an `author`
+ * object instead of just a uid).
+ *
+ * {
+ *   actorUid: string,
+ *   actorName: string,
+ *   actorAvatar: string,
+ *   type: 'like' | 'comment' | 'follow' | 'announcement',
+ *   postId?: string,          // like / comment
+ *   commentPreview?: string,  // comment (first ~80 chars)
+ *   communityId?: string,     // announcement
+ *   communityName?: string,   // announcement
+ *   message?: string,         // announcement body
+ *   read: boolean,
+ *   createdAt: serverTimestamp
+ * }
+ *
+ * getUnreadNotificationCount(uid) keeps its existing signature/return
+ * shape (a plain number) — HomePage.jsx already calls this exact
+ * function; this is a compatible implementation of it, not a breaking
+ * change to that call site. subscribeToUnreadCount is NEW — a
+ * real-time equivalent HomePage.jsx isn't using yet (still doing a
+ * single one-time fetch on mount), which is the actual gap between
+ * "there's a bell icon with a dot" and "real-time notification badge"
+ * this phase asks for. Swapping HomePage.jsx onto it is a real,
+ * separate edit — done below, after this file.
+ */
 
-function formatTimeAgo(timestamp) {
-  if (!timestamp?.toDate) return 'Just now'
-  const diffMs = Date.now() - timestamp.toDate().getTime()
-  const diffMinutes = Math.floor(diffMs / 60000)
-  if (diffMinutes < 1) return 'Just now'
-  if (diffMinutes < 60) return `${diffMinutes}m ago`
-  const diffHours = Math.floor(diffMinutes / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
-  const diffDays = Math.floor(diffHours / 24)
-  return `${diffDays}d ago`
+function notificationsCollection(uid) {
+  return collection(db, 'users', uid, 'notifications')
 }
 
-const ACTION_TEXT = {
-  follow: 'started following you.',
-  like: 'liked your post.',
-  comment: 'commented on your post.'
+async function createNotification(targetUid, data) {
+  // No self-notifications — mirrors the security rule's own
+  // actorUid != uid requirement, checked client-side too so a caller
+  // gets a clear no-op instead of a rules rejection for the common
+  // case (e.g. liking your own post).
+  if (data.actorUid === targetUid) return null
+
+  const notifRef = doc(notificationsCollection(targetUid))
+  await setDoc(notifRef, {
+    ...data,
+    read: false,
+    createdAt: serverTimestamp()
+  })
+  return notifRef.id
 }
 
-function targetLinkFor(raw) {
-  if (raw.type === 'follow') return `/student/${raw.actorUsername}`
-  if (raw.type === 'like' || raw.type === 'comment') return `/post/${raw.targetId}`
-  return null
+export async function createLikeNotification({ postOwnerUid, actorUid, actorName, actorAvatar, postId }) {
+  return createNotification(postOwnerUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    type: 'like',
+    postId
+  })
+}
+
+export async function createCommentNotification({
+  postOwnerUid,
+  actorUid,
+  actorName,
+  actorAvatar,
+  postId,
+  commentText
+}) {
+  return createNotification(postOwnerUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    type: 'comment',
+    postId,
+    commentPreview: (commentText || '').slice(0, 80)
+  })
 }
 
 /**
- * Maps a Firestore users/{uid}/notifications/{id} document into the
- * exact shape the existing, untouched NotificationCard.jsx and
- * NotificationIcon.jsx already expect (actorName, actorInitials,
- * actorColorClass, text, time, targetLink, read) — the ONLY translation
- * layer between Firestore's schema and the existing UI, same pattern as
- * postService.js's mapPostDoc.
+ * Four distinct creators below — per this task's explicit requirement
+ * that each notification type have its own icon/title/message instead
+ * of every comment-related event reusing createCommentNotification.
+ * All follow createNotification's existing shape/pattern exactly (own
+ * `type` value, own field set) rather than introducing a new one.
  */
-function mapNotification(docSnap) {
-  const raw = { id: docSnap.id, ...docSnap.data() }
-  const actorLabel = raw.actorDisplayName || raw.actorUsername || 'Someone'
 
-  return {
-    id: raw.id,
-    type: raw.type,
-    actorName: actorLabel,
-    actorInitials: getInitials(actorLabel),
-    actorColorClass: getAvatarColor(raw.actorUid || raw.id),
-    text: ACTION_TEXT[raw.type] || '',
-    time: formatTimeAgo(raw.createdAt),
-    read: raw.read === true,
-    targetLink: targetLinkFor(raw)
+export async function createReplyNotification({
+  targetUid,
+  actorUid,
+  actorName,
+  actorAvatar,
+  postId,
+  commentId,
+  replyText
+}) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    type: 'reply',
+    postId,
+    commentId,
+    commentPreview: (replyText || '').slice(0, 80)
+  })
+}
+
+export async function createCommentLikeNotification({
+  targetUid,
+  actorUid,
+  actorName,
+  actorAvatar,
+  postId,
+  commentId
+}) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    type: 'comment_like',
+    postId,
+    commentId
+  })
+}
+
+export async function createMentionNotification({
+  targetUid,
+  actorUid,
+  actorName,
+  actorAvatar,
+  postId,
+  commentId,
+  commentText
+}) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    type: 'mention',
+    postId,
+    commentId,
+    commentPreview: (commentText || '').slice(0, 80)
+  })
+}
+
+export async function createPinNotification({
+  targetUid,
+  actorUid,
+  actorName,
+  actorAvatar,
+  postId,
+  commentId
+}) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'The post creator',
+    actorAvatar: actorAvatar || '',
+    type: 'pin',
+    postId,
+    commentId
+  })
+}
+
+export async function createFollowNotification({ targetUid, actorUid, actorName, actorAvatar }) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    type: 'follow'
+  })
+}
+
+/**
+ * Community announcements — fans out to every member. Uses
+ * communityService.js's getMembers (already built) to enumerate
+ * recipients, batched at 450 writes per Firestore batch (well under
+ * the 500 hard limit) since a large community could exceed a single
+ * batch. Caller is responsible for checking the actor is actually an
+ * owner/admin of the community before calling this — same pattern
+ * this project already uses (e.g. communityService.js's
+ * updateCommunityDetails checks permission itself rather than trusting
+ * the caller, so this probably should too long-term; flagged rather
+ * than silently assumed, kept simple for this pass since Phase 1 only
+ * asks for the notification to fire, not a full permissions redesign
+ * of who may trigger it).
+ */
+export async function createCommunityAnnouncementNotifications({
+  communityId,
+  communityName,
+  actorUid,
+  actorName,
+  actorAvatar,
+  message
+}) {
+  // Dynamic import here (not a top-level one) is deliberate, unlike
+  // the firestore/storage imports elsewhere in this project which
+  // should always be static: this avoids a circular-import risk if
+  // communityService.js ever needs to import FROM
+  // notificationService.js in the future (e.g. to send a notification
+  // as part of some community action) — a static import at the top of
+  // this file would create that cycle immediately, a dynamic one
+  // inside just this one function doesn't.
+  const { getMembers } = await import('./communityService.js')
+  const { members } = await getMembers(communityId, { pageSize: 500 })
+
+  const recipients = members.map((m) => m.uid).filter((uid) => uid !== actorUid)
+
+  for (let i = 0; i < recipients.length; i += 450) {
+    const batch = writeBatch(db)
+    recipients.slice(i, i + 450).forEach((uid) => {
+      const notifRef = doc(notificationsCollection(uid))
+      batch.set(notifRef, {
+        actorUid,
+        actorName: actorName || 'Someone',
+        actorAvatar: actorAvatar || '',
+        type: 'announcement',
+        communityId,
+        communityName,
+        message: (message || '').slice(0, 280),
+        read: false,
+        createdAt: serverTimestamp()
+      })
+    })
+    await batch.commit()
   }
 }
 
-/**
- * Loads a user's notifications, newest first.
- */
-export async function getNotifications(uid, maxResults = 50) {
-  const notificationsQuery = query(
-    collection(db, USERS_COLLECTION, uid, NOTIFICATIONS_SUBCOLLECTION),
-    orderBy('createdAt', 'desc'),
-    limit(maxResults)
-  )
-  const snap = await getDocs(notificationsQuery)
-  return snap.docs.map(mapNotification)
-}
-
-/**
- * Returns just the unread count — used for the Home header's bell
- * badge. A dedicated equality-filtered query rather than fetching every
- * notification and counting client-side, to keep the read cheap.
- */
 export async function getUnreadNotificationCount(uid) {
-  const unreadQuery = query(
-    collection(db, USERS_COLLECTION, uid, NOTIFICATIONS_SUBCOLLECTION),
-    where('read', '==', false)
-  )
-  const snap = await getDocs(unreadQuery)
+  if (!uid) return 0
+  const snap = await getDocs(query(notificationsCollection(uid), where('read', '==', false)))
   return snap.size
 }
 
-/** Marks a single notification as read. */
+/** Real-time equivalent of getUnreadNotificationCount — see this file's own docstring for why HomePage.jsx should move onto this. */
+export function subscribeToUnreadCount(uid, callback) {
+  if (!uid) {
+    callback(0)
+    return () => {}
+  }
+  const unreadQuery = query(notificationsCollection(uid), where('read', '==', false))
+  return onSnapshot(unreadQuery, (snap) => callback(snap.size))
+}
+
+export async function getNotifications(uid, { pageSize = 20, cursor = null } = {}) {
+  const constraints = [orderBy('createdAt', 'desc'), limit(pageSize)]
+  if (cursor) constraints.push(startAfter(cursor))
+  const snap = await getDocs(query(notificationsCollection(uid), ...constraints))
+  return {
+    notifications: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    nextCursor: snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1] : null
+  }
+}
+
+/** Real-time feed for the actual Notifications page (NotificationsPage.jsx — I don't have this file; see this feature's chat summary for what to wire in). */
+export function subscribeToNotifications(uid, { pageSize = 30 } = {}, callback) {
+  if (!uid) {
+    callback([])
+    return () => {}
+  }
+  const feedQuery = query(notificationsCollection(uid), orderBy('createdAt', 'desc'), limit(pageSize))
+  return onSnapshot(feedQuery, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  })
+}
+
 export async function markNotificationRead(uid, notificationId) {
-  await updateDoc(doc(db, USERS_COLLECTION, uid, NOTIFICATIONS_SUBCOLLECTION, notificationId), { read: true })
+  const notifRef = doc(db, 'users', uid, 'notifications', notificationId)
+  const snap = await getDoc(notifRef)
+  if (!snap.exists() || snap.data().read) return
+  await updateDoc(notifRef, { read: true })
 }
 
-/** Marks every unread notification as read in one batch. */
-export async function markAllNotificationsRead(uid) {
-  const unreadQuery = query(
-    collection(db, USERS_COLLECTION, uid, NOTIFICATIONS_SUBCOLLECTION),
-    where('read', '==', false)
-  )
-  const snap = await getDocs(unreadQuery)
-  if (snap.empty) return
-
-  const batch = writeBatch(db)
-  snap.docs.forEach((docSnap) => batch.update(docSnap.ref, { read: true }))
-  await batch.commit()
-}
-
-/** Deletes a single notification. */
+/**
+ * Was missing — NotificationsPage.jsx imports this (reported runtime
+ * error: "does not provide an export named 'deleteNotification'").
+ * Same (uid, notificationId) signature as markNotificationRead right
+ * above, for consistency. Security rule already permits this
+ * (`allow delete: if isOwner(uid)` on users/{uid}/notifications/{id}),
+ * no rules change needed — this was purely a missing service function.
+ */
 export async function deleteNotification(uid, notificationId) {
-  await deleteDoc(doc(db, USERS_COLLECTION, uid, NOTIFICATIONS_SUBCOLLECTION, notificationId))
+  await deleteDoc(doc(db, 'users', uid, 'notifications', notificationId))
+}
+
+export async function markAllNotificationsRead(uid) {
+  const snap = await getDocs(query(notificationsCollection(uid), where('read', '==', false)))
+  for (let i = 0; i < snap.docs.length; i += 450) {
+    const batch = writeBatch(db)
+    snap.docs.slice(i, i + 450).forEach((d) => batch.update(d.ref, { read: true }))
+    await batch.commit()
+  }
 }

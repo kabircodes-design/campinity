@@ -24,6 +24,7 @@ import {
   subscribeToCommunity,
   transferOwnership
 } from '../firebase/communityService.js'
+import { createCommunityAnnouncementNotifications } from '../firebase/notificationService.js'
 
 const typeLabels = {
   official_club: 'Official Club',
@@ -82,6 +83,11 @@ export default function CommunityDetailPage() {
   const [memberActionError, setMemberActionError] = useState('')
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const [announcementText, setAnnouncementText] = useState('')
+  const [isSendingAnnouncement, setIsSendingAnnouncement] = useState(false)
+  const [announcementError, setAnnouncementError] = useState('')
+  const [announcementSent, setAnnouncementSent] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
@@ -329,6 +335,43 @@ export default function CommunityDetailPage() {
     } catch (err) {
       setDeleteError(err?.message || 'Could not delete this community.')
       setIsDeleting(false)
+    }
+  }
+
+  /**
+   * Actor identity uses auth.currentUser?.displayName directly — this
+   * page never loads the current user's own Firestore profile (only
+   * the community's data), and adding that fetch just for this one
+   * label felt like more than this feature needed. Firebase Auth's own
+   * displayName field may or may not be populated depending on how
+   * signup sets it elsewhere in this project (unverified — I don't
+   * have that flow); falls back to "A community admin" if empty rather
+   * than showing a blank name.
+   */
+  const handleSendAnnouncement = async (event) => {
+    event.preventDefault()
+    if (!announcementText.trim() || isSendingAnnouncement) return
+
+    setIsSendingAnnouncement(true)
+    setAnnouncementError('')
+    setAnnouncementSent(false)
+
+    try {
+      await createCommunityAnnouncementNotifications({
+        communityId,
+        communityName: community.name,
+        actorUid: uid,
+        actorName: auth.currentUser?.displayName || 'A community admin',
+        actorAvatar: auth.currentUser?.photoURL || '',
+        message: announcementText.trim()
+      })
+      setAnnouncementText('')
+      setAnnouncementSent(true)
+      window.setTimeout(() => setAnnouncementSent(false), 2500)
+    } catch (err) {
+      setAnnouncementError(err?.message || 'Could not send this announcement.')
+    } finally {
+      setIsSendingAnnouncement(false)
     }
   }
 
@@ -688,6 +731,28 @@ export default function CommunityDetailPage() {
 
           {activeTab === 'Settings' && isAdmin && (
             <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Send Announcement</p>
+              <form onSubmit={handleSendAnnouncement} className="mb-6">
+                <textarea
+                  rows={3}
+                  value={announcementText}
+                  onChange={(event) => setAnnouncementText(event.target.value)}
+                  disabled={isSendingAnnouncement}
+                  maxLength={280}
+                  placeholder="Share an update with every member..."
+                  className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+                />
+                {announcementError && <p className="mt-1.5 text-xs text-red-500">{announcementError}</p>}
+                {announcementSent && <p className="mt-1.5 text-xs text-emerald-600">Sent to every member.</p>}
+                <button
+                  type="submit"
+                  disabled={!announcementText.trim() || isSendingAnnouncement}
+                  className="mt-2 w-full rounded-full bg-blue-600 text-white text-sm font-semibold py-2.5 hover:bg-blue-700 disabled:opacity-50 transition-all duration-300"
+                >
+                  {isSendingAnnouncement ? 'Sending…' : 'Send to All Members'}
+                </button>
+              </form>
+
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                 Pending Requests {pendingRequests.length > 0 && `(${pendingRequests.length})`}
               </p>

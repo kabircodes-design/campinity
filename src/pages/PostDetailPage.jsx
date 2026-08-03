@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -12,44 +12,64 @@ import {
   MessageCircle,
   MoreHorizontal,
   PackageSearch,
-  Send,
   Share,
   ShoppingBag
 } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
+import CommentCard from '../components/CommentCard.jsx'
+import CommentComposer from '../components/CommentComposer.jsx'
+import CommentSkeleton from '../components/CommentSkeleton.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
-import { getAvatarColor, getInitials, formatTimeAgo, getPostById } from '../firebase/postService.js'
+import { formatTimeAgo, getPostById } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
-import { addComment, deleteComment, getComments, likePost, unlikePost } from '../firebase/engagementService.js'
+import { addComment, getComments, likePost, unlikePost } from '../firebase/engagementService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
 
 /**
- * Maps a Firestore comment doc into the shape the existing comment list
- * JSX already expects (author/initials/colorClass/time) — same pattern
- * as postService.js's mapPostDoc. Comment-level likes aren't part of
- * this feature's scope, so likes/likedByMe stay local-only/cosmetic
- * exactly as they already were.
+ * Complete replacement of the old flat comment section — no
+ * migrate-later, no side-by-side systems. Old local pieces removed
+ * entirely: mapComment (the comments now come pre-shaped, ranked, and
+ * threaded from getComments itself), toggleCommentLike (was
+ * explicitly local-only/cosmetic — real, persisted, transactional
+ * likeComment/unlikeComment now live in engagementService.js and are
+ * called from inside CommentCard.jsx directly), handleDeleteComment
+ * (same — moved into CommentCard.jsx, which now owns its own
+ * edit/delete/pin/reply state instead of PostDetailPage.jsx managing
+ * every comment's interactive state from above).
+ *
+ * getComments(postId) keeps its old two-argument call site
+ * unchanged in spirit (still just needs postId) but now returns
+ * { comments, nextCursor } (ranked, top-level only) instead of a flat
+ * array — this page passes post.userId as creatorUid so the ranking
+ * can apply the "creator interaction" boost correctly.
+ *
+ * #comment-{id} anchor + scroll-into-view + a brief highlight pulse:
+ * this is the other half of NotificationCard.jsx's
+ * /post/{id}#comment-{id} navigation — a reply/mention/pin
+ * notification now actually lands ON the relevant comment, not just
+ * on the post.
  */
-function mapComment(raw) {
-  return {
-    id: raw.id,
-    userId: raw.userId,
-    author: raw.displayName || 'Student',
-    initials: getInitials(raw.displayName),
-    colorClass: getAvatarColor(raw.userId || raw.id),
-    text: raw.text || '',
-    time: formatTimeAgo(raw.createdAt),
-    likes: 0,
-    likedByMe: false
-  }
+function useScrollToCommentAnchor(commentsLoaded) {
+  useEffect(() => {
+    if (!commentsLoaded) return
+    const hash = window.location.hash
+    if (!hash.startsWith('#comment-')) return
+    const el = document.getElementById(hash.slice(1))
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('ring-2', 'ring-blue-300', 'ring-offset-2', 'rounded-xl')
+    const timer = window.setTimeout(() => {
+      el.classList.remove('ring-2', 'ring-blue-300', 'ring-offset-2', 'rounded-xl')
+    }, 2000)
+    return () => window.clearTimeout(timer)
+  }, [commentsLoaded])
 }
 
 export default function PostDetailPage() {
   const { postId } = useParams()
   const navigate = useNavigate()
-  const commentInputRef = useRef(null)
 
   const [post, setPost] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -61,9 +81,12 @@ export default function PostDetailPage() {
   const [saved, setSaved] = useState(false)
   const [reported, setReported] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
+
   const [comments, setComments] = useState([])
-  const [commentText, setCommentText] = useState('')
-  const [isPostingComment, setIsPostingComment] = useState(false)
+  const [commentsLoading, setCommentsLoading] = useState(true)
+  const [commentsError, setCommentsError] = useState('')
+
+  useScrollToCommentAnchor(!commentsLoading)
 
   useEffect(() => {
     let cancelled = false
@@ -94,12 +117,24 @@ export default function PostDetailPage() {
     }
 
     const loadComments = async () => {
+      setCommentsLoading(true)
+      setCommentsError('')
       try {
-        const data = await getComments(postId)
-        if (!cancelled) setComments(data.map(mapComment))
-      } catch {
-        // Comment thread just shows empty if this fails; the post above
-        // still loads independently.
+        const { comments: data } = await getComments(postId, { creatorUid: post?.userId })
+        if (!cancelled) setComments(data)
+      } catch (err) {
+        // This used to be a bare catch that silently left `comments`
+        // empty — indistinguishable from a post that genuinely has zero
+        // comments. That's exactly what hid a missing Firestore
+        // composite index: the write path succeeded, this read failed
+        // with FAILED_PRECONDITION, and nothing ever surfaced it.
+        // console.error so it's visible in dev tools even before a user
+        // reports anything, plus a real error state in the UI below
+        // instead of a misleading empty-conversation message.
+        console.error('Failed to load comments:', err)
+        if (!cancelled) setCommentsError(err?.message || 'Could not load comments.')
+      } finally {
+        if (!cancelled) setCommentsLoading(false)
       }
     }
 
@@ -179,72 +214,49 @@ export default function PostDetailPage() {
     window.setTimeout(() => setShareCopied(false), 1500)
   }
 
-  const focusComposer = (prefill = '') => {
-    if (prefill) setCommentText(prefill)
-    commentInputRef.current?.focus()
-  }
+  const currentUser = profile
+    ? { displayName: profile.displayName, username: profile.username, avatar: profile.avatar }
+    : null
 
-  const toggleCommentLike = (commentId) => {
-    setComments((prev) =>
-      prev.map((comment) =>
-        comment.id === commentId
-          ? {
-              ...comment,
-              likedByMe: !comment.likedByMe,
-              likes: comment.likedByMe ? comment.likes - 1 : comment.likes + 1
-            }
-          : comment
-      )
-    )
-  }
-
-  const handleSendComment = async (event) => {
-    event.preventDefault()
-    const trimmed = commentText.trim()
-    if (!trimmed || isPostingComment) return
-
+  const handlePostComment = async ({ text, mentionedUids }) => {
     const uid = auth.currentUser?.uid
     if (!uid) return
 
-    setIsPostingComment(true)
-    try {
-      const displayName = profile?.displayName || ''
-      const username = profile?.username || ''
-      const commentId = await addComment(post.id, { uid, displayName, username, text: trimmed })
-
-      setComments((prev) => [
-        ...prev,
-        {
-          id: commentId,
-          userId: uid,
-          author: displayName || 'You',
-          initials: getInitials(displayName),
-          colorClass: getAvatarColor(uid),
-          text: trimmed,
-          time: 'Just now',
-          likes: 0,
-          likedByMe: false
-        }
-      ])
-      setCommentText('')
-    } catch {
-      // Keep the typed text in place so the user can retry.
-    } finally {
-      setIsPostingComment(false)
+    // Optimistic: insert immediately, replaced by the real ranked list
+    // next time loadComments would run (this page doesn't currently
+    // re-fetch after posting — the optimistic entry IS the persisted
+    // state going forward this session, matching "optimistic updates"
+    // without an extra round-trip read right after a write).
+    const optimisticComment = {
+      id: `optimistic-${Date.now()}`,
+      userId: uid,
+      displayName: currentUser?.displayName || 'Student',
+      username: currentUser?.username || '',
+      avatar: currentUser?.avatar || '',
+      text,
+      mentions: mentionedUids,
+      parentCommentId: null,
+      replyCount: 0,
+      likedBy: [],
+      likesCount: 0,
+      edited: false,
+      pinned: false,
+      createdAt: { toMillis: () => Date.now() }
     }
-  }
-
-  const handleDeleteComment = async (commentId) => {
-    const uid = auth.currentUser?.uid
-    if (!uid) return
-
-    const previousComments = comments
-    setComments((prev) => prev.filter((comment) => comment.id !== commentId))
+    setComments((prev) => [optimisticComment, ...prev])
 
     try {
-      await deleteComment(post.id, commentId, uid)
+      const realId = await addComment(postId, {
+        uid,
+        displayName: currentUser?.displayName,
+        username: currentUser?.username,
+        avatar: currentUser?.avatar,
+        text,
+        mentionedUids
+      })
+      setComments((prev) => prev.map((c) => (c.id === optimisticComment.id ? { ...c, id: realId } : c)))
     } catch {
-      setComments(previousComments)
+      setComments((prev) => prev.filter((c) => c.id !== optimisticComment.id))
     }
   }
 
@@ -372,14 +384,10 @@ export default function PostDetailPage() {
               <Heart className="w-[18px] h-[18px]" fill={liked ? 'currentColor' : 'none'} />
               {likeCount}
             </button>
-            <button
-              type="button"
-              onClick={() => focusComposer()}
-              className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 transition-all duration-300"
-            >
+            <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
               <MessageCircle className="w-[18px] h-[18px]" />
               {comments.length}
-            </button>
+            </span>
             <button
               type="button"
               onClick={handleShare}
@@ -417,76 +425,40 @@ export default function PostDetailPage() {
               Comments {comments.length > 0 && `(${comments.length})`}
             </p>
 
-            {comments.length === 0 ? (
-              <p className="py-8 text-center text-sm text-gray-400">No comments yet — be the first to reply.</p>
+            {commentsLoading ? (
+              <CommentSkeleton />
+            ) : commentsError ? (
+              <div className="py-10 text-center">
+                <p className="text-sm font-semibold text-gray-900">Couldn't load comments</p>
+                <p className="mt-1 text-xs text-gray-400">{commentsError}</p>
+              </div>
+            ) : comments.length === 0 ? (
+              <div className="py-10 text-center">
+                <p className="text-2xl">💬</p>
+                <p className="mt-2 text-sm font-semibold text-gray-900">Start the conversation</p>
+                <p className="mt-0.5 text-xs text-gray-400">Be the first person to comment.</p>
+              </div>
             ) : (
-              <ul className="space-y-4">
+              <div>
                 {comments.map((comment) => (
-                  <li key={comment.id} className="flex items-start gap-2.5">
-                    <Avatar initials={comment.initials} colorClass={comment.colorClass} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <div className="rounded-2xl bg-gray-50 px-3.5 py-2.5">
-                        <p className="text-xs font-semibold text-gray-900">{comment.author}</p>
-                        <p className="text-sm text-gray-700 mt-0.5">{comment.text}</p>
-                      </div>
-                      <div className="mt-1 flex items-center gap-4 pl-1">
-                        <span className="text-[11px] text-gray-400">{comment.time}</span>
-                        <button
-                          type="button"
-                          onClick={() => toggleCommentLike(comment.id)}
-                          className={`text-[11px] font-medium transition-all duration-300 ${
-                            comment.likedByMe ? 'text-red-500' : 'text-gray-400 hover:text-blue-600'
-                          }`}
-                        >
-                          Like{comment.likes > 0 ? ` (${comment.likes})` : ''}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => focusComposer(`@${comment.author} `)}
-                          className="text-[11px] font-medium text-gray-400 hover:text-blue-600 transition-all duration-300"
-                        >
-                          Reply
-                        </button>
-                        {comment.userId === auth.currentUser?.uid && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteComment(comment.id)}
-                            className="text-[11px] font-medium text-gray-400 hover:text-red-500 transition-all duration-300"
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </li>
+                  <CommentCard
+                    key={comment.id}
+                    comment={comment}
+                    postId={postId}
+                    postOwnerUid={post.userId}
+                    currentUid={auth.currentUser?.uid}
+                    currentUser={currentUser}
+                    onDeleted={(id) => setComments((prev) => prev.filter((c) => c.id !== id))}
+                  />
                 ))}
-              </ul>
+              </div>
             )}
           </section>
         </main>
 
-        <form
-          onSubmit={handleSendComment}
-          className="fixed bottom-16 left-1/2 -translate-x-1/2 z-30 w-full max-w-[480px] lg:max-w-[520px] bg-white/95 backdrop-blur-md border-t border-gray-100 px-3 py-2.5 flex items-center gap-2"
-        >
-          <Avatar initials={getInitials(profile?.displayName)} colorClass={getAvatarColor(auth.currentUser?.uid)} size="sm" />
-          <input
-            ref={commentInputRef}
-            type="text"
-            value={commentText}
-            onChange={(event) => setCommentText(event.target.value)}
-            placeholder="Add a comment..."
-            className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
-          />
-          <button
-            type="submit"
-            disabled={!commentText.trim() || isPostingComment}
-            aria-label="Send comment"
-            className="w-9 h-9 flex-shrink-0 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </form>
+        <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-30 w-full max-w-[480px] lg:max-w-[520px] bg-white/95 backdrop-blur-md border-t border-gray-100 px-3 py-2.5">
+          <CommentComposer currentUser={currentUser} onSubmit={handlePostComment} />
+        </div>
       </div>
 
       <BottomNav />

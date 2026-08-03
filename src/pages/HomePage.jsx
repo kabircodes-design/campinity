@@ -10,11 +10,12 @@ import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getFeedPosts, getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getFeedStories } from '../firebase/storyService.js'
-import { getUnreadNotificationCount } from '../firebase/notificationService.js'
+import { subscribeToUnreadCount } from '../firebase/notificationService.js'
 import { getTrendingCommunities } from '../firebase/communityService.js'
 import CommunityCard from '../components/CommunityCard.jsx'
 import SwipeablePage from '../components/SwipeablePage.jsx'
 import { useFollowingFeed } from '../hooks/useFollowingFeed.js'
+import { useForYouFeed } from '../hooks/useForYouFeed.js'
 import { useCampusVerificationReminder } from '../hooks/useCampusVerificationReminder.js'
 import CampusVerificationModal from '../components/CampusVerificationModal.jsx'
 import CampusVerificationBanner from '../components/CampusVerificationBanner.jsx'
@@ -85,23 +86,25 @@ export default function HomePage() {
       }
     }
 
-    const loadUnreadCount = async () => {
-      if (!uid) return
-      try {
-        const count = await getUnreadNotificationCount(uid)
-        if (!cancelled) setUnreadCount(count)
-      } catch {
-        // Badge just stays hidden if this fails; unrelated to the feed itself.
-      }
-    }
-
-    Promise.all([loadProfile(), loadFeed(), loadUnreadCount()]).finally(() => {
+    Promise.all([loadProfile(), loadFeed()]).finally(() => {
       if (!cancelled) setLoading(false)
     })
 
     return () => {
       cancelled = true
     }
+  }, [])
+
+  // Real-time notification badge — separate from the one-time
+  // profile/feed load above, and intentionally not blocking that
+  // load's `setLoading(false)` (the badge count arriving a moment
+  // later than the feed shouldn't hold up the whole page rendering).
+  // Lives for the component's full lifetime, updating live as
+  // notifications are created/read elsewhere, not just once on mount.
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    const unsubscribe = subscribeToUnreadCount(uid, setUnreadCount)
+    return () => unsubscribe()
   }, [])
 
   const visiblePosts = useMemo(
@@ -115,6 +118,8 @@ export default function HomePage() {
     error: followingError,
     isFollowingAnyone
   } = useFollowingFeed(auth.currentUser?.uid)
+
+  const { posts: forYouPosts, loading: forYouLoading, error: forYouError } = useForYouFeed(auth.currentUser?.uid)
 
   const [communities, setCommunities] = useState([])
   const [communitiesLoading, setCommunitiesLoading] = useState(false)
@@ -362,6 +367,23 @@ export default function HomePage() {
               </div>
             ) : (
               followingPosts.map((post) => <PostCard key={post.id} post={post} />)
+            )
+          ) : activeTab === 'forYou' ? (
+            forYouError ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm text-gray-400">{forYouError}</p>
+              </div>
+            ) : forYouLoading ? (
+              <div className="py-16 flex justify-center">
+                <Loader size="md" tone="dark" />
+              </div>
+            ) : forYouPosts.length === 0 ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">No posts yet.</p>
+                <p className="mt-1 text-sm text-gray-400">Be the first student to post.</p>
+              </div>
+            ) : (
+              forYouPosts.map((post) => <PostCard key={post.id} post={post} />)
             )
           ) : error ? (
             <div className="px-6 py-16 text-center">
