@@ -17,6 +17,7 @@ import {
 } from '../firebase/profileService.js'
 import { getAvatarColor, getInitials, getUserPosts, getPostById } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
+import { getOrCreateChat } from '../firebase/chatService.js'
 
 /**
  * Real implementation — this file's own name ("Placeholder") confirms
@@ -145,10 +146,14 @@ export default function StudentProfilePlaceholder() {
     setIsFollowing(false)
   }
 
-  const handleMessage = () => {
+  const handleMessage = async () => {
     if (!currentUid || !profile) return
-    const chatId = [currentUid, profile.uid].sort().join('_')
-    navigate(`/messages/${chatId}`)
+    try {
+      const { chatId } = await getOrCreateChat(currentUid, profile.uid)
+      navigate(`/messages/${chatId}`)
+    } catch (err) {
+      console.error('Could not open or start this conversation:', err)
+    }
   }
 
   const handleShare = () => {

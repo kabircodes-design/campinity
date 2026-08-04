@@ -1,61 +1,55 @@
-import { useState } from 'react'
-import { Camera, Paperclip, Send, Smile } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Send } from 'lucide-react'
 
-/**
- * Enter-to-send on desktop is native <form> behavior — no extra keydown
- * handler needed, since submitting the form is exactly what Enter
- * already does inside a text input.
- */
-export default function MessageInput({ onSend, disabled = false }) {
+/** Props match ChatPage.jsx's usage: <MessageInput onSend={sendMessage} disabled={sending} />. */
+export default function MessageInput({ onSend, disabled }) {
   const [text, setText] = useState('')
+  const textareaRef = useRef(null)
 
-  const handleSubmit = (event) => {
-    event.preventDefault()
-    const trimmed = text.trim()
-    if (!trimmed || disabled) return
-    onSend(trimmed)
+  const handleSend = () => {
+    if (!text.trim() || disabled) return
+    onSend(text.trim())
     setText('')
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+  }
+
+  const handleChange = (event) => {
+    setText(event.target.value)
+    const el = textareaRef.current
+    if (el) {
+      el.style.height = 'auto'
+      el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+    }
+  }
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      handleSend()
+    }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-1 px-2 py-2.5">
-      <button
-        type="button"
-        aria-label="Emoji"
-        className="w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all duration-300"
-      >
-        <Smile className="w-5 h-5" />
-      </button>
-      <button
-        type="button"
-        aria-label="Attach file"
-        className="w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all duration-300"
-      >
-        <Paperclip className="w-5 h-5" />
-      </button>
-      <button
-        type="button"
-        aria-label="Camera"
-        className="w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all duration-300"
-      >
-        <Camera className="w-5 h-5" />
-      </button>
-      <input
-        type="text"
+    <div className="flex items-end gap-2 px-3 py-2.5">
+      <textarea
+        ref={textareaRef}
+        rows={1}
         value={text}
-        onChange={(event) => setText(event.target.value)}
-        placeholder="Message..."
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
         disabled={disabled}
-        className="flex-1 min-w-0 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300 disabled:opacity-60"
+        placeholder="Message..."
+        className="flex-1 resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
       />
       <button
-        type="submit"
+        type="button"
+        onClick={handleSend}
         disabled={!text.trim() || disabled}
         aria-label="Send message"
-        className="w-9 h-9 flex-shrink-0 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
+        className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
       >
         <Send className="w-4 h-4" />
       </button>
-    </form>
+    </div>
   )
 }

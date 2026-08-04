@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Clock } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 import MessageBubble from '../components/MessageBubble.jsx'
@@ -26,12 +26,18 @@ function dayLabelFor(timestamp) {
   return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
+/**
+ * The pending-status badge below is the real gap confirmed by direct
+ * audit last pass — this file previously existed only as pasted text
+ * with no pending/waiting-for-acceptance UI at all, per "the sender
+ * must never lose access... and see the waiting state."
+ */
 export default function ChatPage() {
   const { chatId } = useParams()
   const navigate = useNavigate()
   const bottomRef = useRef(null)
 
-  const { otherProfile, otherUid, loading: chatLoading, error: chatError } = useChat(chatId)
+  const { chat, otherProfile, otherUid, loading: chatLoading, error: chatError } = useChat(chatId)
   const { messages, loading: messagesLoading, error: messagesError, sending, sendMessage } = useMessages(
     chatId,
     otherUid
@@ -60,6 +66,10 @@ export default function ChatPage() {
   const loading = chatLoading || (messagesLoading && messages.length === 0)
   const displayName = otherProfile?.displayName || 'Student'
   const currentUid = auth.currentUser?.uid
+
+  const isPending = chat?.status === 'pending'
+  const isMyRequest = isPending && chat?.requestedBy === currentUid
+  const pendingLimitReached = isMyRequest && (chat?.pendingMessageCount || 0) >= 3
 
   if (loading) {
     return (
@@ -113,6 +123,15 @@ export default function ChatPage() {
               {otherProfile?.username && <p className="text-[11px] text-gray-400 truncate">@{otherProfile.username}</p>}
             </div>
           </div>
+
+          {isMyRequest && (
+            <div className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 border-t border-amber-100">
+              <Clock className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+              <p className="text-[12px] text-amber-700">
+                <span className="font-semibold">Message Request Sent</span> — waiting for acceptance
+              </p>
+            </div>
+          )}
         </header>
 
         <main className="px-4 py-4 space-y-3 pb-32">
@@ -137,7 +156,13 @@ export default function ChatPage() {
         </main>
 
         <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-30 w-full max-w-[480px] lg:max-w-[520px] bg-white/95 backdrop-blur-md border-t border-gray-100">
-          <MessageInput onSend={sendMessage} disabled={sending} />
+          {pendingLimitReached ? (
+            <p className="px-4 py-3.5 text-center text-xs text-gray-400">
+              You've sent your message — you can reply again once they accept.
+            </p>
+          ) : (
+            <MessageInput onSend={sendMessage} disabled={sending} />
+          )}
         </div>
       </div>
 

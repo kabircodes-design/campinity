@@ -1,80 +1,78 @@
 import { useEffect, useState } from 'react'
 import { auth } from '../firebase/firebase.js'
-import { getOrCreateChat, subscribeToChat } from '../firebase/chatService.js'
+import { subscribeToChat, getOrCreateChat } from '../firebase/chatService.js'
 import { getUserProfile } from '../firebase/profileService.js'
 
 /**
- * Resolves and subscribes to a single chat's live state, and resolves
- * the other participant's profile for the chat header.
+ * Resolves a chat's metadata + the other participant's live profile.
+ * Return shape matches ChatPage.jsx's actual destructuring exactly:
+ * { otherProfile, otherUid, loading, error }.
  *
- * `chatId` is expected in the deterministic "{uidA}_{uidB}" form (sorted
- * uids joined by '_' — see chatService.js's chatDocId). This hook
- * derives the other participant directly from that id and ensures the
- * chat document exists (creating it on first visit) before subscribing
- * — so navigating to /messages/{sorted uidA_uidB} always works as a
- * chat entry point, whether or not a conversation existed yet.
+ * chatId here is expected to already be the deterministic
+ * "{uidA}_{uidB}" id (how MessagesPage.jsx's chat list and any
+ * "message this person" entry point would navigate here) — this hook
+ * subscribes to that chat directly rather than re-deriving it, since
+ * getOrCreateChat is the entry-point-time decision (request vs.
+ * direct), not something to re-run on every chat screen open.
  */
 export function useChat(chatId) {
-  const [chat, setChat] = useState(null)
+  const [chatData, setChatData] = useState(null)
   const [otherProfile, setOtherProfile] = useState(null)
-  const [otherUid, setOtherUid] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const uid = auth.currentUser?.uid
+
   useEffect(() => {
-    let cancelled = false
-    let unsubscribe = null
-
-    const uid = auth.currentUser?.uid
-    const parts = (chatId || '').split('_')
-    const resolvedOtherUid = parts.find((part) => part && part !== uid) || null
-
-    if (!uid || !chatId || !resolvedOtherUid) {
-      setError('Chat not found.')
+    if (!chatId || !uid) {
+      setError('Not signed in.')
       setLoading(false)
       return undefined
     }
 
-    setOtherUid(resolvedOtherUid)
+    setLoading(true)
+    setError('')
 
-    const setup = async () => {
-      try {
-        await getOrCreateChat(uid, resolvedOtherUid)
-        if (cancelled) return
-
-        const profile = await getUserProfile(resolvedOtherUid).catch(() => null)
-        if (!cancelled) setOtherProfile(profile)
-
-        unsubscribe = subscribeToChat(
-          chatId,
-          (data) => {
-            if (!cancelled) {
-              setChat(data)
-              setLoading(false)
-            }
-          },
-          () => {
-            if (!cancelled) {
-              setError('Could not load this chat.')
-              setLoading(false)
-            }
-          }
-        )
-      } catch {
-        if (!cancelled) {
-          setError('Could not load this chat.')
+    const unsubscribe = subscribeToChat(
+      chatId,
+      uid,
+      (data) => {
+        if (!data) {
+          setError('This conversation no longer exists.')
           setLoading(false)
+          return
         }
+        setChatData(data)
+        setLoading(false)
+      },
+      (err) => {
+        setError(err?.message || 'Could not load this conversation.')
+        setLoading(false)
       }
-    }
+    )
 
-    setup()
+    return unsubscribe
+  }, [chatId, uid])
 
+  useEffect(() => {
+    if (!chatData?.otherUid) return
+    let cancelled = false
+    getUserProfile(chatData.otherUid)
+      .then((profile) => {
+        if (!cancelled) setOtherProfile(profile)
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
-      if (unsubscribe) unsubscribe()
     }
-  }, [chatId])
+  }, [chatData?.otherUid])
 
-  return { chat, otherProfile, otherUid, loading, error }
+  return { chat: chatData, otherProfile, otherUid: chatData?.otherUid || null, loading, error }
+}
+
+/** Entry point for starting/opening a conversation from a profile's Message button — not used by ChatPage.jsx itself, which expects an existing chatId, but needed somewhere to actually produce one. */
+export async function openChatWith(otherUid) {
+  const uid = auth.currentUser?.uid
+  if (!uid) throw new Error('You need to be signed in to message someone.')
+  return getOrCreateChat(uid, otherUid)
 }

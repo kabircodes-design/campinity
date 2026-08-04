@@ -1,82 +1,89 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { auth } from '../firebase/firebase.js'
-import { markChatRead, sendMessage as sendMessageToChat, subscribeToMessages } from '../firebase/chatService.js'
+import { subscribeToMessages, sendMessage as sendMessageToFirestore, markChatRead } from '../firebase/chatService.js'
 
 /**
- * Subscribes to a chat's messages in real time and exposes a
- * sendMessage function with optimistic local insertion (the sent bubble
- * appears instantly; the realtime listener's next snapshot replaces the
- * optimistic entry with the server-confirmed message automatically,
- * since each snapshot replaces the whole list rather than merging).
+ * Return shape matches ChatPage.jsx's actual destructuring:
+ * { messages, loading, error, sending, sendMessage }.
  *
- * Marks the chat read (for the current user, against `otherUid`) every
- * time a fresh snapshot arrives while this hook is mounted — i.e.
- * whenever the user has the chat open and a new message comes in.
+ * Optimistic send: a message with `pending: true` and a fake
+ * client-side id is added to local state immediately, BEFORE the
+ * Firestore write resolves — ChatPage.jsx's own dayLabelFor logic
+ * already special-cases `message.pending` (labels it "Today"
+ * unconditionally, since a pending message has no real createdAt yet),
+ * confirming this exact optimistic-flag pattern is what that page
+ * expects, not something invented here. Once the real onSnapshot
+ * delivers the persisted message, the optimistic entry is removed
+ * (matched by matching senderId + text among still-pending optimistic
+ * entries) so it isn't shown twice.
+ *
+ * Marks the chat read on mount (opening a chat reads its unread
+ * incoming messages), not on every message list update.
  */
 export function useMessages(chatId, otherUid) {
   const [messages, setMessages] = useState([])
+  const [optimisticMessages, setOptimisticMessages] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
-  const optimisticIdRef = useRef(0)
+
+  const uid = auth.currentUser?.uid
 
   useEffect(() => {
     if (!chatId) return undefined
-    let cancelled = false
+    setLoading(true)
+    setError('')
 
-    const unsubscribe = subscribeToMessages(
-      chatId,
-      (data) => {
-        if (cancelled) return
-        setMessages(data)
-        setLoading(false)
+    const unsubscribe = subscribeToMessages(chatId, (data) => {
+      setMessages(data)
+      setLoading(false)
+      // Drop any optimistic entry now confirmed by a real, persisted
+      // message with the same sender + text.
+      setOptimisticMessages((prev) =>
+        prev.filter(
+          (optimistic) => !data.some((real) => real.senderId === optimistic.senderId && real.text === optimistic.text)
+        )
+      )
+    })
 
-        const uid = auth.currentUser?.uid
-        if (uid && otherUid) markChatRead(chatId, uid, otherUid).catch(() => {})
-      },
-      () => {
-        if (!cancelled) {
-          setError('Could not load messages.')
-          setLoading(false)
-        }
-      }
-    )
+    return unsubscribe
+  }, [chatId])
 
-    return () => {
-      cancelled = true
-      unsubscribe()
-    }
-  }, [chatId, otherUid])
+  useEffect(() => {
+    if (!chatId || !uid) return
+    markChatRead(chatId, uid).catch(() => {})
+  }, [chatId, uid])
 
   const sendMessage = async (text) => {
-    const trimmed = (text || '').trim()
-    const uid = auth.currentUser?.uid
-    if (!trimmed || !uid || !otherUid || !chatId || sending) return
-
-    optimisticIdRef.current += 1
-    const optimisticId = `optimistic-${optimisticIdRef.current}`
-    const optimisticMessage = {
-      id: optimisticId,
-      senderId: uid,
-      text: trimmed,
-      createdAt: null,
-      read: false,
-      pending: true
-    }
-
-    setMessages((prev) => [...prev, optimisticMessage])
+    if (!chatId || !uid || !text?.trim()) return
     setSending(true)
     setError('')
 
+    const optimisticEntry = {
+      id: `optimistic-${Date.now()}`,
+      senderId: uid,
+      text: text.trim(),
+      read: false,
+      edited: false,
+      deletedFor: [],
+      pending: true,
+      createdAt: null
+    }
+    setOptimisticMessages((prev) => [...prev, optimisticEntry])
+
     try {
-      await sendMessageToChat(chatId, uid, otherUid, trimmed)
-    } catch {
-      setMessages((prev) => prev.filter((message) => message.id !== optimisticId))
-      setError('Message failed to send.')
+      await sendMessageToFirestore(chatId, uid, text)
+    } catch (err) {
+      setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimisticEntry.id))
+      setError(err?.message || 'Could not send this message.')
     } finally {
       setSending(false)
     }
   }
 
-  return { messages, loading, error, sending, sendMessage }
+  const visibleMessages = [...messages, ...optimisticMessages].filter(
+    (message) => !uid || !(message.deletedFor || []).includes(uid)
+  )
+
+  return { messages: visibleMessages, loading, error, sending, sendMessage }
 }

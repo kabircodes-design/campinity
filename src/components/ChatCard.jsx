@@ -1,36 +1,29 @@
 import { useNavigate } from 'react-router-dom'
+import { Pin, VolumeX } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
+import { auth } from '../firebase/firebase.js'
 
 /**
- * `chat` comes from chatService.js's subscribeToUserChats():
- *   { id, otherUid, lastMessage, lastMessageAt, unreadCount }
- * `profile` comes from profileService.js's getUserProfile(otherUid), and
- * may be undefined for a brief moment while it's still loading — this
- * renders a safe placeholder in that case rather than crashing.
- *
- * `chat` itself is guarded too: chatService.js already filters out
- * incomplete documents before this ever renders, but this component
- * never assumes that upstream guarantee holds — rendering nothing for a
- * missing chat is always safer than crashing the whole list.
- *
- * No online indicator is rendered — there's no real presence system
- * backing it, and showing a fabricated online/offline dot would be
- * exactly the kind of dummy shortcut this feature avoids.
+ * Props match MessagesPage.jsx's usage: <ChatCard chat={chat}
+ * profile={profiles[chat.otherUid]} />. profile can be undefined
+ * briefly (MessagesPage.jsx fetches profiles asynchronously after the
+ * chat list arrives) — handled with a "Student" fallback, not a crash.
  */
 export default function ChatCard({ chat, profile }) {
   const navigate = useNavigate()
+  const uid = auth.currentUser?.uid
 
-  if (!chat) return null
-
-  const hasUnread = (chat.unreadCount ?? 0) > 0
   const displayName = profile?.displayName || 'Student'
+  const isPinned = (chat.pinnedBy || []).includes(uid)
+  const isMuted = (chat.mutedBy || []).includes(uid)
+  const isUnread = chat.lastMessage && chat.lastSenderId !== uid && !(chat.readBy || []).includes(uid)
 
   return (
     <button
       type="button"
       onClick={() => navigate(`/messages/${chat.id}`)}
-      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-all duration-300 text-left"
+      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-all duration-200"
     >
       <Avatar
         initials={getInitials(displayName)}
@@ -40,20 +33,21 @@ export default function ChatCard({ chat, profile }) {
       />
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
-          <span className="text-[11px] text-gray-400 flex-shrink-0">{formatTimeAgo(chat.lastMessageAt)}</span>
-        </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className={`text-xs truncate ${hasUnread ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
-            {chat.lastMessage || 'Say hello 👋'}
+        <div className="flex items-center gap-1.5">
+          <p className={`text-sm truncate ${isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'}`}>
+            {displayName}
           </p>
-          {hasUnread && (
-            <span className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center px-1">
-              {chat.unreadCount}
-            </span>
-          )}
+          {isPinned && <Pin className="w-3 h-3 text-gray-300 flex-shrink-0" fill="currentColor" />}
+          {isMuted && <VolumeX className="w-3 h-3 text-gray-300 flex-shrink-0" />}
         </div>
+        <p className={`text-xs truncate ${isUnread ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
+          {chat.isPendingSent ? 'Message Request Sent' : chat.lastMessage || 'Say hello 👋'}
+        </p>
+      </div>
+
+      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+        <span className="text-[11px] text-gray-400">{formatTimeAgo(chat.lastMessageAt)}</span>
+        {isUnread && <span className="w-2 h-2 rounded-full bg-blue-600" aria-hidden="true" />}
       </div>
     </button>
   )

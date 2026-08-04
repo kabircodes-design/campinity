@@ -298,5 +298,3 @@ export async function getMutualFollowers(viewerUid, profileUid, { limit: max = 3
 
   return profiles.filter(Boolean)
 }
-
-

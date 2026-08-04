@@ -1,190 +1,349 @@
 import {
+  arrayRemove,
+  arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
-  increment,
   limit,
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
-  setDoc,
+  startAfter,
   updateDoc,
   where,
   writeBatch
 } from 'firebase/firestore'
 import { db } from './firebase.js'
+import { checkIsFollowing } from './profileService.js'
 
-const CHATS_COLLECTION = 'chats'
-const MESSAGES_SUBCOLLECTION = 'messages'
+/**
+ * Correctly named this time — MessagesPage.jsx and ChatPage.jsx
+ * (pasted just now) both confirm the real file is chatService.js, not
+ * messageService.js, which I built one turn ago without having either
+ * page to check against and have now deleted. Same underlying schema
+ * as that deleted file (it was built correctly against
+ * firestore.rules, just under the wrong name) — this version is also
+ * shaped to match the REAL contracts those two pages actually call:
+ * subscribeToUserChats(uid, onData, onError) delivering chats with an
+ * `otherUid` convenience field attached (MessagesPage.jsx reads
+ * chat.otherUid directly, so this function computes and attaches it,
+ * rather than making every caller re-derive it from `participants`).
+ *
+ * Schema (from firestore.rules, confirmed, unchanged from last pass):
+ * chats/{chatId} — doc id "{uidA}_{uidB}" sorted, participants: [uid,
+ * uid], status: 'pending'|'accepted', requestedBy, pinnedBy/mutedBy/
+ * archivedBy: [uid], lastMessage, lastMessageAt.
+ * chats/{chatId}/messages/{messageId} — senderId, text, read, edited,
+ * editedAt, deletedFor: [uid], createdAt.
+ */
 
 function chatDocId(uidA, uidB) {
   return [uidA, uidB].sort().join('_')
 }
 
-/**
- * Returns the deterministic chat id for two participants, creating the
- * chat document if it doesn't exist yet. The doc id itself (sorted
- * "{uidA}_{uidB}") is the uniqueness guarantee — never creates a
- * duplicate chat between the same two users. Idempotent: safe to call
- * on every visit to a chat, whether or not it already existed.
- */
-export async function getOrCreateChat(currentUid, otherUid) {
-  if (!currentUid || !otherUid || currentUid === otherUid) return null
+function chatDoc(chatId) {
+  return doc(db, 'chats', chatId)
+}
 
-  const chatId = chatDocId(currentUid, otherUid)
-  const chatRef = doc(db, CHATS_COLLECTION, chatId)
-  const snap = await getDoc(chatRef)
+function messagesCollection(chatId) {
+  return collection(db, 'chats', chatId, 'messages')
+}
 
-  if (!snap.exists()) {
-    await setDoc(chatRef, {
-      participants: [currentUid, otherUid].sort(),
-      lastMessage: '',
-      lastMessageAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
-      unreadCounts: { [currentUid]: 0, [otherUid]: 0 }
-    })
-  }
-
-  return chatId
+function otherParticipant(participants, uid) {
+  return participants.find((id) => id !== uid) || null
 }
 
 /**
- * Realtime listener for the current user's chats. Deliberately queries
- * with array-contains ONLY (no orderBy) — combining array-contains with
- * an orderBy on a different field requires a Firestore composite index,
- * and a user's own chat list is small enough that sorting the already-
- * fetched snapshot client-side (by lastMessageAt, newest first) is both
- * index-free and effectively instant. Returns the unsubscribe function.
- *
- * Every chat document is mapped defensively: if a document is somehow
- * missing its participants (structurally incomplete), it's dropped
- * entirely rather than passed along as a partial object — this is what
- * prevents "Cannot read properties of undefined" crashes further down
- * the chain in MessagesPage.jsx / ChatCard.jsx.
+ * Real-time inbox — accepted chats only (pending requests are a
+ * separate surface, subscribeToMessageRequests below), each chat
+ * annotated with `otherUid` since that's what MessagesPage.jsx reads
+ * directly without any intermediate resolution step.
  */
-export function subscribeToUserChats(uid, callback, onError) {
+export function subscribeToUserChats(uid, onData, onError) {
   const chatsQuery = query(
-    collection(db, CHATS_COLLECTION),
+    collection(db, 'chats'),
     where('participants', 'array-contains', uid),
-    limit(50)
+    where('status', '==', 'accepted'),
+    orderBy('lastMessageAt', 'desc')
   )
-
   return onSnapshot(
     chatsQuery,
     (snap) => {
-      const chats = snap.docs
-        .map((docSnap) => {
-          const data = docSnap.data() || {}
-          const participants = Array.isArray(data.participants) ? data.participants : []
-          if (participants.length === 0) return null // structurally incomplete doc — never rendered
-
-          const otherUid = participants.find((id) => id !== uid) || null
-
-          return {
-            id: docSnap.id,
-            otherUid,
-            lastMessage: data.lastMessage || '',
-            lastMessageAt: data.lastMessageAt || null,
-            unreadCount: data.unreadCounts?.[uid] ?? 0
-          }
-        })
-        .filter(Boolean)
-        .sort((a, b) => {
-          const aTime = a.lastMessageAt?.toMillis?.() ?? 0
-          const bTime = b.lastMessageAt?.toMillis?.() ?? 0
-          return bTime - aTime
-        })
-      callback(chats)
+      const chats = snap.docs.map((d) => {
+        const data = d.data()
+        return { id: d.id, ...data, otherUid: otherParticipant(data.participants, uid) }
+      })
+      onData(chats)
     },
     (err) => onError?.(err)
   )
 }
 
-/** Realtime listener for a single chat document. */
-export function subscribeToChat(chatId, callback, onError) {
+/** Resolves a single chat's metadata + the other participant's uid — what useChat.js needs. */
+export async function getChat(chatId, uid) {
+  const snap = await getDoc(chatDoc(chatId))
+  if (!snap.exists()) return null
+  const data = snap.data()
+  return { id: chatId, ...data, otherUid: otherParticipant(data.participants, uid) }
+}
+
+export function subscribeToChat(chatId, uid, onData, onError) {
   return onSnapshot(
-    doc(db, CHATS_COLLECTION, chatId),
-    (snap) => callback(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+    chatDoc(chatId),
+    (snap) => {
+      if (!snap.exists()) {
+        onData(null)
+        return
+      }
+      const data = snap.data()
+      onData({ id: chatId, ...data, otherUid: otherParticipant(data.participants, uid) })
+    },
     (err) => onError?.(err)
   )
 }
 
 /**
- * Realtime listener for a chat's messages, oldest first (chronological
- * display order). Single-field orderBy only — no composite index
- * needed.
+ * Decides request vs. direct-inbox: per the brief, "if two users don't
+ * follow each other OR have never chatted before" -> request. Either
+ * direction of follow is enough to skip the request step.
  */
-export function subscribeToMessages(chatId, callback, onError) {
-  const messagesQuery = query(
-    collection(db, CHATS_COLLECTION, chatId, MESSAGES_SUBCOLLECTION),
-    orderBy('createdAt', 'asc'),
-    limit(200)
-  )
-
-  return onSnapshot(
-    messagesQuery,
-    (snap) => callback(snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))),
-    (err) => onError?.(err)
-  )
+async function shouldStartAsRequest(uidA, uidB) {
+  const [aFollowsB, bFollowsA] = await Promise.all([checkIsFollowing(uidA, uidB), checkIsFollowing(uidB, uidA)])
+  return !aFollowsB && !bFollowsA
 }
 
-/**
- * Sends a message: creates the message doc and updates the chat's
- * lastMessage/lastMessageAt plus the recipient's unread counter, in one
- * batch — so a reader of the chat list never sees a lastMessage without
- * a matching unread bump, or vice versa.
- */
-export async function sendMessage(chatId, senderId, recipientId, text) {
-  const trimmed = (text || '').trim()
-  if (!trimmed || !chatId || !senderId || !recipientId) return
+/** Gets an existing chat or creates one, deciding pending/accepted. Returns { chatId, status, isNew }. */
+export async function getOrCreateChat(currentUid, otherUid) {
+  if (!currentUid || !otherUid) throw new Error('Both participants are required.')
+  if (currentUid === otherUid) throw new Error("You can't message yourself.")
 
-  const chatRef = doc(db, CHATS_COLLECTION, chatId)
-  const messageRef = doc(collection(db, CHATS_COLLECTION, chatId, MESSAGES_SUBCOLLECTION))
+  const chatId = chatDocId(currentUid, otherUid)
+  const existingSnap = await getDoc(chatDoc(chatId))
+  if (existingSnap.exists()) {
+    return { chatId, status: existingSnap.data().status, isNew: false }
+  }
 
-  const batch = writeBatch(db)
-  batch.set(messageRef, {
-    senderId,
-    text: trimmed,
-    createdAt: serverTimestamp(),
-    read: false
-  })
-  batch.set(
-    chatRef,
-    {
-      lastMessage: trimmed,
+  const startAsRequest = await shouldStartAsRequest(currentUid, otherUid)
+  const status = startAsRequest ? 'pending' : 'accepted'
+
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(chatDoc(chatId))
+    if (snap.exists()) return
+    transaction.set(chatDoc(chatId), {
+      participants: [currentUid, otherUid],
+      status,
+      requestedBy: status === 'pending' ? currentUid : null,
+      pendingMessageCount: 0,
+      pinnedBy: [],
+      mutedBy: [],
+      archivedBy: [],
+      lastMessage: '',
       lastMessageAt: serverTimestamp(),
-      [`unreadCounts.${recipientId}`]: increment(1)
-    },
-    { merge: true }
+      lastSenderId: null,
+      readBy: [currentUid, otherUid],
+      createdAt: serverTimestamp()
+    })
+  })
+
+  return { chatId, status, isNew: true }
+}
+
+const PENDING_MESSAGE_LIMIT = 3 // configurable — how many messages the requester can send before the receiver accepts
+
+export async function sendMessage(chatId, senderId, text) {
+  if (!senderId) throw new Error('You need to be signed in to send a message.')
+  if (!text?.trim()) throw new Error('Message cannot be empty.')
+
+  const newMessageRef = doc(messagesCollection(chatId))
+
+  await runTransaction(db, async (transaction) => {
+    const chatSnap = await transaction.get(chatDoc(chatId))
+    if (!chatSnap.exists()) throw new Error('This conversation no longer exists.')
+    const chatData = chatSnap.data()
+
+    if (chatData.status === 'pending') {
+      if (chatData.requestedBy !== senderId) {
+        throw new Error('Accept this request before replying.')
+      }
+      const sentCount = chatData.pendingMessageCount || 0
+      if (sentCount >= PENDING_MESSAGE_LIMIT) {
+        throw new Error(`You can only send ${PENDING_MESSAGE_LIMIT} messages until this request is accepted.`)
+      }
+    }
+
+    transaction.set(newMessageRef, {
+      senderId,
+      text: text.trim(),
+      read: false,
+      edited: false,
+      editedAt: null,
+      deletedFor: [],
+      createdAt: serverTimestamp()
+    })
+
+    const chatUpdate = {
+      lastMessage: text.trim().slice(0, 120),
+      lastMessageAt: serverTimestamp(),
+      lastSenderId: senderId,
+      readBy: [senderId]
+    }
+    if (chatData.status === 'pending') {
+      chatUpdate.pendingMessageCount = (chatData.pendingMessageCount || 0) + 1
+    }
+    transaction.update(chatDoc(chatId), chatUpdate)
+  })
+
+  return newMessageRef.id
+}
+
+/* ============================================================
+   MESSAGE REQUESTS
+   ============================================================ */
+
+export function subscribeToMessageRequests(uid, callback) {
+  const requestsQuery = query(
+    collection(db, 'chats'),
+    where('participants', 'array-contains', uid),
+    where('status', '==', 'pending')
   )
-  await batch.commit()
+  return onSnapshot(requestsQuery, (snap) => {
+    const requests = snap.docs
+      .map((d) => {
+        const data = d.data()
+        return { id: d.id, ...data, otherUid: otherParticipant(data.participants, uid) }
+      })
+      .filter((chat) => chat.requestedBy !== uid)
+    callback(requests)
+  })
 }
 
 /**
- * Marks a chat as read for `uid`: resets their unread counter and marks
- * any unread messages from `otherUid` as read. Uses two equality
- * filters (read == false, senderId == otherUid) rather than a `!=`
- * filter, specifically to avoid the composite index a not-equal
- * comparison combined with another filter would require — two equality
- * filters on different fields need no composite index.
+ * The missing half of subscribeToMessageRequests — that function
+ * shows requests RECEIVED (explicitly filters out the caller's own
+ * requestedBy). This shows requests the current user SENT, which
+ * previously had no subscription anywhere — the actual root cause of
+ * "inbox stays empty for a chat I'm actively messaging in": a pending
+ * chat where I'm the requester was invisible to every list view,
+ * only reachable by already knowing its chatId directly. Same query
+ * shape as subscribeToMessageRequests, opposite filter.
  */
-export async function markChatRead(chatId, uid, otherUid) {
-  const chatRef = doc(db, CHATS_COLLECTION, chatId)
-  await updateDoc(chatRef, { [`unreadCounts.${uid}`]: 0 }).catch(() => {})
-
-  if (!otherUid) return
-
-  const unreadQuery = query(
-    collection(db, CHATS_COLLECTION, chatId, MESSAGES_SUBCOLLECTION),
-    where('read', '==', false),
-    where('senderId', '==', otherUid)
+export function subscribeToSentPendingChats(uid, callback) {
+  const sentQuery = query(
+    collection(db, 'chats'),
+    where('participants', 'array-contains', uid),
+    where('status', '==', 'pending')
   )
-  const snap = await getDocs(unreadQuery).catch(() => null)
-  if (!snap || snap.empty) return
+  return onSnapshot(sentQuery, (snap) => {
+    const sent = snap.docs
+      .map((d) => {
+        const data = d.data()
+        return { id: d.id, ...data, otherUid: otherParticipant(data.participants, uid) }
+      })
+      .filter((chat) => chat.requestedBy === uid)
+    callback(sent)
+  })
+}
 
+export async function acceptMessageRequest(chatId, receiverUid) {
+  const snap = await getDoc(chatDoc(chatId))
+  if (!snap.exists()) throw new Error('This request no longer exists.')
+  if (snap.data().requestedBy === receiverUid) {
+    throw new Error('Only the recipient can accept a message request.')
+  }
+  await updateDoc(chatDoc(chatId), { status: 'accepted' })
+}
+
+/** Real delete — "sender isn't notified" per the brief, deliberately no notification call. */
+export async function deleteMessageRequest(chatId) {
+  const messagesSnap = await getDocs(collection(db, 'chats', chatId, 'messages'))
   const batch = writeBatch(db)
-  snap.docs.forEach((docSnap) => batch.update(docSnap.ref, { read: true }))
+  messagesSnap.docs.forEach((d) => batch.delete(d.ref))
+  batch.delete(chatDoc(chatId))
   await batch.commit()
+}
+
+/* ============================================================
+   CHAT LIST ACTIONS
+   ============================================================ */
+
+async function toggleParticipantArrayField(chatId, uid, field) {
+  const snap = await getDoc(chatDoc(chatId))
+  if (!snap.exists()) return
+  const current = snap.data()[field] || []
+  await updateDoc(chatDoc(chatId), { [field]: current.includes(uid) ? arrayRemove(uid) : arrayUnion(uid) })
+}
+
+export const togglePinChat = (chatId, uid) => toggleParticipantArrayField(chatId, uid, 'pinnedBy')
+export const toggleMuteChat = (chatId, uid) => toggleParticipantArrayField(chatId, uid, 'mutedBy')
+export const toggleArchiveChat = (chatId, uid) => toggleParticipantArrayField(chatId, uid, 'archivedBy')
+
+export async function deleteChat(chatId) {
+  const messagesSnap = await getDocs(collection(db, 'chats', chatId, 'messages'))
+  const batch = writeBatch(db)
+  messagesSnap.docs.forEach((d) => batch.delete(d.ref))
+  batch.delete(chatDoc(chatId))
+  await batch.commit()
+}
+
+/* ============================================================
+   MESSAGES WITHIN A CHAT
+   ============================================================ */
+
+export function subscribeToMessages(chatId, callback, { pageSize = 50 } = {}) {
+  const messagesQuery = query(messagesCollection(chatId), orderBy('createdAt', 'desc'), limit(pageSize))
+  return onSnapshot(messagesQuery, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse())
+  })
+}
+
+export async function getOlderMessages(chatId, cursor, { pageSize = 50 } = {}) {
+  const messagesQuery = query(messagesCollection(chatId), orderBy('createdAt', 'desc'), startAfter(cursor), limit(pageSize))
+  const snap = await getDocs(messagesQuery)
+  return {
+    messages: snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse(),
+    nextCursor: snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1] : null
+  }
+}
+
+export async function markChatRead(chatId, uid) {
+  const snap = await getDocs(query(messagesCollection(chatId), where('read', '==', false)))
+  const batch = writeBatch(db)
+  let touched = false
+  snap.docs.forEach((d) => {
+    if (d.data().senderId !== uid) {
+      batch.update(d.ref, { read: true })
+      touched = true
+    }
+  })
+  if (touched) await batch.commit()
+
+  const chatSnap = await getDoc(chatDoc(chatId))
+  if (chatSnap.exists() && !(chatSnap.data().readBy || []).includes(uid)) {
+    await updateDoc(chatDoc(chatId), { readBy: arrayUnion(uid) })
+  }
+}
+
+export async function editMessage(chatId, messageId, senderId, newText) {
+  const messageRef = doc(db, 'chats', chatId, 'messages', messageId)
+  const snap = await getDoc(messageRef)
+  if (!snap.exists()) throw new Error('This message no longer exists.')
+  if (snap.data().senderId !== senderId) throw new Error('You can only edit your own messages.')
+  if (!newText?.trim()) throw new Error('Message cannot be empty.')
+  await updateDoc(messageRef, { text: newText.trim(), edited: true, editedAt: serverTimestamp() })
+}
+
+export async function deleteMessageForMe(chatId, messageId, uid) {
+  await updateDoc(doc(db, 'chats', chatId, 'messages', messageId), { deletedFor: arrayUnion(uid) })
+}
+
+export async function deleteMessageForEveryone(chatId, messageId, senderId) {
+  const messageRef = doc(db, 'chats', chatId, 'messages', messageId)
+  const snap = await getDoc(messageRef)
+  if (!snap.exists()) return
+  if (snap.data().senderId !== senderId) throw new Error('You can only delete your own messages for everyone.')
+  await deleteDoc(messageRef)
 }
