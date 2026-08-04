@@ -1,39 +1,85 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings } from 'lucide-react'
+import { Grid3x3, List, Settings } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import ProfileHeader from '../components/ProfileHeader.jsx'
 import PostCard from '../components/PostCard.jsx'
-import PDFCard from '../components/PDFCard.jsx'
-import EventCard from '../components/EventCard.jsx'
+import CommunityCard from '../components/CommunityCard.jsx'
 import Loader from '../auth/components/Loader.jsx'
-import { myEventIds, profileTabs } from '../data/dummyProfile.js'
-import { dummyProfileStats } from '../data/dummyProfileStats.js'
-import { posts } from '../data/dummyFeed.js'
-import { notes, events } from '../data/dummySearch.js'
 import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
-import { getAvatarColor, getInitials, getUserPosts } from '../firebase/postService.js'
+import { getAvatarColor, getInitials, getUserPosts, getPostById } from '../firebase/postService.js'
+import { getSavedPostIds } from '../firebase/engagementService.js'
+import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
 
+const GRID_LAYOUT_KEY = 'campinity:profileGridLayout'
+
+const tabs = [
+  { key: 'posts', label: 'Posts' },
+  { key: 'pinned', label: 'Pinned' },
+  { key: 'saved', label: 'Saved' },
+  { key: 'communities', label: 'Communities' },
+  { key: 'activity', label: 'Activity' }
+]
+
+/**
+ * Complete replacement of the old tab content — the previous version's
+ * notes/events/marketplace tabs pulled from dummySearch.js/dummyFeed.js
+ * (hardcoded sample data, never connected to real Firestore data for
+ * THIS user at all — filtering dummy `notes` by
+ * `note.uploader === profile.displayName` could never return anything
+  * for a real signed-in user). Replaced with tabs backed by real
+ * data: Posts (unchanged, already real), Pinned (profile.pinnedPostIds,
+ * now correctly returned by profileService.js), Saved
+ * (engagementService.js's getSavedPostIds, added last pass),
+ * Communities (communityService.js's getUserCommunityMemberships,
+ * already fully real and working).
+ *
+ * "Tagged" from the brief is not here — no tagging concept exists
+ * anywhere in this project's schema; a fake empty tab for a feature
+ * with zero backing data isn't a real tab, it's a decoration.
+ * "Activity" shows a real "coming soon" empty state rather than faked
+ * history — no activity-log collection exists yet; building one means
+ * writing an activity-log entry at every like/comment/join/create
+ * action across the app, a change to many existing write paths this
+ * page alone can't safely make.
+ *
+ * "Comment Karma" / "Likes Received" / "Events Joined" stats from the
+ * brief are not shown — computing them live means scanning every post/
+ * comment a user has ever made on every profile view (real N+1 risk);
+ * showing them for real needs denormalized counters incremented at
+ * write time, a separate, larger change. Not faked with a live scan,
+ * not silently dropped without explanation either — see this
+ * feature's own chat summary.
+ */
 export default function ProfilePage() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState(profileTabs[0].key)
+  const currentUid = auth.currentUser?.uid
+
+  const [activeTab, setActiveTab] = useState(tabs[0].key)
+  const [gridLayout, setGridLayout] = useState(() => localStorage.getItem(GRID_LAYOUT_KEY) || 'list')
+
   const [profile, setProfile] = useState(null)
   const [myPosts, setMyPosts] = useState([])
   const [postsError, setPostsError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const [pinnedPosts, setPinnedPosts] = useState([])
+  const [pinnedLoading, setPinnedLoading] = useState(false)
+  const [savedPosts, setSavedPosts] = useState([])
+  const [savedLoading, setSavedLoading] = useState(false)
+  const [communities, setCommunities] = useState([])
+  const [communitiesLoading, setCommunitiesLoading] = useState(false)
+  const [communitiesLoadedOnce, setCommunitiesLoadedOnce] = useState(false)
+  const [pinnedLoadedOnce, setPinnedLoadedOnce] = useState(false)
+  const [savedLoadedOnce, setSavedLoadedOnce] = useState(false)
+
   useEffect(() => {
     let cancelled = false
-    const uid = auth.currentUser?.uid
+    const uid = currentUid
 
-    /**
-     * Profile and Posts are fetched independently — a Firestore error on
-     * one (e.g. a missing composite index on the posts query) must never
-     * wipe out data that loaded successfully on the other.
-     */
     const loadProfile = async () => {
       if (!uid) {
         if (!cancelled) setError('Not signed in.')
@@ -64,33 +110,72 @@ export default function ProfilePage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [currentUid])
 
-  const username = profile?.username || ''
+  useEffect(() => {
+    if (activeTab !== 'pinned' || pinnedLoadedOnce || !profile) return
+    let cancelled = false
+    setPinnedLoading(true)
+    Promise.all(profile.pinnedPostIds.map((id) => getPostById(id, currentUid).catch(() => null)))
+      .then((results) => {
+        if (!cancelled) {
+          setPinnedPosts(results.filter(Boolean))
+          setPinnedLoadedOnce(true)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPinnedLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, profile, currentUid, pinnedLoadedOnce])
 
-  const myMarketplace = useMemo(
-    () => posts.filter((post) => post.username === username && post.type === 'marketplace'),
-    [username]
-  )
-  const myNotes = useMemo(
-    () => notes.filter((note) => note.uploader === profile?.displayName),
-    [profile]
-  )
-  const myEvents = useMemo(() => events.filter((event) => myEventIds.includes(event.id)), [])
+  useEffect(() => {
+    if (activeTab !== 'saved' || savedLoadedOnce || !currentUid) return
+    let cancelled = false
+    setSavedLoading(true)
+    getSavedPostIds(currentUid)
+      .then(({ postIds }) => Promise.all(postIds.map((id) => getPostById(id, currentUid).catch(() => null))))
+      .then((results) => {
+        if (!cancelled) {
+          setSavedPosts(results.filter(Boolean))
+          setSavedLoadedOnce(true)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSavedLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, currentUid, savedLoadedOnce])
 
-  const tabContent = {
-    posts: myPosts,
-    notes: myNotes,
-    events: myEvents,
-    marketplace: myMarketplace
-  }[activeTab]
+  useEffect(() => {
+    if (activeTab !== 'communities' || communitiesLoadedOnce || !currentUid) return
+    let cancelled = false
+    setCommunitiesLoading(true)
+    getUserCommunityMemberships(currentUid)
+      .then((memberships) => Promise.all(memberships.map((m) => getCommunityById(m.communityId).catch(() => null))))
+      .then((results) => {
+        if (!cancelled) {
+          setCommunities(results.filter(Boolean))
+          setCommunitiesLoadedOnce(true)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCommunitiesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, currentUid, communitiesLoadedOnce])
 
-  const emptyMessage = {
-    posts: postsError || "You haven't posted anything yet.",
-    notes: 'No notes uploaded yet.',
-    events: 'No events yet — RSVP to something from the feed.',
-    marketplace: 'No marketplace listings yet.'
-  }[activeTab]
+  const toggleGridLayout = () => {
+    const next = gridLayout === 'grid' ? 'list' : 'grid'
+    setGridLayout(next)
+    localStorage.setItem(GRID_LAYOUT_KEY, next)
+  }
 
   if (loading) {
     return (
@@ -114,18 +199,22 @@ export default function ProfilePage() {
   const college = getCollegeById(profile.collegeId)
 
   const displayProfile = {
-    name: profile.displayName,
-    username: profile.username,
-    bio: profile.bio,
+    ...profile,
     college: college?.name || '',
-    department: profile.course,
-    year: profile.year,
     initials: getInitials(profile.displayName),
-    colorClass: getAvatarColor(auth.currentUser?.uid || profile.username),
-    coverGradient: dummyProfileStats.coverGradient,
+    colorClass: getAvatarColor(currentUid || profile.username),
+    postsCount: myPosts.length,
     followers: profile.followersCount || 0,
     following: profile.followingCount || 0,
-    postsCount: myPosts.length
+    communitiesCount: communitiesLoadedOnce ? communities.length : undefined
+  }
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({ title: profile.displayName, url: window.location.href }).catch(() => {})
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(window.location.href).catch(() => {})
+    }
   }
 
   return (
@@ -145,15 +234,22 @@ export default function ProfilePage() {
           </div>
         </header>
 
-        <ProfileHeader profile={displayProfile} onEdit={() => navigate('/profile/edit')} />
+        <ProfileHeader
+          profile={displayProfile}
+          isOwnProfile
+          onEdit={() => navigate('/profile/edit')}
+          onShare={handleShare}
+          onOpenFollowers={() => navigate('/followers')}
+          onOpenFollowing={() => navigate('/following')}
+        />
 
-        <nav className="sticky top-14 z-30 flex items-center bg-white border-b border-gray-100">
-          {profileTabs.map((tab) => (
+        <nav className="sticky top-14 z-30 flex items-center bg-white border-b border-gray-100 overflow-x-auto scroll-hidden">
+          {tabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 py-3 text-[13px] font-semibold text-center border-b-2 transition-all duration-300 ${
+              className={`flex-shrink-0 px-4 py-3 text-[13px] font-semibold text-center border-b-2 transition-all duration-300 ${
                 activeTab === tab.key
                   ? 'text-blue-600 border-blue-600'
                   : 'text-gray-400 border-transparent hover:text-gray-600'
@@ -162,23 +258,114 @@ export default function ProfilePage() {
               {tab.label}
             </button>
           ))}
+          {activeTab === 'posts' && (
+            <button
+              type="button"
+              onClick={toggleGridLayout}
+              aria-label={gridLayout === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+              className="ml-auto mr-3 flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-all duration-300"
+            >
+              {gridLayout === 'grid' ? <List className="w-4 h-4" /> : <Grid3x3 className="w-4 h-4" />}
+            </button>
+          )}
         </nav>
 
         <main className="pb-24">
-          {tabContent.length === 0 ? (
+          {activeTab === 'posts' &&
+            (myPosts.length === 0 ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm text-gray-400">{postsError || "You haven't posted anything yet."}</p>
+              </div>
+            ) : gridLayout === 'grid' ? (
+              <div className="grid grid-cols-3 gap-0.5 p-0.5">
+                {myPosts.map((post) =>
+                  post.imagePreviewUrl ? (
+                    <button
+                      key={post.id}
+                      type="button"
+                      onClick={() => navigate(`/post/${post.id}`)}
+                      className="aspect-square overflow-hidden bg-gray-100"
+                    >
+                      <img src={post.imagePreviewUrl} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ) : (
+                    <button
+                      key={post.id}
+                      type="button"
+                      onClick={() => navigate(`/post/${post.id}`)}
+                      className="aspect-square bg-gray-50 flex items-center justify-center p-2"
+                    >
+                      <span className="text-[10px] text-gray-400 line-clamp-4 text-center">{post.text}</span>
+                    </button>
+                  )
+                )}
+              </div>
+            ) : (
+              <div>
+                {myPosts.map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+              </div>
+            ))}
+
+          {activeTab === 'pinned' &&
+            (pinnedLoading ? (
+              <div className="py-16 flex justify-center">
+                <Loader size="md" tone="dark" />
+              </div>
+            ) : pinnedPosts.length === 0 ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">No pinned posts</p>
+                <p className="mt-1 text-sm text-gray-400">Pin up to 3 posts to feature them here.</p>
+              </div>
+            ) : (
+              <div>
+                {pinnedPosts.map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+              </div>
+            ))}
+
+          {activeTab === 'saved' &&
+            (savedLoading ? (
+              <div className="py-16 flex justify-center">
+                <Loader size="md" tone="dark" />
+              </div>
+            ) : savedPosts.length === 0 ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">No saved posts yet</p>
+                <p className="mt-1 text-sm text-gray-400">Posts you save will show up here — only you can see this.</p>
+              </div>
+            ) : (
+              <div>
+                {savedPosts.map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+              </div>
+            ))}
+
+          {activeTab === 'communities' &&
+            (communitiesLoading ? (
+              <div className="py-16 flex justify-center">
+                <Loader size="md" tone="dark" />
+              </div>
+            ) : communities.length === 0 ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">No communities joined</p>
+                <p className="mt-1 text-sm text-gray-400">Communities you join will show up here.</p>
+              </div>
+            ) : (
+              <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {communities.map((community) => (
+                  <CommunityCard key={community.id} community={community} />
+                ))}
+              </div>
+            ))}
+
+          {activeTab === 'activity' && (
             <div className="px-6 py-16 text-center">
-              <p className="text-sm text-gray-400">{emptyMessage}</p>
-            </div>
-          ) : (
-            <div>
-              {tabContent.map((item) => {
-                if (activeTab === 'posts' || activeTab === 'marketplace') {
-                  return <PostCard key={item.id} post={item} />
-                }
-                if (activeTab === 'notes') return <PDFCard key={item.id} note={item} />
-                if (activeTab === 'events') return <EventCard key={item.id} event={item} />
-                return null
-              })}
+              <p className="text-sm font-semibold text-gray-900">Activity history coming soon</p>
+              <p className="mt-1 text-sm text-gray-400">This needs a bit more backend work — not faked here.</p>
             </div>
           )}
         </main>

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Search } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import FollowUserCard from '../components/FollowUserCard.jsx'
 import EmptyFollowState from '../components/EmptyFollowState.jsx'
@@ -10,10 +10,9 @@ import { getUserProfileByUsername } from '../firebase/profileService.js'
 import { useFollowList } from '../hooks/useFollowList.js'
 
 /**
- * Route: /following/:username? — an optional username segment. Present
- * when viewing someone else's following list (linked from their
- * profile); absent when viewing your own (falls back to the signed-in
- * user).
+ * Route: /following/:username? — mirrors FollowersPage.jsx exactly,
+ * same search + infinite-scroll addition on top of your pasted
+ * structure, direction='following' instead of 'followers'.
  */
 export default function FollowingPage() {
   const navigate = useNavigate()
@@ -56,9 +55,27 @@ export default function FollowingPage() {
     }
   }, [username])
 
-  const { users, loading, error } = useFollowList(targetUid, 'following')
+  const { users, loading, error, searchTerm, setSearchTerm, loadMore, hasMore, loadingMore } = useFollowList(
+    targetUid,
+    'following'
+  )
   const isLoading = resolving || (Boolean(targetUid) && loading)
   const combinedError = resolveError || error
+
+  const sentinelRef = useRef(null)
+  useEffect(() => {
+    if (!hasMore || isLoading) return undefined
+    const el = sentinelRef.current
+    if (!el) return undefined
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadMore()
+      },
+      { rootMargin: '200px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasMore, isLoading, loadMore])
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
@@ -75,6 +92,18 @@ export default function FollowingPage() {
             </button>
             <span className="text-base font-bold tracking-tight text-gray-900">Following</span>
           </div>
+          <div className="px-3 pb-3">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search following"
+                className="w-full rounded-full border border-gray-200 bg-gray-50 pl-10 pr-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+              />
+            </div>
+          </div>
         </header>
 
         <main className="pb-24">
@@ -87,12 +116,17 @@ export default function FollowingPage() {
               <p className="text-sm text-gray-400">{combinedError}</p>
             </div>
           ) : users.length === 0 ? (
-            <EmptyFollowState message="Not following anyone yet" />
+            <EmptyFollowState message={searchTerm ? 'No matches found' : 'Not following anyone yet'} />
           ) : (
             <div>
               {users.map((user) => (
                 <FollowUserCard key={user.uid} user={user} />
               ))}
+              {hasMore && (
+                <div ref={sentinelRef} className="py-4 flex justify-center">
+                  {loadingMore && <Loader size="md" tone="dark" />}
+                </div>
+              )}
             </div>
           )}
         </main>

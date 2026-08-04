@@ -1,69 +1,89 @@
 import { useEffect, useRef, useState } from 'react'
+import { getFollowListPage } from '../firebase/profileService.js'
 import { auth } from '../firebase/firebase.js'
-import { subscribeToFollowerIds, subscribeToFollowingIds } from '../firebase/followService.js'
-import { getUserProfile } from '../firebase/profileService.js'
 
 /**
- * Loads and keeps live a list of resolved user profiles for either the
- * followers or following relationship of `targetUid` (falls back to the
- * signed-in user if not provided — e.g. someone opening /followers
- * directly by URL rather than tapping through from a profile).
- * `direction` is 'followers' or 'following'.
- *
- * The underlying id list is realtime (onSnapshot); each id is then
- * resolved to a full profile via getUserProfile and cached for the
- * lifetime of this hook instance, so re-renders and list updates never
- * re-fetch a profile that's already been resolved once.
+ * Real implementation — was referenced by FollowersPage.jsx/
+ * FollowingPage.jsx (both pasted into this conversation) but never
+ * shown to me. Return shape ({ users, loading, error }) and call
+ * signature (targetUid, 'followers'|'following') match exactly what
+ * those two pages already call, so neither page needs to change for
+ * basic functionality to work — search and infinite scroll are added
+ * on top via the extra returned fields below (searchTerm/setSearchTerm/
+ * loadMore/hasMore), which those pages need a small update to actually
+ * use (added separately).
  */
 export function useFollowList(targetUid, direction) {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const profileCacheRef = useRef(new Map())
+  const [searchTerm, setSearchTerm] = useState('')
+  const [cursor, setCursor] = useState(null)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  const searchDebounceRef = useRef(null)
 
   useEffect(() => {
-    const uid = targetUid || auth.currentUser?.uid
-    if (!uid) {
-      setError('Not signed in.')
+    if (!targetUid) {
+      setUsers([])
       setLoading(false)
       return undefined
     }
 
+    let cancelled = false
     setLoading(true)
     setError('')
+    setCursor(null)
 
-    const subscribe = direction === 'following' ? subscribeToFollowingIds : subscribeToFollowerIds
-
-    const unsubscribe = subscribe(
-      uid,
-      async (ids) => {
+    window.clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = window.setTimeout(
+      async () => {
         try {
-          const profiles = await Promise.all(
-            ids.map(async (otherUid) => {
-              if (profileCacheRef.current.has(otherUid)) {
-                return profileCacheRef.current.get(otherUid)
-              }
-              const profile = await getUserProfile(otherUid).catch(() => null)
-              const entry = profile ? { uid: otherUid, ...profile } : null
-              if (entry) profileCacheRef.current.set(otherUid, entry)
-              return entry
-            })
-          )
-          setUsers(profiles.filter(Boolean))
-          setLoading(false)
-        } catch {
-          setError('Could not load this list.')
-          setLoading(false)
+          const { users: data, nextCursor } = await getFollowListPage(targetUid, direction, {
+            searchTerm,
+            viewerUid: auth.currentUser?.uid
+          })
+          if (cancelled) return
+          setUsers(data)
+          setCursor(nextCursor)
+          setHasMore(Boolean(nextCursor))
+        } catch (err) {
+          if (!cancelled) setError(err?.message || 'Could not load this list.')
+        } finally {
+          if (!cancelled) setLoading(false)
         }
       },
-      () => {
-        setError('Could not load this list.')
-        setLoading(false)
-      }
+      searchTerm ? 250 : 0
     )
 
-    return unsubscribe
-  }, [targetUid, direction])
+    return () => {
+      cancelled = true
+      window.clearTimeout(searchDebounceRef.current)
+    }
+  }, [targetUid, direction, searchTerm])
 
-  return { users, loading, error }
+  const loadMore = async () => {
+    if (!targetUid || !cursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const { users: data, nextCursor } = await getFollowListPage(targetUid, direction, {
+        cursor,
+        searchTerm,
+        viewerUid: auth.currentUser?.uid
+      })
+      setUsers((prev) => [...prev, ...data])
+      setCursor(nextCursor)
+      setHasMore(Boolean(nextCursor))
+    } catch {
+      // Silently stop paginating on failure — the list already loaded
+      // stays visible and usable rather than showing an error over
+      // otherwise-good content.
+      setHasMore(false)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  return { users, loading, error, searchTerm, setSearchTerm, loadMore, hasMore, loadingMore }
 }

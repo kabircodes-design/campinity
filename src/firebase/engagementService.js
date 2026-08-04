@@ -2,6 +2,7 @@ import {
   arrayRemove,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -12,6 +13,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   startAfter,
   updateDoc,
   where,
@@ -414,4 +416,45 @@ export async function pinComment(postId, commentId, requesterUid, postOwnerUid, 
 export async function unpinComment(postId, commentId, requesterUid, postOwnerUid) {
   if (requesterUid !== postOwnerUid) throw new Error('Only the post creator can unpin a comment.')
   await updateDoc(commentDoc(postId, commentId), { pinned: false })
+}
+
+/* ============================================================
+   SAVED POSTS — new feature, private to the owner. Schema:
+   users/{uid}/savedPosts/{postId}, doc id IS the postId (structurally
+   prevents duplicate saves, matches this project's existing composite-
+   id conventions — follows/{}, usernames/{}). Placed here rather than
+   in profileService.js (which I've never seen) since this is
+   post-engagement, and this file is the one I have complete, verified
+   knowledge of.
+   ============================================================ */
+
+function savedPostDoc(uid, postId) {
+  return doc(db, 'users', uid, 'savedPosts', postId)
+}
+
+export async function savePost(uid, postId) {
+  if (!uid) throw new Error('You need to be signed in to save a post.')
+  await setDoc(savedPostDoc(uid, postId), { postId, savedAt: serverTimestamp() })
+}
+
+export async function unsavePost(uid, postId) {
+  if (!uid) throw new Error('You need to be signed in.')
+  await deleteDoc(savedPostDoc(uid, postId))
+}
+
+export async function isPostSaved(uid, postId) {
+  if (!uid) return false
+  const snap = await getDoc(savedPostDoc(uid, postId))
+  return snap.exists()
+}
+
+/** Returns saved post IDs, newest-saved first — caller resolves each to full post data (e.g. via getPostById), keeping this function itself a single cheap query rather than N+1 post reads baked in. */
+export async function getSavedPostIds(uid, { pageSize = 20, cursor = null } = {}) {
+  const constraints = [orderBy('savedAt', 'desc'), limit(pageSize)]
+  if (cursor) constraints.push(startAfter(cursor))
+  const snap = await getDocs(query(collection(db, 'users', uid, 'savedPosts'), ...constraints))
+  return {
+    postIds: snap.docs.map((d) => d.id),
+    nextCursor: snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1] : null
+  }
 }
