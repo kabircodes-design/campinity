@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase.js'
 import { checkIsFollowing } from './profileService.js'
+import { SHARE_TYPE_LABELS } from '../sharing/shareTypes.js'
 
 /**
  * Correctly named this time — MessagesPage.jsx and ChatPage.jsx
@@ -154,9 +155,18 @@ export async function getOrCreateChat(currentUid, otherUid) {
 
 const PENDING_MESSAGE_LIMIT = 3 // configurable — how many messages the requester can send before the receiver accepts
 
-export async function sendMessage(chatId, senderId, text) {
+/**
+ * Extended for the Sharing System (Phase 1) — the 4th `options`
+ * parameter is entirely optional and defaults to plain-text behavior,
+ * so every existing call site (sendMessage(chatId, senderId, text))
+ * is completely unaffected; this is the same function, not a new one,
+ * per "reuse existing sendMessage(), do not duplicate logic."
+ */
+export async function sendMessage(chatId, senderId, text, options = {}) {
+  const { type = 'text', imageUrl = null, sharedPayload = null } = options
+
   if (!senderId) throw new Error('You need to be signed in to send a message.')
-  if (!text?.trim()) throw new Error('Message cannot be empty.')
+  if (type === 'text' && !text?.trim()) throw new Error('Message cannot be empty.')
 
   const newMessageRef = doc(messagesCollection(chatId))
 
@@ -175,18 +185,29 @@ export async function sendMessage(chatId, senderId, text) {
       }
     }
 
-    transaction.set(newMessageRef, {
+    const messageDoc = {
       senderId,
-      text: text.trim(),
+      text: text?.trim() || '',
+      type,
       read: false,
       edited: false,
       editedAt: null,
       deletedFor: [],
       createdAt: serverTimestamp()
-    })
+    }
+    if (imageUrl) messageDoc.imageUrl = imageUrl
+    if (sharedPayload) messageDoc.sharedPayload = sharedPayload
+
+    transaction.set(newMessageRef, messageDoc)
+
+    // Last-message preview in the chat list reflects the share, not
+    // raw payload data — "Shared a post" reads correctly in the inbox
+    // instead of an empty string or a JSON blob.
+    const lastMessagePreview =
+      type === 'text' ? text.trim().slice(0, 120) : sharedPayload?.preview?.title ? `Shared: ${sharedPayload.preview.title}` : SHARE_TYPE_LABELS[type] || 'Sent a message'
 
     const chatUpdate = {
-      lastMessage: text.trim().slice(0, 120),
+      lastMessage: lastMessagePreview,
       lastMessageAt: serverTimestamp(),
       lastSenderId: senderId,
       readBy: [senderId]

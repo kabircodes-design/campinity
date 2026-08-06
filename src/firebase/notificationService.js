@@ -185,6 +185,32 @@ export async function createPinNotification({
   })
 }
 
+/**
+ * Sharing System (Phase 1) — one new notification type, same pattern
+ * as every creator above. `entityType`/`entityId` cover all share
+ * targets generically ("Kabir shared your post" / "Rahul shared your
+ * profile" / "Aman shared your event") rather than one function per
+ * shareable type, matching this whole system's "future types need
+ * almost zero new code" principle.
+ */
+export async function createShareNotification({
+  targetUid,
+  actorUid,
+  actorName,
+  actorAvatar,
+  entityType,
+  entityId
+}) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    type: 'share',
+    entityType,
+    entityId
+  })
+}
+
 export async function createFollowNotification({ targetUid, actorUid, actorName, actorAvatar }) {
   return createNotification(targetUid, {
     actorUid,

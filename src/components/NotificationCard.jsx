@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { AtSign, CornerUpLeft, Heart, Mail, Megaphone, MessageCircle, Pin, Trash2, UserPlus } from 'lucide-react'
+import { AtSign, CornerUpLeft, Heart, Mail, Megaphone, MessageCircle, Pin, Share2, Trash2, UserPlus } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { getNotificationText } from '../utils/notificationText.js'
 import { formatTimeAgo } from '../firebase/postService.js'
@@ -12,6 +12,7 @@ const ICON_STYLES = {
   reply: { Icon: CornerUpLeft, bg: 'bg-blue-600', fill: false },
   comment_like: { Icon: Heart, bg: 'bg-red-500', fill: true },
   pin: { Icon: Pin, bg: 'bg-amber-500', fill: true },
+  share: { Icon: Share2, bg: 'bg-blue-600', fill: false },
   invite: { Icon: Mail, bg: 'bg-amber-500', fill: false },
   announcement: { Icon: Megaphone, bg: 'bg-violet-500', fill: false }
 }

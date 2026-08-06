@@ -148,7 +148,7 @@ export default function ChatPage() {
                   </span>
                 </div>
               ) : (
-                <MessageBubble key={item.id} message={item.message} isMine={item.message.senderId === currentUid} />
+                <MessageBubble key={item.id} message={item.message} isMine={item.message.senderId === currentUid} currentUid={currentUid} />
               )
             )
           )}

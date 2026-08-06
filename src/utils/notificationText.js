@@ -17,6 +17,7 @@ export const NOTIFICATION_ICONS = {
   reply: 'CornerUpLeft',
   comment_like: 'Heart',
   pin: 'Pin',
+  share: 'Share2',
   invite: 'Mail',
   announcement: 'Megaphone'
 }
@@ -43,6 +44,10 @@ export function getNotificationText(notification) {
       return { lead: name, action: 'liked your comment', preview: null }
     case 'pin':
       return { lead: name, action: 'pinned your comment', preview: null }
+    case 'share': {
+      const entityLabel = { post: 'post', profile: 'profile', event: 'event', community: 'community', club: 'club' }[notification.entityType] || 'content'
+      return { lead: name, action: `shared your ${entityLabel}`, preview: null }
+    }
     case 'invite':
       return {
         lead: notification.communityName || 'A club',

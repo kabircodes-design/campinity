@@ -1,4 +1,5 @@
 import { Check, CheckCheck, Clock } from 'lucide-react'
+import SharedCard from '../sharing/SharedCard.jsx'
 
 /**
  * Props match ChatPage.jsx's exact usage: <MessageBubble message={...}
@@ -7,7 +8,9 @@ import { Check, CheckCheck, Clock } from 'lucide-react'
  * that field only exists client-side before Firestore confirms the
  * write, so it's the correct signal for "still sending," not a guess.
  */
-export default function MessageBubble({ message, isMine }) {
+export default function MessageBubble({ message, isMine, currentUid }) {
+  const type = message.type || 'text' // existing messages have no `type` field at all — this is what makes them render exactly as before, through this same branch
+
   const time = message.pending
     ? null
     : message.createdAt?.toDate
@@ -21,7 +24,16 @@ export default function MessageBubble({ message, isMine }) {
           isMine ? 'bg-blue-600 text-white rounded-br-md' : 'bg-gray-100 text-gray-900 rounded-bl-md'
         } ${message.pending ? 'opacity-60' : 'opacity-100'} transition-opacity duration-300`}
       >
-        <p className="text-[14px] leading-relaxed whitespace-pre-wrap break-words">{message.text}</p>
+        {type === 'text' ? (
+          <p className="text-[14px] leading-relaxed whitespace-pre-wrap break-words">{message.text}</p>
+        ) : (
+          <div className={isMine ? '[&_button]:bg-white/10' : ''}>
+            <SharedCard message={message} currentUid={currentUid} />
+            {message.text && (
+              <p className="mt-1.5 text-[14px] leading-relaxed whitespace-pre-wrap break-words">{message.text}</p>
+            )}
+          </div>
+        )}
         <div className={`mt-0.5 flex items-center gap-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
           {message.edited && (
             <span className={`text-[10px] ${isMine ? 'text-white/60' : 'text-gray-400'}`}>Edited</span>
