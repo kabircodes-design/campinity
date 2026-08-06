@@ -13,6 +13,7 @@ import { getFeedStories } from '../firebase/storyService.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
 import { getTrendingCommunities } from '../firebase/communityService.js'
 import CommunityCard from '../components/CommunityCard.jsx'
+import ProgressWidget from '../gamification/ProgressWidget.jsx'
 import SwipeablePage from '../components/SwipeablePage.jsx'
 import { useFollowingFeed } from '../hooks/useFollowingFeed.js'
 import { useForYouFeed } from '../hooks/useForYouFeed.js'
@@ -271,6 +272,8 @@ export default function HomePage() {
               <p className="mt-0.5 text-[13px] text-gray-400">Catch up on what's happening across campus.</p>
             </div>
           </div>
+
+          <ProgressWidget uid={auth.currentUser?.uid} />
 
           <button
             type="button"

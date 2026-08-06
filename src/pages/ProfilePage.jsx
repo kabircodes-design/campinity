@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Grid3x3, List, Settings } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import ProfileHeader from '../components/ProfileHeader.jsx'
+import ProgressCard from '../gamification/ProgressCard.jsx'
 import PostCard from '../components/PostCard.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
 import Loader from '../auth/components/Loader.jsx'
@@ -242,6 +243,8 @@ export default function ProfilePage() {
           onOpenFollowers={() => navigate('/followers')}
           onOpenFollowing={() => navigate('/following')}
         />
+
+        <ProgressCard uid={currentUid} />
 
         <nav className="sticky top-14 z-30 flex items-center bg-white border-b border-gray-100 overflow-x-auto scroll-hidden">
           {tabs.map((tab) => (
