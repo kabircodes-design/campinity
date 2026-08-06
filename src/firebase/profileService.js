@@ -165,6 +165,90 @@ export async function getUserProfileByUsername(username) {
 }
 
 /* ============================================================
+   RADAR — new. Built only on real, existing fields: collegeId (same
+   campus) and courseLower/yearLower (the search-index fields this
+   file already maintains via healProfile/createUserProfile/
+   updateUserProfile — not new schema, reused for a new purpose).
+   users/{uid}'s read rule is unconditional for any signed-in user
+   (allow read: if isSignedIn()), so a direct collection query here
+   needs no rule change, unlike collections with conditional read
+   rules elsewhere in this project.
+   ============================================================ */
+
+/**
+ * "Nearby Students" — same campus, real data only. Deliberately does
+ * NOT sort "online first" or "recently active" — no presence/activity
+ * timestamp exists anywhere in this project (the same gap already
+ * flagged for typing indicators and online status in the messaging
+ * system). Sorted by join date instead, newest members first, which
+ * is real data rather than a fabricated online signal.
+ */
+export async function getNearbyStudents(collegeId, excludeUid, { pageSize = 20 } = {}) {
+  if (!collegeId) return []
+  const snap = await getDocs(
+    query(collection(db, COLLECTION), where('collegeId', '==', collegeId), orderBy('createdAt', 'desc'), limit(pageSize + 1))
+  )
+  return snap.docs
+    .filter((d) => d.id !== excludeUid)
+    .slice(0, pageSize)
+    .map((d) => {
+      const data = d.data()
+      return {
+        uid: d.id,
+        displayName: data.displayName ?? data.fullName ?? '',
+        username: data.username ?? '',
+        avatar: data.avatar ?? data.photoURL ?? '',
+        course: data.course ?? '',
+        year: data.year ?? '',
+        verifiedCampus: data.verifiedCampus ?? false
+      }
+    })
+}
+
+/**
+ * "People You May Know" — same course OR same year as the current
+ * user, real fields only. Two separate queries merged (Firestore
+ * can't OR across different fields in one query), deduplicated.
+ * Mutual-followers/mutual-communities suggestions are NOT included
+ * here — that needs a proper graph traversal (friends-of-friends)
+ * this function doesn't attempt; getMutualFollowers elsewhere in this
+ * file answers "who do THESE TWO specific people have in common," not
+ * "suggest me people," which is a different, harder query.
+ */
+export async function getPeopleYouMayKnow(currentUid, { course = '', year = '', pageSize = 10 } = {}) {
+  const courseLower = course.trim().toLowerCase()
+  const yearLower = year.trim().toLowerCase()
+  if (!courseLower && !yearLower) return []
+
+  const queries = []
+  if (courseLower) {
+    queries.push(getDocs(query(collection(db, COLLECTION), where('courseLower', '==', courseLower), limit(pageSize))))
+  }
+  if (yearLower) {
+    queries.push(getDocs(query(collection(db, COLLECTION), where('yearLower', '==', yearLower), limit(pageSize))))
+  }
+
+  const results = await Promise.all(queries)
+  const seen = new Map()
+  results.forEach((snap) => {
+    snap.docs.forEach((d) => {
+      if (d.id === currentUid || seen.has(d.id)) return
+      const data = d.data()
+      seen.set(d.id, {
+        uid: d.id,
+        displayName: data.displayName ?? data.fullName ?? '',
+        username: data.username ?? '',
+        avatar: data.avatar ?? data.photoURL ?? '',
+        course: data.course ?? '',
+        year: data.year ?? ''
+      })
+    })
+  })
+
+  return Array.from(seen.values()).slice(0, pageSize)
+}
+
+/* ============================================================
    FOLLOW GRAPH — new. Schema matches the existing follows/{} security
    rule exactly: composite doc id "{followerId}_{followingId}"
    (structurally prevents duplicate follow records, same pattern as

@@ -25,6 +25,7 @@ const CreatePostPage = lazy(() => import('./pages/CreatePostPage.jsx'))
 const PostDetailPage = lazy(() => import('./pages/PostDetailPage.jsx'))
 const MessagesPage = lazy(() => import('./pages/MessagesPage.jsx'))
 const RequestsPage = lazy(() => import('./pages/RequestsPage.jsx'))
+const RadarPage = lazy(() => import('./pages/RadarPage.jsx'))
 const ChatPage = lazy(() => import('./pages/ChatPage.jsx'))
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage.jsx'))
 const NotificationDetailPage = lazy(() => import('./pages/NotificationDetailPage.jsx'))
@@ -82,6 +83,15 @@ export default function App() {
           element={
             <ProtectedRoute stage="onboarding">
               <CreateProfilePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/radar"
+          element={
+            <ProtectedRoute stage="home">
+              <RadarPage />
             </ProtectedRoute>
           }
         />
