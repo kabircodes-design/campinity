@@ -154,6 +154,41 @@ export async function togglePinnedPost(uid, postId) {
   return nextPinned
 }
 
+/**
+ * Sharing System (Phase 2) — search for the recipient picker. Two
+ * separate prefix queries (username, displayNameLower) merged and
+ * deduped, same pragmatic pattern getPeopleYouMayKnow above already
+ * uses for course/year — Firestore can't OR across two different
+ * fields in one query. "kab" matching "Kabir Jain" needs the
+ * displayNameLower query specifically; the existing
+ * searchUsersForMention (engagementService.js) only searches
+ * username, which is why this is a new function rather than reusing
+ * that one — different real requirement, not duplicated logic.
+ */
+export async function searchUsersForShare(rawTerm, excludeUid, { pageSize = 10 } = {}) {
+  const term = rawTerm.trim().toLowerCase()
+  if (!term) return []
+
+  const [byUsername, byName] = await Promise.all([
+    getDocs(query(collection(db, COLLECTION), orderBy('username'), where('username', '>=', term), where('username', '<=', term + '\uf8ff'), limit(pageSize))),
+    getDocs(query(collection(db, COLLECTION), orderBy('displayNameLower'), where('displayNameLower', '>=', term), where('displayNameLower', '<=', term + '\uf8ff'), limit(pageSize)))
+  ])
+
+  const seen = new Map()
+  ;[...byUsername.docs, ...byName.docs].forEach((d) => {
+    if (d.id === excludeUid || seen.has(d.id)) return
+    const data = d.data()
+    seen.set(d.id, {
+      uid: d.id,
+      displayName: data.displayName ?? data.fullName ?? '',
+      username: data.username ?? '',
+      avatar: data.avatar ?? data.photoURL ?? ''
+    })
+  })
+
+  return Array.from(seen.values()).slice(0, pageSize)
+}
+
 export async function getUserProfileByUsername(username) {
   const uid = await getUserIdByUsername(username)
   if (!uid) return null

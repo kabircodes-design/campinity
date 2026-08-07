@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   CalendarDays,
@@ -17,9 +17,10 @@ import {
   Users
 } from 'lucide-react'
 import Avatar from './Avatar.jsx'
+import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
 import { postTypeConfig } from '../data/dummyFeed.js'
 import { auth } from '../firebase/firebase.js'
-import { likePost, unlikePost } from '../firebase/engagementService.js'
+import { likePost, unlikePost, subscribeToPostShareCount } from '../firebase/engagementService.js'
 
 /**
  * 'general' and 'study' were added for Feature 4B (Create Post) — every
@@ -38,15 +39,20 @@ const typeIcons = {
 
 export default function PostCard({ post }) {
   const navigate = useNavigate()
-  const config = postTypeConfig[post.type] || {
-  label: "Post",
-  color: "bg-gray-100 text-gray-700"
-}
+  const config = postTypeConfig[post.type]
+  const TypeIcon = typeIcons[post.type]
 
-const TypeIcon = typeIcons[post.type] || MessageCircle
   const [liked, setLiked] = useState(post.likedByMe)
   const [likeCount, setLikeCount] = useState(post.likes)
-  const [shareCopied, setShareCopied] = useState(false)
+  const [shareSheetOpen, setShareSheetOpen] = useState(false)
+  const isOwner = auth.currentUser?.uid && post.userId === auth.currentUser.uid
+  const [shareCount, setShareCount] = useState(post.shareCount || 0)
+
+  useEffect(() => {
+    if (!isOwner) return undefined
+    const unsubscribe = subscribeToPostShareCount(post.id, setShareCount)
+    return unsubscribe
+  }, [isOwner, post.id])
 
   const goToProfile = () => navigate(`/student/${post.username}`)
   const goToPost = () => navigate(`/post/${post.id}`)
@@ -77,8 +83,7 @@ const TypeIcon = typeIcons[post.type] || MessageCircle
   }
 
   const handleShare = () => {
-    setShareCopied(true)
-    window.setTimeout(() => setShareCopied(false), 1500)
+    setShareSheetOpen(true)
   }
 
   return (
@@ -232,9 +237,23 @@ const TypeIcon = typeIcons[post.type] || MessageCircle
           className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 transition-all duration-300 ml-auto"
         >
           <Share className="w-[18px] h-[18px]" />
-          {shareCopied ? 'Copied' : 'Share'}
+          Share
+          {isOwner && shareCount > 0 && <span className="text-gray-400">· {shareCount}</span>}
         </button>
       </div>
+
+      <ShareBottomSheet
+        open={shareSheetOpen}
+        onClose={() => setShareSheetOpen(false)}
+        referenceType="post"
+        referenceId={post.id}
+        preview={{
+          title: post.text?.slice(0, 80) || 'Shared post',
+          subtitle: post.name,
+          username: post.username,
+          image: post.imagePreviewUrl || null
+        }}
+      />
     </article>
   )
 }

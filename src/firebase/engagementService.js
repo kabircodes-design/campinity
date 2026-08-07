@@ -458,3 +458,26 @@ export async function getSavedPostIds(uid, { pageSize = 20, cursor = null } = {}
     nextCursor: snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1] : null
   }
 }
+
+/* ============================================================
+   SHARE COUNT — Sharing System Phase 2. incrementShareCount is
+   called once per share action (not once per recipient — sharing to
+   3 people is one share of the post, matching "Owner sees Shares: 83"
+   as a real analytics number, not an inflated per-recipient count).
+   subscribeToPostShareCount reads directly via onSnapshot on the raw
+   posts/{postId} document rather than through postService.js's
+   getPostById/mapping — deliberately, since that file's full content
+   isn't available to verify its mapper includes this field. Reading
+   the raw document directly for this one counter is self-contained
+   and doesn't depend on unverified code elsewhere.
+   ============================================================ */
+
+export async function incrementShareCount(postId) {
+  await updateDoc(doc(db, 'posts', postId), { shareCount: increment(1) })
+}
+
+export function subscribeToPostShareCount(postId, callback) {
+  return onSnapshot(doc(db, 'posts', postId), (snap) => {
+    callback(snap.exists() ? snap.data().shareCount || 0 : 0)
+  })
+}

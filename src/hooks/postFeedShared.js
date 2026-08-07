@@ -51,6 +51,7 @@ export function mapPostForCard(raw, currentUid, liveProfile) {
 
   return {
     id: raw.id,
+    userId: raw.userId,
     type: raw.category || 'general',
     text: raw.text || '',
     imageUrl: raw.imageUrl || null,
@@ -69,6 +70,7 @@ export function mapPostForCard(raw, currentUid, liveProfile) {
     likes: raw.likesCount || 0,
     likedByMe: Array.isArray(raw.likedBy) && currentUid ? raw.likedBy.includes(currentUid) : false,
     comments: raw.commentsCount || 0,
+    shareCount: raw.shareCount || 0,
     communityId: raw.communityId || null,
     communityName: raw.communityName || null,
     file: raw.file,
