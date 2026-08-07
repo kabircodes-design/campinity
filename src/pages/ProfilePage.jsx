@@ -11,7 +11,6 @@ import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getAvatarColor, getInitials, getUserPosts, getPostById } from '../firebase/postService.js'
-import { getSavedPostIds } from '../firebase/engagementService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
 
 const GRID_LAYOUT_KEY = 'campinity:profileGridLayout'
@@ -19,7 +18,6 @@ const GRID_LAYOUT_KEY = 'campinity:profileGridLayout'
 const tabs = [
   { key: 'posts', label: 'Posts' },
   { key: 'pinned', label: 'Pinned' },
-  { key: 'saved', label: 'Saved' },
   { key: 'communities', label: 'Communities' },
   { key: 'activity', label: 'Activity' }
 ]
@@ -32,10 +30,13 @@ const tabs = [
  * `note.uploader === profile.displayName` could never return anything
   * for a real signed-in user). Replaced with tabs backed by real
  * data: Posts (unchanged, already real), Pinned (profile.pinnedPostIds,
- * now correctly returned by profileService.js), Saved
- * (engagementService.js's getSavedPostIds, added last pass),
- * Communities (communityService.js's getUserCommunityMemberships,
- * already fully real and working).
+ * now correctly returned by profileService.js), Communities
+ * (communityService.js's getUserCommunityMemberships, already fully
+ * real and working).
+ *
+ * Saved was removed from here entirely (moved to Settings > Saved,
+ * per the Saved Library System's explicit instruction — Instagram
+ * puts Saved in settings, not the profile tab row).
  *
  * "Tagged" from the brief is not here — no tagging concept exists
  * anywhere in this project's schema; a fake empty tab for a feature
@@ -69,13 +70,10 @@ export default function ProfilePage() {
 
   const [pinnedPosts, setPinnedPosts] = useState([])
   const [pinnedLoading, setPinnedLoading] = useState(false)
-  const [savedPosts, setSavedPosts] = useState([])
-  const [savedLoading, setSavedLoading] = useState(false)
   const [communities, setCommunities] = useState([])
   const [communitiesLoading, setCommunitiesLoading] = useState(false)
   const [communitiesLoadedOnce, setCommunitiesLoadedOnce] = useState(false)
   const [pinnedLoadedOnce, setPinnedLoadedOnce] = useState(false)
-  const [savedLoadedOnce, setSavedLoadedOnce] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -131,26 +129,6 @@ export default function ProfilePage() {
       cancelled = true
     }
   }, [activeTab, profile, currentUid, pinnedLoadedOnce])
-
-  useEffect(() => {
-    if (activeTab !== 'saved' || savedLoadedOnce || !currentUid) return
-    let cancelled = false
-    setSavedLoading(true)
-    getSavedPostIds(currentUid)
-      .then(({ postIds }) => Promise.all(postIds.map((id) => getPostById(id, currentUid).catch(() => null))))
-      .then((results) => {
-        if (!cancelled) {
-          setSavedPosts(results.filter(Boolean))
-          setSavedLoadedOnce(true)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setSavedLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [activeTab, currentUid, savedLoadedOnce])
 
   useEffect(() => {
     if (activeTab !== 'communities' || communitiesLoadedOnce || !currentUid) return
@@ -324,24 +302,6 @@ export default function ProfilePage() {
             ) : (
               <div>
                 {pinnedPosts.map((post) => (
-                  <PostCard key={post.id} post={post} />
-                ))}
-              </div>
-            ))}
-
-          {activeTab === 'saved' &&
-            (savedLoading ? (
-              <div className="py-16 flex justify-center">
-                <Loader size="md" tone="dark" />
-              </div>
-            ) : savedPosts.length === 0 ? (
-              <div className="px-6 py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">No saved posts yet</p>
-                <p className="mt-1 text-sm text-gray-400">Posts you save will show up here — only you can see this.</p>
-              </div>
-            ) : (
-              <div>
-                {savedPosts.map((post) => (
                   <PostCard key={post.id} post={post} />
                 ))}
               </div>

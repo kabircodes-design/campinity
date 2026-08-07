@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  Bookmark,
   CalendarDays,
   Clock,
   Download,
@@ -18,6 +19,8 @@ import {
 } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
+import SaveBottomSheet from '../saved/SaveBottomSheet.jsx'
+import { subscribeToIsItemSaved } from '../saved/savedService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
 import { auth } from '../firebase/firebase.js'
 import { likePost, unlikePost, subscribeToPostShareCount } from '../firebase/engagementService.js'
@@ -45,6 +48,14 @@ export default function PostCard({ post }) {
   const [liked, setLiked] = useState(post.likedByMe)
   const [likeCount, setLikeCount] = useState(post.likes)
   const [shareSheetOpen, setShareSheetOpen] = useState(false)
+  const [saveSheetOpen, setSaveSheetOpen] = useState(false)
+  const [isSaved, setIsSaved] = useState(false)
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    if (!uid) return undefined
+    return subscribeToIsItemSaved(uid, 'post', post.id, setIsSaved)
+  }, [post.id])
   const isOwner = auth.currentUser?.uid && post.userId === auth.currentUser.uid
   const [shareCount, setShareCount] = useState(post.shareCount || 0)
 
@@ -240,6 +251,15 @@ export default function PostCard({ post }) {
           Share
           {isOwner && shareCount > 0 && <span className="text-gray-400">· {shareCount}</span>}
         </button>
+        <button
+          type="button"
+          onClick={() => setSaveSheetOpen(true)}
+          aria-label={isSaved ? 'Saved' : 'Save'}
+          aria-pressed={isSaved}
+          className={`flex items-center transition-all duration-300 ${isSaved ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'}`}
+        >
+          <Bookmark className="w-[18px] h-[18px]" fill={isSaved ? 'currentColor' : 'none'} />
+        </button>
       </div>
 
       <ShareBottomSheet
@@ -249,6 +269,19 @@ export default function PostCard({ post }) {
         referenceId={post.id}
         preview={{
           title: post.text?.slice(0, 80) || 'Shared post',
+          subtitle: post.name,
+          username: post.username,
+          image: post.imagePreviewUrl || null
+        }}
+      />
+
+      <SaveBottomSheet
+        open={saveSheetOpen}
+        onClose={() => setSaveSheetOpen(false)}
+        entityType="post"
+        entityId={post.id}
+        preview={{
+          title: post.text?.slice(0, 80) || 'Saved post',
           subtitle: post.name,
           username: post.username,
           image: post.imagePreviewUrl || null

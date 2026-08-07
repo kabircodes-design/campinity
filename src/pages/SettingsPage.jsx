@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, HelpCircle, Info, Lock, LogOut, Shield, Trash2, User, UserX, ArrowLeft } from 'lucide-react'
+import { Bell, Bookmark, HelpCircle, Info, Lock, LogOut, Shield, Trash2, User, UserX, ArrowLeft } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import SettingsItem from '../components/SettingsItem.jsx'
 import AppearanceSettings from '../components/AppearanceSettings.jsx'
@@ -48,6 +48,7 @@ export default function SettingsPage() {
 
           <section className="mt-2 border-t theme-border">
             <p className="px-4 py-2 text-xs font-semibold theme-text-secondary uppercase tracking-wide">Account</p>
+            <SettingsItem icon={Bookmark} label="Saved" onClick={() => navigate('/saved')} />
             <SettingsItem icon={User} label="Edit Profile" onClick={() => navigate('/profile/edit')} />
             <SettingsItem icon={Lock} label="Change Password" onClick={() => navigate('/settings/change-password')} />
           </section>
