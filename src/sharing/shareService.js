@@ -21,10 +21,19 @@ import { createShareNotification } from '../firebase/notificationService.js'
  * "Owner sees Shares: 83" as a real count of share actions, not an
  * inflated per-recipient number.
  */
+/**
+ * recipientUids is now recipients: an array of either
+ * { type: 'user', uid } (needs getOrCreateChat, exactly as before) or
+ * { type: 'group', chatId } (the chat already exists — send directly,
+ * no chat-creation step). This is what makes "Recent Chats can contain
+ * both 1-to-1 and group chats" actually work end-to-end — a group has
+ * no otherUid to resolve through getOrCreateChat, it has an existing
+ * chatId to send into directly.
+ */
 export async function shareContentToRecipients({
   currentUid,
   currentUserProfile,
-  recipientUids,
+  recipients,
   type,
   referenceId,
   referenceType,
@@ -32,25 +41,34 @@ export async function shareContentToRecipients({
   message = ''
 }) {
   if (!currentUid) throw new Error('You need to be signed in to share.')
-  if (!recipientUids?.length) throw new Error('Select at least one person to share with.')
+  if (!recipients?.length) throw new Error('Select at least one person to share with.')
 
   const sharedPayload = { referenceId, referenceType, preview }
 
   const results = await Promise.allSettled(
-    recipientUids.map(async (recipientUid) => {
-      const { chatId } = await getOrCreateChat(currentUid, recipientUid)
+    recipients.map(async (recipient) => {
+      const chatId = recipient.type === 'group' ? recipient.chatId : (await getOrCreateChat(currentUid, recipient.uid)).chatId
+
       await sendMessage(chatId, currentUid, message, { type, sharedPayload })
 
-      await createShareNotification({
-        targetUid: recipientUid,
-        actorUid: currentUid,
-        actorName: currentUserProfile?.displayName,
-        actorAvatar: currentUserProfile?.avatar,
-        entityType: referenceType,
-        entityId: referenceId
-      }).catch(() => {}) // a notification failure shouldn't fail the share itself
+      if (recipient.type === 'user') {
+        await createShareNotification({
+          targetUid: recipient.uid,
+          actorUid: currentUid,
+          actorName: currentUserProfile?.displayName,
+          actorAvatar: currentUserProfile?.avatar,
+          entityType: referenceType,
+          entityId: referenceId
+        }).catch(() => {}) // a notification failure shouldn't fail the share itself
+      }
+      // Group shares don't fire a per-member notification here — the
+      // existing notification system has no "shared with your group"
+      // concept, and fanning out one notification per member would be
+      // inventing new notification behavior beyond what was asked for
+      // ("Kabir shared a post with you" is framed as a 1-to-1 concept
+      // in the brief this feature was built from).
 
-      return { recipientUid, chatId }
+      return { recipient, chatId }
     })
   )
 

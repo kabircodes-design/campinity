@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Clock } from 'lucide-react'
+import { ArrowLeft, Clock, Users } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 import MessageBubble from '../components/MessageBubble.jsx'
@@ -65,6 +65,7 @@ export default function ChatPage() {
 
   const loading = chatLoading || (messagesLoading && messages.length === 0)
   const displayName = otherProfile?.displayName || 'Student'
+  const isGroup = chat?.type === 'group'
   const currentUid = auth.currentUser?.uid
 
   const isPending = chat?.status === 'pending'
@@ -112,16 +113,38 @@ export default function ChatPage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <Avatar
-              initials={getInitials(displayName)}
-              colorClass={getAvatarColor(otherUid || chatId)}
-              size="sm"
-              src={otherProfile?.avatar || undefined}
-            />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
-              {otherProfile?.username && <p className="text-[11px] text-gray-400 truncate">@{otherProfile.username}</p>}
-            </div>
+            {isGroup ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/messages/${chatId}/info`)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-left"
+              >
+                {chat?.groupAvatar ? (
+                  <img src={chat.groupAvatar} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center flex-shrink-0">
+                    <Users className="w-4 h-4 text-white" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{chat?.groupName || 'Group'}</p>
+                  <p className="text-[11px] text-gray-400 truncate">{chat?.participants?.length || 0} members</p>
+                </div>
+              </button>
+            ) : (
+              <>
+                <Avatar
+                  initials={getInitials(displayName)}
+                  colorClass={getAvatarColor(otherUid || chatId)}
+                  size="sm"
+                  src={otherProfile?.avatar || undefined}
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
+                  {otherProfile?.username && <p className="text-[11px] text-gray-400 truncate">@{otherProfile.username}</p>}
+                </div>
+              </>
+            )}
           </div>
 
           {isMyRequest && (

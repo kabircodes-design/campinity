@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Search, Check, Link as LinkIcon, Send, RotateCcw } from 'lucide-react'
+import { X, Search, Check, Link as LinkIcon, Send, RotateCcw, Users } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
@@ -24,7 +24,50 @@ import ExternalShareRow from './ExternalShareRow.jsx'
  * stayed on top. Fixed via createPortal straight to document.body,
  * the standard escape hatch for exactly this problem — verified by
  * reading SwipeablePage.jsx directly, not guessed at.
+ *
+ * Group-chat support: recentChats (from useShareRecipients) can now
+ * contain group chat documents alongside 1-to-1 ones — a group has no
+ * uid (it's not a person), it has a chatId (the chat already exists).
+ * normalizeItem below produces one consistent shape for both kinds so
+ * selection/rendering/sending don't need type-checks scattered
+ * everywhere; recipient.key is what selection state tracks (a group's
+ * chatId or a user's uid — always unique, never undefined), and
+ * building the actual { type, uid } / { type, chatId } shape
+ * shareContentToRecipients expects happens in one place (buildRecipient
+ * below), not duplicated at each call site.
  */
+
+function normalizeItem(item) {
+  if (item.type === 'group') {
+    return {
+      key: item.id,
+      kind: 'group',
+      chatId: item.id,
+      displayName: item.groupName || 'Group',
+      username: null,
+      avatar: item.groupAvatar || '',
+      memberCount: item.participants?.length || 0
+    }
+  }
+  // 1-to-1 chat (has otherUid, enriched with displayName/avatar/username
+  // by useShareRecipients.js) or a search result (already this exact
+  // shape from searchUsersForShare) — both are "kind: user".
+  const uid = item.otherUid || item.uid
+  return {
+    key: uid,
+    kind: 'user',
+    uid,
+    displayName: item.displayName || 'Student',
+    username: item.username || null,
+    avatar: item.avatar || '',
+    memberCount: null
+  }
+}
+
+function buildRecipient(selection) {
+  return selection.kind === 'group' ? { type: 'group', chatId: selection.chatId } : { type: 'user', uid: selection.uid }
+}
+
 export default function ShareBottomSheet({ open, onClose, referenceType, referenceId, preview }) {
   const currentUid = auth.currentUser?.uid
   const [currentUserProfile, setCurrentUserProfile] = useState(null)
@@ -32,14 +75,14 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
   const { recentChats, recentLoading, searchTerm, setSearchTerm, searchResults, searchLoading, isSearching } =
     useShareRecipients(currentUid)
 
-  const [selectedUsers, setSelectedUsers] = useState([]) // full user objects, not just uids — needed to render chips without a lookup
+  const [selectedRecipients, setSelectedRecipients] = useState([]) // normalized items, keyed by .key
   const [messageText, setMessageText] = useState('')
   const [sending, setSending] = useState(false)
   const [allSent, setAllSent] = useState(false)
   const [error, setError] = useState('')
   const [linkCopied, setLinkCopied] = useState(false)
-  // Per-recipient status, for "sending / sent / failed" + retry —
-  // Map<uid, 'sending' | 'sent' | 'failed'>
+  // Per-recipient status, keyed by the same .key used for selection —
+  // 'sending' | 'sent' | 'failed'
   const [recipientStatus, setRecipientStatus] = useState({})
 
   useEffect(() => {
@@ -49,7 +92,7 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
 
   useEffect(() => {
     if (!open) {
-      setSelectedUsers([])
+      setSelectedRecipients([])
       setMessageText('')
       setAllSent(false)
       setError('')
@@ -82,24 +125,24 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
 
   if (!open) return null
 
-  const toggleRecipient = (user) => {
-    setSelectedUsers((prev) =>
-      prev.some((u) => u.uid === user.uid) ? prev.filter((u) => u.uid !== user.uid) : [...prev, user]
+  const toggleRecipient = (item) => {
+    setSelectedRecipients((prev) =>
+      prev.some((r) => r.key === item.key) ? prev.filter((r) => r.key !== item.key) : [...prev, item]
     )
   }
 
-  const removeChip = (uid) => {
-    setSelectedUsers((prev) => prev.filter((u) => u.uid !== uid))
+  const removeChip = (key) => {
+    setSelectedRecipients((prev) => prev.filter((r) => r.key !== key))
   }
 
-  const performSend = async (usersToSend) => {
-    if (usersToSend.length === 0) return
+  const performSend = async (itemsToSend) => {
+    if (itemsToSend.length === 0) return
     setSending(true)
     setError('')
     setRecipientStatus((prev) => {
       const next = { ...prev }
-      usersToSend.forEach((u) => {
-        next[u.uid] = 'sending'
+      itemsToSend.forEach((item) => {
+        next[item.key] = 'sending'
       })
       return next
     })
@@ -108,7 +151,7 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
       const { succeeded, failedCount } = await shareContentToRecipients({
         currentUid,
         currentUserProfile,
-        recipientUids: usersToSend.map((u) => u.uid),
+        recipients: itemsToSend.map(buildRecipient),
         type: `shared_${referenceType}`,
         referenceId,
         referenceType,
@@ -116,11 +159,16 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
         message: messageText
       })
 
-      const succeededUids = new Set(succeeded.map((s) => s.recipientUid))
+      // succeeded entries carry back { recipient, chatId } — recipient
+      // is the same { type, uid } / { type, chatId } shape sent in, so
+      // matching back to itemsToSend's .key works for both kinds.
+      const succeededKeys = new Set(
+        succeeded.map((s) => (s.recipient.type === 'group' ? s.recipient.chatId : s.recipient.uid))
+      )
       setRecipientStatus((prev) => {
         const next = { ...prev }
-        usersToSend.forEach((u) => {
-          next[u.uid] = succeededUids.has(u.uid) ? 'sent' : 'failed'
+        itemsToSend.forEach((item) => {
+          next[item.key] = succeededKeys.has(item.key) ? 'sent' : 'failed'
         })
         return next
       })
@@ -128,7 +176,7 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
       if (failedCount === 0) {
         setAllSent(true)
         window.setTimeout(onClose, 900)
-      } else if (failedCount === usersToSend.length) {
+      } else if (failedCount === itemsToSend.length) {
         setError('Could not send — tap retry on a recipient below.')
       } else {
         setError('Some messages failed to send — tap retry below.')
@@ -136,8 +184,8 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
     } catch (err) {
       setRecipientStatus((prev) => {
         const next = { ...prev }
-        usersToSend.forEach((u) => {
-          next[u.uid] = 'failed'
+        itemsToSend.forEach((item) => {
+          next[item.key] = 'failed'
         })
         return next
       })
@@ -147,9 +195,9 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
     }
   }
 
-  const handleSend = () => performSend(selectedUsers)
+  const handleSend = () => performSend(selectedRecipients)
 
-  const handleRetry = (user) => performSend([user])
+  const handleRetry = (item) => performSend([item])
 
   const handleCopyLink = async () => {
     const path = getCanonicalUrl(referenceType, referenceId)
@@ -164,7 +212,8 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
     }
   }
 
-  const listToShow = isSearching ? searchResults : recentChats
+  const rawList = isSearching ? searchResults : recentChats
+  const listToShow = rawList.map(normalizeItem)
   const isListLoading = isSearching ? searchLoading : recentLoading
   const anyFailed = Object.values(recipientStatus).includes('failed')
 
@@ -214,16 +263,26 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
           </div>
         </div>
 
-        {selectedUsers.length > 0 && (
+        {selectedRecipients.length > 0 && (
           <div className="px-4 pb-2 flex items-center gap-2 overflow-x-auto scroll-hidden">
-            {selectedUsers.map((user) => (
+            {selectedRecipients.map((item) => (
               <span
-                key={user.uid}
+                key={item.key}
                 className="flex-shrink-0 flex items-center gap-1.5 rounded-full bg-blue-50 text-blue-700 pl-1.5 pr-2.5 py-1 text-xs font-medium"
               >
-                <Avatar initials={getInitials(user.displayName)} colorClass={getAvatarColor(user.uid)} size="sm" src={user.avatar || undefined} />
-                {user.displayName}
-                <button type="button" onClick={() => removeChip(user.uid)} aria-label={`Remove ${user.displayName}`}>
+                {item.kind === 'group' ? (
+                  item.avatar ? (
+                    <img src={item.avatar} alt="" className="w-5 h-5 rounded-full object-cover" />
+                  ) : (
+                    <span className="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
+                      <Users className="w-3 h-3 text-white" />
+                    </span>
+                  )
+                ) : (
+                  <Avatar initials={getInitials(item.displayName)} colorClass={getAvatarColor(item.key)} size="sm" src={item.avatar || undefined} />
+                )}
+                {item.displayName}
+                <button type="button" onClick={() => removeChip(item.key)} aria-label={`Remove ${item.displayName}`}>
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -267,21 +326,28 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
             </p>
           ) : (
             listToShow.map((item) => {
-              const uid = item.otherUid || item.uid
-              const displayName = item.displayName || 'Student'
-              const user = { uid, displayName, username: item.username, avatar: item.avatar }
-              const isSelected = selectedUsers.some((u) => u.uid === uid)
-              const status = recipientStatus[uid]
+              const isSelected = selectedRecipients.some((r) => r.key === item.key)
+              const status = recipientStatus[item.key]
 
               return (
                 <button
-                  key={uid}
+                  key={item.key}
                   type="button"
-                  onClick={() => toggleRecipient(user)}
+                  onClick={() => toggleRecipient(item)}
                   className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-gray-50 transition-all duration-200"
                 >
                   <div className="relative">
-                    <Avatar initials={getInitials(displayName)} colorClass={getAvatarColor(uid)} size="md" src={item.avatar || undefined} />
+                    {item.kind === 'group' ? (
+                      item.avatar ? (
+                        <img src={item.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
+                          <Users className="w-4 h-4 text-white" />
+                        </div>
+                      )
+                    ) : (
+                      <Avatar initials={getInitials(item.displayName)} colorClass={getAvatarColor(item.key)} size="md" src={item.avatar || undefined} />
+                    )}
                     {isSelected && (
                       <span className="absolute -bottom-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center">
                         <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
@@ -289,8 +355,12 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
                     )}
                   </div>
                   <div className="flex-1 min-w-0 text-left">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
-                    {item.username && <p className="text-[11px] text-gray-400 truncate">@{item.username}</p>}
+                    <p className="text-sm font-semibold text-gray-900 truncate">{item.displayName}</p>
+                    {item.kind === 'group' ? (
+                      <p className="text-[11px] text-gray-400 truncate">{item.memberCount} members</p>
+                    ) : (
+                      item.username && <p className="text-[11px] text-gray-400 truncate">@{item.username}</p>
+                    )}
                   </div>
                   {status === 'sending' && <span className="text-[11px] text-gray-400">Sending...</span>}
                   {status === 'sent' && <Check className="w-4 h-4 text-emerald-500" />}
@@ -300,7 +370,7 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
                       tabIndex={0}
                       onClick={(event) => {
                         event.stopPropagation()
-                        handleRetry(user)
+                        handleRetry(item)
                       }}
                       className="flex items-center gap-1 text-[11px] font-semibold text-red-500"
                     >
@@ -320,7 +390,7 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
               {anyFailed && (
                 <button
                   type="button"
-                  onClick={() => performSend(selectedUsers.filter((u) => recipientStatus[u.uid] === 'failed'))}
+                  onClick={() => performSend(selectedRecipients.filter((r) => recipientStatus[r.key] === 'failed'))}
                   className="font-semibold underline"
                 >
                   Retry all failed
@@ -339,7 +409,7 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
           <button
             type="button"
             onClick={handleSend}
-            disabled={selectedUsers.length === 0 || sending || allSent}
+            disabled={selectedRecipients.length === 0 || sending || allSent}
             className="w-full flex items-center justify-center gap-1.5 rounded-full bg-blue-600 text-white text-sm font-semibold py-3 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
           >
             {allSent ? (
@@ -351,7 +421,7 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                Send{selectedUsers.length > 0 ? ` (${selectedUsers.length})` : ''}
+                Send{selectedRecipients.length > 0 ? ` (${selectedRecipients.length})` : ''}
               </>
             )}
           </button>

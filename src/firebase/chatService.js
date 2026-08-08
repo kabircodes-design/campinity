@@ -54,7 +54,8 @@ function messagesCollection(chatId) {
   return collection(db, 'chats', chatId, 'messages')
 }
 
-function otherParticipant(participants, uid) {
+function otherParticipant(participants, uid, type) {
+  if (type === 'group') return null // "the other participant" isn't a meaningful concept for a group — every caller checks type === 'group' before relying on otherUid anyway
   return participants.find((id) => id !== uid) || null
 }
 
@@ -76,7 +77,7 @@ export function subscribeToUserChats(uid, onData, onError) {
     (snap) => {
       const chats = snap.docs.map((d) => {
         const data = d.data()
-        return { id: d.id, ...data, otherUid: otherParticipant(data.participants, uid) }
+        return { id: d.id, ...data, otherUid: otherParticipant(data.participants, uid, data.type) }
       })
       onData(chats)
     },
@@ -89,7 +90,7 @@ export async function getChat(chatId, uid) {
   const snap = await getDoc(chatDoc(chatId))
   if (!snap.exists()) return null
   const data = snap.data()
-  return { id: chatId, ...data, otherUid: otherParticipant(data.participants, uid) }
+  return { id: chatId, ...data, otherUid: otherParticipant(data.participants, uid, data.type) }
 }
 
 export function subscribeToChat(chatId, uid, onData, onError) {
@@ -101,7 +102,7 @@ export function subscribeToChat(chatId, uid, onData, onError) {
         return
       }
       const data = snap.data()
-      onData({ id: chatId, ...data, otherUid: otherParticipant(data.participants, uid) })
+      onData({ id: chatId, ...data, otherUid: otherParticipant(data.participants, uid, data.type) })
     },
     (err) => onError?.(err)
   )
@@ -235,7 +236,7 @@ export function subscribeToMessageRequests(uid, callback) {
     const requests = snap.docs
       .map((d) => {
         const data = d.data()
-        return { id: d.id, ...data, otherUid: otherParticipant(data.participants, uid) }
+        return { id: d.id, ...data, otherUid: otherParticipant(data.participants, uid, data.type) }
       })
       .filter((chat) => chat.requestedBy !== uid)
     callback(requests)
@@ -262,7 +263,7 @@ export function subscribeToSentPendingChats(uid, callback) {
     const sent = snap.docs
       .map((d) => {
         const data = d.data()
-        return { id: d.id, ...data, otherUid: otherParticipant(data.participants, uid) }
+        return { id: d.id, ...data, otherUid: otherParticipant(data.participants, uid, data.type) }
       })
       .filter((chat) => chat.requestedBy === uid)
     callback(sent)
@@ -367,4 +368,109 @@ export async function deleteMessageForEveryone(chatId, messageId, senderId) {
   if (!snap.exists()) return
   if (snap.data().senderId !== senderId) throw new Error('You can only delete your own messages for everyone.')
   await deleteDoc(messageRef)
+}
+
+/* ============================================================
+   GROUP CHATS — extends the existing chats/{chatId} collection
+   rather than a separate system. type: 'group' (existing 1-to-1
+   chats have no type field at all — treated as 'direct' via a
+   fallback wherever type is read, so nothing about them changes).
+   Doc id is auto-generated (unlike 1-to-1's deterministic sorted-uid
+   id, which only works for exactly two participants). status is
+   always 'accepted' — there's no request/accept concept for group
+   membership, matching the rules written for this.
+   ============================================================ */
+
+const MIN_GROUP_MEMBERS = 3 // creator + at least 2 others, matches the rules' participants.size() >= 3
+
+export async function createGroupChat(creatorUid, memberUids, groupName, groupAvatar = '') {
+  if (!creatorUid) throw new Error('You need to be signed in to create a group.')
+  if (!groupName?.trim()) throw new Error('Give your group a name.')
+
+  const participants = Array.from(new Set([creatorUid, ...memberUids]))
+  if (participants.length < MIN_GROUP_MEMBERS) {
+    throw new Error(`Select at least ${MIN_GROUP_MEMBERS - 1} other members to create a group.`)
+  }
+
+  const chatRef = doc(collection(db, 'chats'))
+  await setDoc(chatRef, {
+    type: 'group',
+    participants,
+    admins: [creatorUid],
+    createdBy: creatorUid,
+    groupName: groupName.trim(),
+    groupAvatar,
+    pinnedBy: [],
+    mutedBy: [],
+    archivedBy: [],
+    lastMessage: '',
+    lastMessageAt: serverTimestamp(),
+    lastSenderId: null,
+    readBy: participants,
+    status: 'accepted',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  })
+
+  return chatRef.id
+}
+
+/** Admin-only, matching the rules' admin-gated membership branch exactly. */
+export async function addGroupMembers(chatId, requesterUid, newMemberUids) {
+  const snap = await getDoc(chatDoc(chatId))
+  if (!snap.exists()) throw new Error('This group no longer exists.')
+  const data = snap.data()
+  if (!(data.admins || []).includes(requesterUid)) {
+    throw new Error('Only group admins can add members.')
+  }
+  const nextParticipants = Array.from(new Set([...data.participants, ...newMemberUids]))
+  await updateDoc(chatDoc(chatId), { participants: nextParticipants, updatedAt: serverTimestamp() })
+}
+
+/** Admin-only — a member cannot remove another member themselves, matching "cannot arbitrarily remove others." */
+export async function removeGroupMember(chatId, requesterUid, memberToRemoveUid) {
+  const snap = await getDoc(chatDoc(chatId))
+  if (!snap.exists()) throw new Error('This group no longer exists.')
+  const data = snap.data()
+  if (!(data.admins || []).includes(requesterUid)) {
+    throw new Error('Only group admins can remove members.')
+  }
+  if (memberToRemoveUid === requesterUid) {
+    throw new Error('Use Leave Group to remove yourself.')
+  }
+  const nextParticipants = data.participants.filter((uid) => uid !== memberToRemoveUid)
+  const nextAdmins = (data.admins || []).filter((uid) => uid !== memberToRemoveUid)
+  await updateDoc(chatDoc(chatId), { participants: nextParticipants, admins: nextAdmins, updatedAt: serverTimestamp() })
+}
+
+/** Self-removal only — matches the rules' narrowly-scoped leave branch (participants must equal old list minus exactly the requester's own uid). */
+export async function leaveGroup(chatId, uid) {
+  const snap = await getDoc(chatDoc(chatId))
+  if (!snap.exists()) return
+  const data = snap.data()
+  const nextParticipants = data.participants.filter((id) => id !== uid)
+  await updateDoc(chatDoc(chatId), { participants: nextParticipants, updatedAt: serverTimestamp() })
+}
+
+/** Admin-only, per "creator/admin permissions must be enforced server-side" — the rules independently verify this too, this is the client-side check that fails fast with a clear message before the write attempt. */
+export async function updateGroupInfo(chatId, requesterUid, { groupName, groupAvatar }) {
+  const snap = await getDoc(chatDoc(chatId))
+  if (!snap.exists()) throw new Error('This group no longer exists.')
+  const data = snap.data()
+  if (!(data.admins || []).includes(requesterUid)) {
+    throw new Error('Only group admins can edit group info.')
+  }
+  const update = { updatedAt: serverTimestamp() }
+  if (groupName !== undefined) update.groupName = groupName.trim()
+  if (groupAvatar !== undefined) update.groupAvatar = groupAvatar
+  await updateDoc(chatDoc(chatId), update)
+}
+
+export async function promoteToGroupAdmin(chatId, requesterUid, targetUid) {
+  const snap = await getDoc(chatDoc(chatId))
+  if (!snap.exists()) throw new Error('This group no longer exists.')
+  const data = snap.data()
+  if (!(data.admins || []).includes(requesterUid)) throw new Error('Only group admins can promote members.')
+  if (!data.participants.includes(targetUid)) throw new Error('That person is not a member of this group.')
+  await updateDoc(chatDoc(chatId), { admins: Array.from(new Set([...(data.admins || []), targetUid])), updatedAt: serverTimestamp() })
 }

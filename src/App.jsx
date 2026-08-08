@@ -25,6 +25,7 @@ const CreatePostPage = lazy(() => import('./pages/CreatePostPage.jsx'))
 const PostDetailPage = lazy(() => import('./pages/PostDetailPage.jsx'))
 const MessagesPage = lazy(() => import('./pages/MessagesPage.jsx'))
 const RequestsPage = lazy(() => import('./pages/RequestsPage.jsx'))
+const GroupInfoPage = lazy(() => import('./messaging/GroupInfoPage.jsx'))
 const RadarPage = lazy(() => import('./pages/RadarPage.jsx'))
 const SavedLibraryPage = lazy(() => import('./saved/SavedLibraryPage.jsx'))
 const CollectionPage = lazy(() => import('./saved/CollectionPage.jsx'))
@@ -156,6 +157,14 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <RequestsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/messages/:chatId/info"
+          element={
+            <ProtectedRoute stage="home">
+              <GroupInfoPage />
             </ProtectedRoute>
           }
         />

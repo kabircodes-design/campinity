@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, MoreVertical, Users } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import ChatCard from '../components/ChatCard.jsx'
 import EmptyChat from '../components/EmptyChat.jsx'
 import Loader from '../auth/components/Loader.jsx'
+import CreateGroupFlow from '../messaging/CreateGroupFlow.jsx'
 import { auth } from '../firebase/firebase.js'
 import { subscribeToUserChats, subscribeToSentPendingChats, subscribeToMessageRequests } from '../firebase/chatService.js'
 import { getUserProfile } from '../firebase/profileService.js'
@@ -14,6 +15,8 @@ export default function MessagesPage() {
   const [chats, setChats] = useState([])
   const [sentPendingChats, setSentPendingChats] = useState([])
   const [incomingRequestCount, setIncomingRequestCount] = useState(0)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [createGroupOpen, setCreateGroupOpen] = useState(false)
   const [profiles, setProfiles] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -139,6 +142,32 @@ export default function MessagesPage() {
                 </span>
               )}
             </button>
+
+            <div className="relative flex-shrink-0">
+              <button
+                type="button"
+                aria-label="More options"
+                onClick={() => setMenuOpen((v) => !v)}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-11 w-44 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setCreateGroupOpen(true)
+                    }}
+                    className="w-full flex items-center gap-2.5 text-left px-3.5 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <Users className="w-4 h-4 text-gray-400" />
+                    Create Group
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -160,6 +189,7 @@ export default function MessagesPage() {
       </div>
 
       <BottomNav />
+      <CreateGroupFlow open={createGroupOpen} onClose={() => setCreateGroupOpen(false)} />
     </div>
   )
 }
