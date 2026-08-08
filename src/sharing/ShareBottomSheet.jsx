@@ -5,6 +5,7 @@ import { X, Search, Check, Link as LinkIcon, Send, RotateCcw, Users } from 'luci
 import Avatar from '../components/Avatar.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { useShareRecipients } from './useShareRecipients.js'
 import { shareContentToRecipients } from './shareService.js'
@@ -59,7 +60,7 @@ function normalizeItem(item) {
     uid,
     displayName: item.displayName || 'Student',
     username: item.username || null,
-    avatar: item.avatar || '',
+    avatar: getProfileIdentityImage(item) || item.avatar || '',
     memberCount: null
   }
 }

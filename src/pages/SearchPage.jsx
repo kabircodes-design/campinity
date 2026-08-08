@@ -5,30 +5,34 @@ import BottomNav from '../components/BottomNav.jsx'
 import StudentCard from '../components/StudentCard.jsx'
 import CollegeResultCard from '../components/CollegeResultCard.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
+import PostCard from '../components/PostCard.jsx'
 import SearchSkeleton from '../components/SearchSkeleton.jsx'
 import SearchEmptyState from '../components/SearchEmptyState.jsx'
 import { searchAll } from '../firebase/searchService.js'
 import { searchCommunitiesByName } from '../firebase/communityService.js'
+import { searchPostsByText } from '../firebase/postService.js'
+import { auth } from '../firebase/firebase.js'
 import { addRecentSearch, clearRecentSearches, getRecentSearches, removeRecentSearch } from '../utils/recentSearches.js'
 
 const tabs = [
   { label: 'All', key: 'all' },
   { label: 'Students', key: 'students' },
   { label: 'Colleges', key: 'colleges' },
-  { label: 'Communities', key: 'communities' }
+  { label: 'Communities', key: 'communities' },
+  { label: 'Posts', key: 'posts' }
 ]
 
 const DEBOUNCE_MS = 300
 
 /**
- * Extended to include communities alongside the existing students/
- * colleges search — this file previously had zero community
- * integration despite being reported as complete. searchAll() (from
- * searchService.js, which I don't have) is left completely untouched;
- * communities are fetched as a SEPARATE call
- * (searchCommunitiesByName, new in communityService.js) run in
- * parallel with it, not merged into searchAll's own result shape,
- * since I can't safely modify a service file I've never seen.
+ * Extended across two passes now. Communities were added first
+ * (searchCommunitiesByName, run in parallel with the untouched
+ * searchAll()). This pass adds Posts — searchPostsByText, new in
+ * postService.js, using a real Firestore prefix-range query on a
+ * textLower field written at post-creation time (added this pass).
+ * Posts created before textLower existed are not searchable — a
+ * real, stated limitation, not a bug being silently introduced.
+ * searchAll() itself remains completely untouched throughout.
  */
 export default function SearchPage() {
   const navigate = useNavigate()
@@ -42,6 +46,7 @@ export default function SearchPage() {
   const [students, setStudents] = useState([])
   const [colleges, setColleges] = useState([])
   const [communities, setCommunities] = useState([])
+  const [posts, setPosts] = useState([])
   const [status, setStatus] = useState('idle') // 'idle' | 'loading' | 'success' | 'error'
 
   useEffect(() => {
@@ -57,6 +62,7 @@ export default function SearchPage() {
       setStudents([])
       setColleges([])
       setCommunities([])
+      setPosts([])
       return undefined
     }
 
@@ -65,14 +71,16 @@ export default function SearchPage() {
 
     const timer = window.setTimeout(async () => {
       try {
-        const [result, communityResults] = await Promise.all([
+        const [result, communityResults, postResults] = await Promise.all([
           searchAll(trimmed),
-          searchCommunitiesByName(trimmed).catch(() => [])
+          searchCommunitiesByName(trimmed).catch(() => []),
+          searchPostsByText(trimmed, auth.currentUser?.uid).catch(() => [])
         ])
         if (requestIdRef.current !== requestId) return // a newer keystroke superseded this search
         setStudents(result.students)
         setColleges(result.colleges)
         setCommunities(communityResults)
+        setPosts(postResults)
         setStatus('success')
       } catch {
         if (requestIdRef.current !== requestId) return
@@ -84,11 +92,12 @@ export default function SearchPage() {
   }, [query])
 
   const isSearching = query.trim().length > 0
-  const hasResults = students.length > 0 || colleges.length > 0 || communities.length > 0
+  const hasResults = students.length > 0 || colleges.length > 0 || communities.length > 0 || posts.length > 0
 
   const showStudents = activeTab === 'all' || activeTab === 'students'
   const showColleges = activeTab === 'all' || activeTab === 'colleges'
   const showCommunities = activeTab === 'all' || activeTab === 'communities'
+  const showPosts = activeTab === 'all' || activeTab === 'posts'
 
   const runSearch = (value) => {
     setQuery(value)
@@ -109,12 +118,17 @@ export default function SearchPage() {
     setStatus('loading')
     requestIdRef.current += 1
     const requestId = requestIdRef.current
-    Promise.all([searchAll(query.trim()), searchCommunitiesByName(query.trim()).catch(() => [])])
-      .then(([result, communityResults]) => {
+    Promise.all([
+      searchAll(query.trim()),
+      searchCommunitiesByName(query.trim()).catch(() => []),
+      searchPostsByText(query.trim(), auth.currentUser?.uid).catch(() => [])
+    ])
+      .then(([result, communityResults, postResults]) => {
         if (requestIdRef.current !== requestId) return
         setStudents(result.students)
         setColleges(result.colleges)
         setCommunities(communityResults)
+        setPosts(postResults)
         setStatus('success')
       })
       .catch(() => {
@@ -151,7 +165,7 @@ export default function SearchPage() {
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') commitSearch()
                 }}
-                placeholder="Search students, colleges or communities"
+                placeholder="Search students, communities, posts..."
                 className="w-full rounded-full border border-gray-200 bg-gray-50 pl-4 pr-9 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
               />
               {query && (
@@ -297,6 +311,19 @@ export default function SearchPage() {
                       <CommunityCard key={community.id} community={community} />
                     ))}
                   </div>
+                </section>
+              )}
+
+              {showPosts && posts.length > 0 && (
+                <section>
+                  {activeTab === 'all' && (
+                    <p className="px-4 pt-3 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Posts
+                    </p>
+                  )}
+                  {posts.map((post) => (
+                    <PostCard key={post.id} post={post} />
+                  ))}
                 </section>
               )}
             </div>

@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import Avatar from '../components/Avatar.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { matchTier } from './radarService.js'
 
 const TIER_RING_COLOR = {
@@ -111,7 +112,7 @@ const positioned = useMemo(() => {
               initials={getInitials(match.displayName)}
               colorClass={getAvatarColor(match.uid)}
               size="sm"
-              src={match.avatar || undefined}
+              src={getProfileIdentityImage(match) || undefined}
             />
           </div>
         </motion.button>

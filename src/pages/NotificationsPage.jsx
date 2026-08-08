@@ -7,6 +7,7 @@ import EmptyNotifications from '../components/EmptyNotifications.jsx'
 import NotificationBadge from '../components/NotificationBadge.jsx'
 import NotificationSkeleton from '../components/NotificationSkeleton.jsx'
 import { auth } from '../firebase/firebase.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import {
   deleteNotification,
   getNotifications,
@@ -77,7 +78,7 @@ export default function NotificationsPage() {
           (notification, profile) => ({
             ...notification,
             actorName: profile.displayName,
-            actorAvatar: profile.avatar,
+            actorAvatar: getProfileIdentityImage(profile) || '',
             actorUsername: profile.username,
             actorVerified: profile.verified
           })

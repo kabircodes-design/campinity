@@ -25,8 +25,9 @@ import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { formatTimeAgo, getPostById } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
+import { getCommunityById } from '../firebase/communityService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { addComment, getComments, likePost, unlikePost, deletePost } from '../firebase/engagementService.js'
+import { addComment, getComments, likePost, unlikePost, deletePost, editPost } from '../firebase/engagementService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
 
 /**
@@ -74,6 +75,11 @@ export default function PostDetailPage() {
   const navigate = useNavigate()
 
   const [post, setPost] = useState(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editText, setEditText] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [canModerate, setCanModerate] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -93,6 +99,21 @@ export default function PostDetailPage() {
   const [commentsError, setCommentsError] = useState('')
 
   const isOwner = Boolean(post?.userId) && post.userId === auth.currentUser?.uid
+
+  const handleSaveEdit = async () => {
+    if (editSaving) return
+    setEditSaving(true)
+    setEditError('')
+    try {
+      await editPost(postId, auth.currentUser?.uid, { text: editText })
+      setPost((prev) => ({ ...prev, text: editText.trim(), edited: true }))
+      setIsEditing(false)
+    } catch (err) {
+      setEditError(err?.message || 'Could not save your changes. Please try again.')
+    } finally {
+      setEditSaving(false)
+    }
+  }
 
   const handleDeletePost = async () => {
     if (deleting) return
@@ -126,6 +147,20 @@ export default function PostDetailPage() {
           setPost(data)
           setLiked(data.likedByMe)
           setLikeCount(data.likes)
+
+          if (data.communityId && uid) {
+            try {
+              const community = await getCommunityById(data.communityId)
+              if (!cancelled && community) {
+                setCanModerate(community.ownerId === uid || (community.admins || []).includes(uid))
+              }
+            } catch {
+              // Community fetch failing shouldn't block viewing the
+              // post itself — canModerate simply stays false, which
+              // is the safe default (no extra delete capability
+              // shown), not a crash.
+            }
+          }
         }
       } catch {
         if (!cancelled) {
@@ -325,6 +360,18 @@ export default function PostDetailPage() {
                           type="button"
                           onClick={() => {
                             setMenuOpen(false)
+                            setEditText(post.text || '')
+                            setEditError('')
+                            setIsEditing(true)
+                          }}
+                          className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                        >
+                          Edit post
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false)
                             setConfirmingDelete(true)
                           }}
                           className="w-full text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-all duration-150"
@@ -348,8 +395,45 @@ export default function PostDetailPage() {
             </div>
           </div>
 
-          {post.text && (
-            <p className="px-4 mt-3 text-[15px] text-gray-700 leading-relaxed whitespace-pre-wrap">{post.text}</p>
+          {isEditing ? (
+            <div className="px-4 mt-3">
+              <textarea
+                value={editText}
+                onChange={(event) => setEditText(event.target.value)}
+                rows={4}
+                autoFocus
+                className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-[15px] text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+              />
+              {editError && <p className="mt-1.5 text-xs text-red-500">{editError}</p>}
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(false)
+                    setEditError('')
+                  }}
+                  disabled={editSaving}
+                  className="rounded-full border border-gray-200 text-gray-700 text-xs font-semibold px-4 py-1.5 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={editSaving || !editText.trim()}
+                  className="rounded-full bg-blue-600 text-white text-xs font-semibold px-4 py-1.5 disabled:opacity-50"
+                >
+                  {editSaving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            post.text && (
+              <p className="px-4 mt-3 text-[15px] text-gray-700 leading-relaxed whitespace-pre-wrap">
+                {post.text}
+                {post.edited && <span className="ml-1.5 text-xs text-gray-400 font-normal">· Edited</span>}
+              </p>
+            )
           )}
 
           {post.imagePreviewUrl && (
@@ -488,6 +572,7 @@ export default function PostDetailPage() {
                     postOwnerUid={post.userId}
                     currentUid={auth.currentUser?.uid}
                     currentUser={currentUser}
+                    canModerate={canModerate}
                     onDeleted={(id) => setComments((prev) => prev.filter((c) => c.id !== id))}
                   />
                 ))}

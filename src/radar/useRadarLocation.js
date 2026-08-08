@@ -32,6 +32,7 @@ export function useRadarLocation(uid, enabled) {
   const [status, setStatus] = useState('idle') // 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported' | 'error'
   const [currentPosition, setCurrentPosition] = useState(null) // { lat, lng, accuracy, capturedAt }
   const [error, setError] = useState('')
+  const [retryToken, setRetryToken] = useState(0)
 
   const lastWriteRef = useRef(null)
   const watchIdRef = useRef(null)
@@ -93,7 +94,7 @@ export function useRadarLocation(uid, enabled) {
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current)
     }
-  }, [enabled, uid])
+  }, [enabled, uid, retryToken])
 
   // Disabling Radar removes the location document entirely, per "a
   // user who disables Radar should not appear to others" — not just
@@ -103,5 +104,7 @@ export function useRadarLocation(uid, enabled) {
     disableRadarVisibility(uid).catch(() => {})
   }, [enabled, uid])
 
-  return { status, currentPosition, error }
+  const retry = () => setRetryToken((t) => t + 1)
+
+  return { status, currentPosition, error, retry }
 }

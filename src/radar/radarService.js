@@ -79,6 +79,8 @@ async function computeCompatibility(currentProfile, currentUid, candidateUid, cu
     displayName: data.displayName ?? '',
     username: data.username ?? '',
     avatar: data.avatar ?? '',
+    campusAvatarUrl: data.campusAvatarUrl ?? '',
+    avatarMode: data.avatarMode ?? 'photo',
     course: data.course ?? '',
     year: data.year ?? '',
     interests: candidateInterests,

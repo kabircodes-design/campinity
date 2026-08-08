@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { subscribeToUserChats } from '../firebase/chatService.js'
 import { searchUsersForShare, getUserProfile } from '../firebase/profileService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 /**
  * Recent chats load instantly and stay visible above search results
@@ -70,7 +71,7 @@ export function useShareRecipients(currentUid) {
   const enrichedRecentChats = recentChats.map((chat) => {
     const profile = profiles[chat.otherUid]
     return profile
-      ? { ...chat, displayName: profile.displayName, username: profile.username, avatar: profile.avatar }
+      ? { ...chat, displayName: profile.displayName, username: profile.username, avatar: getProfileIdentityImage(profile) || '' }
       : chat
   })
 

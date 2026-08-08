@@ -13,7 +13,7 @@ const REFRESH_INTERVAL_MS = 15000 // matches radarLocationService.js's own write
  * immediately whenever a first position becomes available.
  */
 export function useRadarPresence(uid, currentProfile, enabled) {
-  const { status, currentPosition, error: locationError } = useRadarLocation(uid, enabled)
+  const { status, currentPosition, error: locationError, retry: retryLocation } = useRadarLocation(uid, enabled)
 
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
@@ -56,6 +56,8 @@ export function useRadarPresence(uid, currentProfile, enabled) {
     locationError,
     matches,
     loading: enabled && loading,
-    matchesError
+    matchesError,
+    retryLocation,
+    retryMatches: refresh
   }
 }

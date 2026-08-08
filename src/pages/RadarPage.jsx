@@ -32,7 +32,7 @@ export default function RadarPage() {
   const [selectedMatch, setSelectedMatch] = useState(null)
   const [activeFilters, setActiveFilters] = useState([])
 
-  const { status, currentPosition, locationError, matches, loading, matchesError } = useRadarPresence(
+  const { status, currentPosition, locationError, matches, loading, matchesError, retryLocation, retryMatches } = useRadarPresence(
     currentUid,
     myProfile,
     radarEnabled
@@ -79,11 +79,20 @@ export default function RadarPage() {
         </header>
 
         {status === 'denied' && (
-          <div className="mx-4 mt-3 flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-3">
-            <MapPin className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-            <p className="text-[12.5px] text-amber-800">
-              Location access was denied. Enable it in your browser settings to see who's nearby.
-            </p>
+          <div className="mx-4 mt-3 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-3">
+            <div className="flex items-start gap-2.5">
+              <MapPin className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-[12.5px] text-amber-800">
+                Location access was denied. Enable it in your browser settings to see who's nearby.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={retryLocation}
+              className="mt-2 ml-6 text-xs font-semibold text-amber-800 underline underline-offset-2"
+            >
+              Try Again
+            </button>
           </div>
         )}
         {status === 'unsupported' && (
@@ -94,6 +103,13 @@ export default function RadarPage() {
         {status === 'error' && locationError && (
           <div className="mx-4 mt-3 rounded-xl bg-red-50 border border-red-200 px-3.5 py-3">
             <p className="text-[12.5px] text-red-600">{locationError}</p>
+            <button
+              type="button"
+              onClick={retryLocation}
+              className="mt-2 text-xs font-semibold text-red-700 underline underline-offset-2"
+            >
+              Try Again
+            </button>
           </div>
         )}
         {accuracyMessage && accuracyTier !== 'good' && status === 'granted' && (
@@ -143,11 +159,22 @@ export default function RadarPage() {
           {!radarEnabled ? (
             <p className="text-center text-sm text-gray-400 py-8">Radar is hidden — you're not visible to others either.</p>
           ) : status === 'requesting' || status === 'idle' ? (
-            <p className="text-center text-sm text-gray-400 py-8">Requesting location access...</p>
+            <div className="flex flex-col items-center py-8 gap-2">
+              <div className="w-5 h-5 border-2 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
+              <p className="text-sm text-gray-400">Requesting location access...</p>
+            </div>
           ) : loading ? (
-            <p className="text-center text-sm text-gray-400 py-8">Scanning your campus...</p>
+            <div className="flex flex-col items-center py-8 gap-2">
+              <div className="w-5 h-5 border-2 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
+              <p className="text-sm text-gray-400">Scanning your campus...</p>
+            </div>
           ) : matchesError ? (
-            <p className="text-center text-sm text-gray-400 py-8">{matchesError}</p>
+            <div className="py-8 text-center">
+              <p className="text-sm text-gray-400">{matchesError}</p>
+              <button type="button" onClick={retryMatches} className="mt-2 text-xs font-semibold text-blue-600 underline underline-offset-2">
+                Try Again
+              </button>
+            </div>
           ) : effectiveMatches.length === 0 && (accuracyTier === 'poor' || accuracyTier === 'very_poor') ? (
             <div className="py-10 text-center">
               <p className="text-sm font-semibold text-gray-900">Can't confirm nearby people right now.</p>

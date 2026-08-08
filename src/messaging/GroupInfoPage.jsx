@@ -5,6 +5,7 @@ import Avatar from '../components/Avatar.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile, searchUsersForShare } from '../firebase/profileService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getChat, addGroupMembers, removeGroupMember, leaveGroup } from '../firebase/chatService.js'
 
 /**
@@ -158,7 +159,7 @@ export default function GroupInfoPage() {
                 onClick={() => handleAddMember(user)}
                 className="w-full flex items-center gap-3 px-2 py-2 mt-1 rounded-xl hover:bg-gray-50"
               >
-                <Avatar initials={getInitials(user.displayName)} colorClass={getAvatarColor(user.uid)} size="sm" src={user.avatar || undefined} />
+                <Avatar initials={getInitials(user.displayName)} colorClass={getAvatarColor(user.uid)} size="sm" src={getProfileIdentityImage(user) || undefined} />
                 <span className="text-sm font-medium text-gray-800">{user.displayName}</span>
               </button>
             ))}
@@ -176,7 +177,7 @@ export default function GroupInfoPage() {
                   initials={getInitials(profile?.displayName || 'Student')}
                   colorClass={getAvatarColor(memberUid)}
                   size="sm"
-                  src={profile?.avatar || undefined}
+                  src={getProfileIdentityImage(profile) || undefined}
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">

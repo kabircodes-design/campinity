@@ -1,36 +1,33 @@
 import { useNavigate } from 'react-router-dom'
-import { BadgeCheck, GraduationCap, MapPin } from 'lucide-react'
+import { GraduationCap } from 'lucide-react'
 
+/**
+ * Renders a college search result. Exact object shape from searchAll()
+ * (searchService.js) is unverified — dummyColleges.js, which would
+ * confirm the canonical college shape, is also absent from this project
+ * (a separate, unrelated finding — noted, not fixed here). Built
+ * defensively: only { id, name, location/city } are read, all with
+ * fallbacks, so this renders safely regardless of which optional fields
+ * are actually present.
+ */
 export default function CollegeResultCard({ college }) {
   const navigate = useNavigate()
+  const name = college.name || 'College'
+  const location = college.location || college.city || ''
 
   return (
     <button
       type="button"
       onClick={() => navigate(`/college/${college.id}`)}
-      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-all duration-300 text-left"
+      className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-all duration-200"
     >
-      {college.logo ? (
-        <img
-          src={college.logo}
-          alt=""
-          className="w-11 h-11 rounded-xl object-cover flex-shrink-0 border border-gray-100"
-        />
-      ) : (
-        <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-          <GraduationCap className="w-5 h-5 text-blue-600" strokeWidth={1.8} />
-        </div>
-      )}
-
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900 truncate">{college.name}</p>
-        <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-400 truncate">
-          <MapPin className="w-3 h-3 flex-shrink-0" />
-          {college.city}, {college.state}
-        </p>
+      <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+        <GraduationCap className="w-4.5 h-4.5 text-blue-500" />
       </div>
-
-      {college.verified && <BadgeCheck className="w-4 h-4 text-blue-600 flex-shrink-0" />}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
+        {location && <p className="text-[11px] text-gray-400 truncate">{location}</p>}
+      </div>
     </button>
   )
 }

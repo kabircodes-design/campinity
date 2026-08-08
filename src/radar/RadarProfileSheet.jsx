@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { X, MessageCircle, Users, Sparkles } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { auth } from '../firebase/firebase.js'
 import { getOrCreateChat } from '../firebase/chatService.js'
 import { matchTier } from './radarService.js'
@@ -49,7 +50,7 @@ export default function RadarProfileSheet({ match, onClose }) {
         </div>
 
         <div className="px-6 pb-6 text-center">
-          <Avatar initials={getInitials(match.displayName)} colorClass={getAvatarColor(match.uid)} size="xl" src={match.avatar || undefined} />
+          <Avatar initials={getInitials(match.displayName)} colorClass={getAvatarColor(match.uid)} size="xl" src={getProfileIdentityImage(match) || undefined} />
           <p className="mt-3 text-lg font-bold text-gray-900">{match.displayName}</p>
           {match.username && <p className="text-sm text-gray-400">@{match.username}</p>}
           <p className="mt-1 text-[13px] text-gray-500">{[match.course, match.year].filter(Boolean).join(' · ')}</p>

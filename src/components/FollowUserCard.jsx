@@ -4,6 +4,7 @@ import { BadgeCheck } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { auth } from '../firebase/firebase.js'
 import { followUser, unfollowUser } from '../firebase/profileService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 
 /**
@@ -54,7 +55,7 @@ export default function FollowUserCard({ user, mutualCount = 0 }) {
         initials={getInitials(user.displayName)}
         colorClass={getAvatarColor(user.uid)}
         size="md"
-        src={user.avatar || undefined}
+        src={getProfileIdentityImage(user) || undefined}
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">

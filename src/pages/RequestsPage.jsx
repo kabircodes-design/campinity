@@ -6,6 +6,7 @@ import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { subscribeToMessageRequests, acceptMessageRequest, deleteMessageRequest } from '../firebase/chatService.js'
 
 /**
@@ -120,7 +121,7 @@ export default function RequestsPage() {
                         initials={getInitials(displayName)}
                         colorClass={getAvatarColor(req.otherUid)}
                         size="md"
-                        src={profile?.avatar || undefined}
+                        src={getProfileIdentityImage(profile) || undefined}
                       />
                     </button>
 

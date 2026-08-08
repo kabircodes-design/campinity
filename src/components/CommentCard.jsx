@@ -49,7 +49,8 @@ export default function CommentCard({
   currentUid,
   currentUser,
   depth = 0,
-  onDeleted
+  onDeleted,
+  canModerate = false
 }) {
   const navigate = useNavigate()
 
@@ -260,15 +261,16 @@ export default function CommentCard({
                   </button>
                 )}
 
-                <div className="relative ml-auto">
-                  <button
-                    type="button"
-                    aria-label="Comment options"
-                    onClick={() => setShowMenu((v) => !v)}
-                    className="text-gray-300 hover:text-gray-500 transition-all duration-200"
-                  >
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
+                {(isOwnComment || isPostOwner || canModerate) && (
+                  <div className="relative ml-auto">
+                    <button
+                      type="button"
+                      aria-label="Comment options"
+                      onClick={() => setShowMenu((v) => !v)}
+                      className="text-gray-300 hover:text-gray-500 transition-all duration-200"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
 
                   {showMenu && (
                     <div className="absolute right-0 top-6 w-36 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30">
@@ -294,7 +296,7 @@ export default function CommentCard({
                           Edit
                         </button>
                       )}
-                      {isOwnComment && (
+                      {(isOwnComment || isPostOwner || canModerate) && (
                         <button
                           type="button"
                           onClick={() => {
@@ -308,7 +310,8 @@ export default function CommentCard({
                       )}
                     </div>
                   )}
-                </div>
+                  </div>
+                )}
               </div>
 
               {confirmingDelete && (

@@ -58,6 +58,7 @@ function mapPostDoc(docSnap, currentUid) {
 
   return {
     id: docSnap.id,
+    userId: data.userId,
     type: 'general',
     name: data.displayName || 'Student',
     username: data.username || '',
@@ -166,6 +167,15 @@ export async function uploadPostImage(uid, file) {
  * required schema — mapPostDoc() doesn't read them yet, so they don't
  * affect how the post renders today, but the data isn't silently lost.
  *
+ * `textLower` — added for Phase 3 post search. Firestore has no
+ * substring/full-text search; a lowercase prefix-indexed field is the
+ * same established pattern already used for users (displayNameLower)
+ * and communities. This is a PREFIX match only ("hello" matches a post
+ * starting with "hello world", not one containing "say hello there") —
+ * a real, stated limitation, not full-text search. Only written at
+ * creation time here; existing posts created before this change won't
+ * have it (handled gracefully in searchPostsByText below, not migrated).
+ *
  * Returns the new document's id.
  */
 export async function createPost({ uid, text, imageUrl, author, extra = {} }) {
@@ -175,6 +185,7 @@ export async function createPost({ uid, text, imageUrl, author, extra = {} }) {
     username: author.username || '',
     profilePhoto: author.profilePhoto || '',
     text: text || '',
+    textLower: (text || '').trim().toLowerCase(),
     image: imageUrl || null,
     visibility: 'public',
     likesCount: 0,
@@ -185,4 +196,33 @@ export async function createPost({ uid, text, imageUrl, author, extra = {} }) {
   }
   const docRef = await addDoc(collection(db, COLLECTION), payload)
   return docRef.id
+}
+
+/**
+ * Prefix search on post text — same query shape as searchCommunitiesByName
+ * in communityService.js, but implemented as a real Firestore prefix-range
+ * query (not client-side filtering) since textLower is written fresh at
+ * creation time going forward, making a proper indexed range query
+ * possible for any post created after this change.
+ *
+ * Posts created before textLower existed are invisible to this search —
+ * a real, honest gap (see the note on createPost above), not silently
+ * hidden. There is no safe way to backfill textLower onto every existing
+ * post from client code (would require iterating the entire collection
+ * and writing to documents this function has no legitimate reason to
+ * touch otherwise), so this is stated as a limitation, not solved here.
+ */
+export async function searchPostsByText(term, currentUid, { resultLimit = 20 } = {}) {
+  const normalized = term.trim().toLowerCase()
+  if (!normalized) return []
+
+  const postsQuery = query(
+    collection(db, COLLECTION),
+    where('visibility', '==', 'public'),
+    where('textLower', '>=', normalized),
+    where('textLower', '<=', normalized + '\uf8ff'),
+    limit(resultLimit)
+  )
+  const snap = await getDocs(postsQuery)
+  return snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
 }

@@ -24,7 +24,7 @@ import SaveBottomSheet from '../saved/SaveBottomSheet.jsx'
 import { subscribeToIsItemSaved } from '../saved/savedService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
 import { auth } from '../firebase/firebase.js'
-import { likePost, unlikePost, subscribeToPostShareCount, deletePost } from '../firebase/engagementService.js'
+import { likePost, unlikePost, subscribeToPostShareCount, deletePost, editPost } from '../firebase/engagementService.js'
 
 /**
  * 'general' and 'study' were added for Feature 4B (Create Post) — every
@@ -41,7 +41,7 @@ const typeIcons = {
   lostfound: PackageSearch
 }
 
-export default function PostCard({ post, onDeleted = () => {} }) {
+export default function PostCard({ post, onDeleted = () => {}, canModerate = false }) {
   const navigate = useNavigate()
   const config = postTypeConfig[post.type]
   const TypeIcon = typeIcons[post.type]
@@ -64,6 +64,12 @@ export default function PostCard({ post, onDeleted = () => {} }) {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [isDeleted, setIsDeleted] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editText, setEditText] = useState(post.text || '')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [currentText, setCurrentText] = useState(post.text || '')
+  const [isEdited, setIsEdited] = useState(Boolean(post.edited))
 
   useEffect(() => {
     if (!isOwner) return undefined
@@ -76,6 +82,22 @@ export default function PostCard({ post, onDeleted = () => {} }) {
   const goToCommunity = (event) => {
     event.stopPropagation()
     navigate(`/community/${post.communityId}`)
+  }
+
+  const handleSaveEdit = async () => {
+    if (editSaving) return
+    setEditSaving(true)
+    setEditError('')
+    try {
+      await editPost(post.id, auth.currentUser?.uid, { text: editText })
+      setCurrentText(editText.trim())
+      setIsEdited(true)
+      setIsEditing(false)
+    } catch (err) {
+      setEditError(err?.message || 'Could not save your changes. Please try again.')
+    } finally {
+      setEditSaving(false)
+    }
   }
 
   const handleDeletePost = async () => {
@@ -153,7 +175,7 @@ export default function PostCard({ post, onDeleted = () => {} }) {
                 {post.year && ` · ${post.year}`} · {post.college}
               </p>
             </button>
-            {isOwner && (
+            {(isOwner || canModerate) && (
               <div className="relative flex-shrink-0">
                 <button
                   type="button"
@@ -165,6 +187,20 @@ export default function PostCard({ post, onDeleted = () => {} }) {
                 </button>
                 {menuOpen && (
                   <div className="absolute right-0 top-6 w-36 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30">
+                    {isOwner && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          setEditText(currentText)
+                          setEditError('')
+                          setIsEditing(true)
+                        }}
+                        className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                      >
+                        Edit post
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -193,9 +229,47 @@ export default function PostCard({ post, onDeleted = () => {} }) {
         </div>
       </div>
 
-      <button type="button" onClick={goToPost} className="block w-full text-left">
-        <p className="px-4 mt-3 text-[14.5px] text-gray-700 leading-relaxed">{post.text}</p>
-      </button>
+      {isEditing ? (
+        <div className="px-4 mt-3">
+          <textarea
+            value={editText}
+            onChange={(event) => setEditText(event.target.value)}
+            rows={3}
+            autoFocus
+            className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-[14.5px] text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+          />
+          {editError && <p className="mt-1.5 text-xs text-red-500">{editError}</p>}
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditing(false)
+                setEditText(currentText)
+                setEditError('')
+              }}
+              disabled={editSaving}
+              className="rounded-full border border-gray-200 text-gray-700 text-xs font-semibold px-4 py-1.5 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveEdit}
+              disabled={editSaving || !editText.trim()}
+              className="rounded-full bg-blue-600 text-white text-xs font-semibold px-4 py-1.5 disabled:opacity-50"
+            >
+              {editSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" onClick={goToPost} className="block w-full text-left">
+          <p className="px-4 mt-3 text-[14.5px] text-gray-700 leading-relaxed">
+            {currentText}
+            {isEdited && <span className="ml-1.5 text-xs text-gray-400 font-normal">· Edited</span>}
+          </p>
+        </button>
+      )}
 
       {post.type === 'notes' && post.file && (
         <button

@@ -3,6 +3,7 @@ import { Smile, X } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import EmojiPicker from './EmojiPicker.jsx'
 import { searchUsersForMention } from '../firebase/engagementService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 const MAX_LENGTH = 500
 
@@ -172,7 +173,7 @@ export default function CommentComposer({
           initials={(currentUser?.displayName || '?').slice(0, 1).toUpperCase()}
           colorClass="from-gray-300 to-gray-400"
           size="sm"
-          src={currentUser?.avatar}
+          src={getProfileIdentityImage(currentUser)}
         />
 
         <div className="flex-1 relative">
@@ -217,7 +218,7 @@ export default function CommentComposer({
                     initials={(user.displayName || '?').slice(0, 1).toUpperCase()}
                     colorClass="from-gray-300 to-gray-400"
                     size="sm"
-                    src={user.avatar}
+                    src={getProfileIdentityImage(user)}
                   />
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-gray-900 truncate">{user.displayName}</p>

@@ -1,15 +1,14 @@
 import { SearchX } from 'lucide-react'
 
+/** Shown when a search genuinely returns zero results across every category. */
 export default function SearchEmptyState({ query }) {
   return (
     <div className="px-6 py-16 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto text-gray-300">
-        <SearchX className="w-7 h-7" strokeWidth={1.7} />
+      <div className="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
+        <SearchX className="w-5 h-5 text-gray-400" />
       </div>
-      <p className="mt-4 text-sm font-semibold text-gray-900">No students or colleges found</p>
-      <p className="mt-1 text-sm text-gray-400">
-        {query ? `Nothing matched "${query}".` : 'Try a different name, username, course, or college.'}
-      </p>
+      <p className="mt-3 text-sm font-semibold text-gray-900">No results for "{query}"</p>
+      <p className="mt-1 text-sm text-gray-400">Try a different name, username, or keyword.</p>
     </div>
   )
 }

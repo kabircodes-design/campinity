@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BadgeCheck, Calendar, Link as LinkIcon, MessageCircle, Share2 } from 'lucide-react'
 import Avatar from './Avatar.jsx'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 /**
  * Complete redesign — built fresh since this is an explicit redesign
@@ -62,7 +63,7 @@ export default function ProfileHeader({
             initials={profile.initials}
             colorClass={profile.colorClass}
             size="xl"
-            src={profile.avatar || undefined}
+            src={getProfileIdentityImage(profile) || undefined}
           />
         </div>
 

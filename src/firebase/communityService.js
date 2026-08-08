@@ -297,8 +297,15 @@ export async function rejectRequest(communityId, uid) {
 }
 
 /** Owner/admin actions — role changes on the community's admins[] array. */
-export async function promoteToAdmin(communityId, targetUid) {
+export async function promoteToAdmin(communityId, requesterUid, targetUid) {
   await runTransaction(db, async (transaction) => {
+    const communitySnap = await transaction.get(communityDocRef(communityId))
+    if (!communitySnap.exists()) throw new Error('Community not found.')
+    const community = communitySnap.data()
+    if (community.ownerId !== requesterUid && !(community.admins || []).includes(requesterUid)) {
+      throw new Error('Only the owner or an admin can promote members.')
+    }
+
     const memberRef = memberDocRef(communityId, targetUid)
     const memberSnap = await transaction.get(memberRef)
     if (!memberSnap.exists()) throw new Error('That person is not a member of this community.')
@@ -308,8 +315,15 @@ export async function promoteToAdmin(communityId, targetUid) {
   })
 }
 
-export async function removeAdmin(communityId, targetUid) {
+export async function removeAdmin(communityId, requesterUid, targetUid) {
   await runTransaction(db, async (transaction) => {
+    const communitySnap = await transaction.get(communityDocRef(communityId))
+    if (!communitySnap.exists()) throw new Error('Community not found.')
+    const community = communitySnap.data()
+    if (community.ownerId !== requesterUid) {
+      throw new Error('Only the owner can remove an admin.')
+    }
+
     const memberRef = memberDocRef(communityId, targetUid)
     const memberSnap = await transaction.get(memberRef)
     if (!memberSnap.exists()) throw new Error('That person is not a member of this community.')

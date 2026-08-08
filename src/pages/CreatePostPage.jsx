@@ -5,6 +5,7 @@ import Avatar from '../components/Avatar.jsx'
 import Switch from '../components/Switch.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { createPost, getAvatarColor, getInitials, uploadPostImage } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
 import { awardXP, getUserProgress } from '../gamification/xpService.js'
@@ -254,7 +255,7 @@ export default function CreatePostPage() {
               initials={isAnonymous ? '?' : initials}
               colorClass={isAnonymous ? 'from-gray-400 to-gray-500' : getAvatarColor(auth.currentUser?.uid || displayName)}
               size="md"
-              src={isAnonymous ? undefined : profile?.avatar || undefined}
+              src={isAnonymous ? undefined : getProfileIdentityImage(profile) || undefined}
             />
             <div className="flex-1">
               <p className="text-sm font-semibold text-gray-900">{isAnonymous ? 'Anonymous' : displayName}</p>

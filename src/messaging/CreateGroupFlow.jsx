@@ -7,6 +7,7 @@ import Avatar from '../components/Avatar.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { searchUsersForShare } from '../firebase/profileService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { createGroupChat } from '../firebase/chatService.js'
 
 const MIN_MEMBERS = 2 // + creator = 3 total, matching chatService.js's MIN_GROUP_MEMBERS
@@ -141,7 +142,7 @@ export default function CreateGroupFlow({ open, onClose }) {
                   key={m.uid}
                   className="flex-shrink-0 flex items-center gap-1.5 rounded-full bg-blue-50 text-blue-700 pl-1.5 pr-2.5 py-1 text-xs font-medium"
                 >
-                  <Avatar initials={getInitials(m.displayName)} colorClass={getAvatarColor(m.uid)} size="sm" src={m.avatar || undefined} />
+                  <Avatar initials={getInitials(m.displayName)} colorClass={getAvatarColor(m.uid)} size="sm" src={getProfileIdentityImage(m) || undefined} />
                   {m.displayName}
                   <button type="button" onClick={() => toggleMember(m)} aria-label={`Remove ${m.displayName}`}>
                     <X className="w-3 h-3" />
@@ -173,7 +174,7 @@ export default function CreateGroupFlow({ open, onClose }) {
                     className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-gray-50 transition-all duration-200"
                   >
                     <div className="relative">
-                      <Avatar initials={getInitials(user.displayName)} colorClass={getAvatarColor(user.uid)} size="md" src={user.avatar || undefined} />
+                      <Avatar initials={getInitials(user.displayName)} colorClass={getAvatarColor(user.uid)} size="md" src={getProfileIdentityImage(user) || undefined} />
                       {isSelected && (
                         <span className="absolute -bottom-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center">
                           <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />

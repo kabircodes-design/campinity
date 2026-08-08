@@ -8,6 +8,7 @@ import BottomNav from '../components/BottomNav.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getFeedPosts, getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getFeedStories } from '../firebase/storyService.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
@@ -319,7 +320,7 @@ export default function HomePage() {
               initials={initials}
               colorClass={myColorClass}
               size="md"
-              src={profile?.avatar || undefined}
+              src={getProfileIdentityImage(profile) || undefined}
             />
             <div>
               <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">

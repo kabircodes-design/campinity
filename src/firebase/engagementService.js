@@ -579,12 +579,50 @@ export function subscribeToPostShareCount(postId, callback) {
    genuinely reachable from here.
    ============================================================ */
 
+/**
+ * Author-only, deliberately — per "do not silently give admins the
+ * ability to rewrite another user's words unless the existing
+ * product design explicitly supports that." No such explicit support
+ * exists anywhere in this codebase (confirmed: editComment is
+ * author-only too), so community admins moderate posts via delete
+ * only, never edit. userId/createdAt are never part of the update
+ * payload, so authorship and creation time can't drift even though
+ * this function doesn't need to explicitly re-assert them.
+ */
+export async function editPost(postId, uid, updates) {
+  if (!uid) throw new Error('You need to be signed in.')
+  const snap = await getDoc(postDoc(postId))
+  if (!snap.exists()) throw new Error('This post no longer exists.')
+  if (snap.data().userId !== uid) throw new Error('You can only edit your own posts.')
+
+  const text = updates?.text?.trim()
+  if (!text) throw new Error('Post cannot be empty.')
+
+  await updateDoc(postDoc(postId), {
+    text,
+    edited: true,
+    editedAt: serverTimestamp()
+  })
+}
+
 export async function deletePost(postId, uid) {
   if (!uid) throw new Error('You need to be signed in.')
 
   const postSnap = await getDoc(postDoc(postId))
   if (!postSnap.exists()) return // already gone — treat as success, not an error
-  if (postSnap.data().userId !== uid) {
+  const postData = postSnap.data()
+
+  let isAuthorized = postData.userId === uid
+
+  if (!isAuthorized && postData.communityId) {
+    const communitySnap = await getDoc(doc(db, 'communities', postData.communityId))
+    if (communitySnap.exists()) {
+      const communityData = communitySnap.data()
+      isAuthorized = communityData.ownerId === uid || (communityData.admins || []).includes(uid)
+    }
+  }
+
+  if (!isAuthorized) {
     throw new Error('You can only delete your own posts.')
   }
 
