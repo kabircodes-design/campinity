@@ -34,10 +34,67 @@ export default function CampusAvatarFlow({ open, onClose, onSaved }) {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const fileInputRef = useRef(null)
+  const playbackCheckTimerRef = useRef(null)
 
   const stopCamera = () => {
+    if (playbackCheckTimerRef.current) {
+      clearTimeout(playbackCheckTimerRef.current)
+      playbackCheckTimerRef.current = null
+    }
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
+  }
+
+  /**
+   * Attaches the current stream to whatever video element exists RIGHT
+   * NOW, and verifies playback actually started — called from two
+   * places: the callback ref (when the element mounts) and after
+   * getUserMedia resolves (when the stream becomes available). Either
+   * one might happen first depending on render timing, so both call
+   * this same function rather than duplicating the attach logic.
+   */
+  const attachStreamToVideo = (videoEl) => {
+    const stream = streamRef.current
+    if (!videoEl || !stream) return
+
+    if (videoEl.srcObject !== stream) {
+      videoEl.srcObject = stream
+    }
+
+    // Explicit .play() rather than relying solely on the autoPlay
+    // attribute — belt and suspenders for browsers/situations where
+    // autoplay is blocked even for a muted stream. play() can reject
+    // (e.g. AbortError if the stream changes mid-call), which is not
+    // itself fatal — the readyState check below is the real signal.
+    videoEl.play().catch(() => {})
+
+    // Defensive check requested explicitly: if getUserMedia resolved
+    // and srcObject was assigned, but the video never actually starts
+    // producing frames (readyState/videoWidth stay at zero), surface
+    // a clear error instead of leaving a silently black preview.
+    if (playbackCheckTimerRef.current) clearTimeout(playbackCheckTimerRef.current)
+    playbackCheckTimerRef.current = setTimeout(() => {
+      if (!videoRef.current) return
+      const hasVideoTrack = streamRef.current?.getVideoTracks().length > 0
+      const isActuallyPlaying = videoRef.current.readyState >= 2 && videoRef.current.videoWidth > 0
+      if (!hasVideoTrack || !isActuallyPlaying) {
+        setCameraStatus('playback_failed')
+      }
+    }, 2500)
+  }
+
+  // Callback ref — fires exactly when React attaches/detaches the
+  // <video> DOM node, independent of any other state. This is the
+  // actual fix: the previous version read videoRef.current inside
+  // startCamera() at a moment when the element was conditionally
+  // unrendered (cameraStatus was still 'requesting', not yet
+  // 'granted'), so the assignment silently targeted null and the
+  // stream was never attached to the element that mounted a moment
+  // later. A callback ref cannot miss the mount the way a
+  // read-a-ref-inside-an-async-function pattern can.
+  const videoCallbackRef = (node) => {
+    videoRef.current = node
+    if (node) attachStreamToVideo(node)
   }
 
   const startCamera = async () => {
@@ -49,8 +106,12 @@ export default function CampusAvatarFlow({ open, onClose, onSaved }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
       streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
       setCameraStatus('granted')
+      // The <video> element renders in response to the status change
+      // above, but this call also handles the case where it already
+      // exists (e.g. a retry from the playback_failed state, where the
+      // element from the prior attempt may still be mounted).
+      attachStreamToVideo(videoRef.current)
     } catch (err) {
       setCameraStatus(err?.name === 'NotAllowedError' ? 'denied' : 'error')
     }
@@ -191,7 +252,7 @@ export default function CampusAvatarFlow({ open, onClose, onSaved }) {
               {cameraStatus === 'granted' && (
                 <>
                   <div className="relative rounded-2xl overflow-hidden bg-black aspect-square">
-                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover -scale-x-100" />
+                    <video ref={videoCallbackRef} autoPlay playsInline muted className="w-full h-full object-cover -scale-x-100" />
                     <div className="absolute inset-6 rounded-full border-2 border-white/70 pointer-events-none" />
                   </div>
                   <p className="mt-3 text-center text-xs text-gray-400">Center your face · Good lighting works best</p>
@@ -215,6 +276,16 @@ export default function CampusAvatarFlow({ open, onClose, onSaved }) {
                 <div className="text-center">
                   <p className="text-sm font-semibold text-gray-900">Camera unavailable on this device.</p>
                   <button type="button" onClick={() => fileInputRef.current?.click()} className="mt-4 w-full flex items-center justify-center gap-1.5 rounded-full bg-blue-600 text-white text-sm font-semibold py-2.5">
+                    <Upload className="w-4 h-4" /> Upload a Selfie Instead
+                  </button>
+                </div>
+              )}
+              {cameraStatus === 'playback_failed' && (
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-gray-900">Camera connected, but the preview didn't start.</p>
+                  <p className="mt-1 text-xs text-gray-400">This can happen on some devices/browsers. Try again, or upload a selfie instead.</p>
+                  <button type="button" onClick={startCamera} className="mt-4 w-full rounded-full border border-gray-200 text-gray-700 text-sm font-semibold py-2.5">Try Again</button>
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="mt-2 w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-blue-600 py-2.5">
                     <Upload className="w-4 h-4" /> Upload a Selfie Instead
                   </button>
                 </div>
