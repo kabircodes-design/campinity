@@ -141,7 +141,7 @@ export default function PostCard({ post, onDeleted = () => {} }) {
 
       <div className={`flex items-start gap-3 px-4 ${post.communityId ? 'pt-2' : 'pt-4'}`}>
         <button type="button" onClick={goToProfile} aria-label={`Open ${post.name}'s profile`}>
-          <Avatar initials={post.initials} colorClass={post.avatarColor} size="md" />
+          <Avatar initials={post.initials} colorClass={post.avatarColor} size="md" src={post.avatarUrl || undefined} />
         </button>
 
         <div className="flex-1 min-w-0">

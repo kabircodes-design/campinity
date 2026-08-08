@@ -67,6 +67,9 @@ export async function getUserProfile(uid) {
     year: data.year ?? '',
     division: data.division ?? '',
     avatar: data.avatar ?? data.photoURL ?? '',
+    campusAvatarUrl: data.campusAvatarUrl ?? '',
+    avatarMode: data.avatarMode ?? 'photo',
+    campusAvatarUpdatedAt: data.campusAvatarUpdatedAt ?? null,
     coverPhoto: data.coverPhoto ?? '',
     website: data.website ?? '',
     verifiedCampus: data.verifiedCampus ?? false,
@@ -96,6 +99,8 @@ export async function createUserProfile(uid, data = {}) {
       yearLower: (data.year ?? '').trim().toLowerCase(),
       division: data.division ?? '',
       avatar: data.avatar ?? '',
+      campusAvatarUrl: data.campusAvatarUrl ?? '',
+      avatarMode: data.avatarMode ?? 'photo',
       coverPhoto: data.coverPhoto ?? '',
       website: data.website ?? '',
       verifiedCampus: data.verifiedCampus ?? false,
@@ -183,7 +188,9 @@ export async function searchUsersForShare(rawTerm, excludeUid, { pageSize = 10 }
       uid: d.id,
       displayName: data.displayName ?? data.fullName ?? '',
       username: data.username ?? '',
-      avatar: data.avatar ?? data.photoURL ?? ''
+      avatar: data.avatar ?? data.photoURL ?? '',
+      campusAvatarUrl: data.campusAvatarUrl ?? '',
+      avatarMode: data.avatarMode ?? 'photo'
     })
   })
 
@@ -261,6 +268,8 @@ export async function getNearbyStudents(collegeId, excludeUid, { pageSize = 20 }
         displayName: data.displayName ?? data.fullName ?? '',
         username: data.username ?? '',
         avatar: data.avatar ?? data.photoURL ?? '',
+        campusAvatarUrl: data.campusAvatarUrl ?? '',
+        avatarMode: data.avatarMode ?? 'photo',
         course: data.course ?? '',
         year: data.year ?? '',
         verifiedCampus: data.verifiedCampus ?? false
@@ -302,6 +311,8 @@ export async function getPeopleYouMayKnow(currentUid, { course = '', year = '', 
         displayName: data.displayName ?? data.fullName ?? '',
         username: data.username ?? '',
         avatar: data.avatar ?? data.photoURL ?? '',
+        campusAvatarUrl: data.campusAvatarUrl ?? '',
+        avatarMode: data.avatarMode ?? 'photo',
         course: data.course ?? '',
         year: data.year ?? ''
       })

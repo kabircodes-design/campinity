@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Camera, X } from 'lucide-react'
+import { ArrowLeft, Camera, X, Sparkles, RefreshCw, Trash2 } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import CollegeSearch from '../components/CollegeSearch.jsx'
 import Loader from '../auth/components/Loader.jsx'
+import CampusAvatarFlow from '../avatar/CampusAvatarFlow.jsx'
+import { deleteCampusAvatarFile } from '../avatar/avatarStorage.js'
 import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
@@ -91,6 +93,12 @@ export default function EditProfilePage() {
   const [loadError, setLoadError] = useState('')
 
   const [photoPreview, setPhotoPreview] = useState('')
+  const [campusAvatarUrl, setCampusAvatarUrl] = useState('')
+  const [avatarMode, setAvatarMode] = useState('photo')
+  const [avatarFlowOpen, setAvatarFlowOpen] = useState(false)
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
+  const [removingAvatar, setRemovingAvatar] = useState(false)
+  const [avatarActionError, setAvatarActionError] = useState('')
   const [name, setName] = useState('')
   const [username, setUsername] = useState('')
   const [originalUsername, setOriginalUsername] = useState('')
@@ -129,6 +137,8 @@ export default function EditProfilePage() {
           setYear(profile.year || years[0])
           setSkills(profile.skills || [])
           setInterests(profile.interests || [])
+          setCampusAvatarUrl(profile.campusAvatarUrl || '')
+          setAvatarMode(profile.avatarMode || 'photo')
         }
       } catch (err) {
         if (!cancelled) setLoadError(err?.message || 'Could not load your profile.')
@@ -168,6 +178,43 @@ export default function EditProfilePage() {
     if (!selectedCollege) next.college = 'Please select your college from the list'
     setErrors(next)
     return Object.keys(next).length === 0
+  }
+
+  const handleUseMode = async (mode) => {
+    setAvatarActionError('')
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+    const previousMode = avatarMode
+    setAvatarMode(mode) // optimistic — reverted below on failure
+    try {
+      await updateUserProfile(uid, { avatarMode: mode })
+    } catch (err) {
+      setAvatarMode(previousMode)
+      setAvatarActionError(err?.message || 'Could not switch — please try again.')
+    }
+  }
+
+  const handleRemoveAvatar = async () => {
+    if (removingAvatar) return
+    setRemovingAvatar(true)
+    setAvatarActionError('')
+    const uid = auth.currentUser?.uid
+    try {
+      await updateUserProfile(uid, { campusAvatarUrl: '', avatarMode: 'photo', campusAvatarUpdatedAt: null })
+      // Storage cleanup is best-effort (deleteCampusAvatarFile already
+      // swallows its own errors) and happens AFTER the Firestore write
+      // succeeds — the user's real photo is never touched by this
+      // path, matching "do not accidentally delete the user's real
+      // profile photo."
+      await deleteCampusAvatarFile(campusAvatarUrl)
+      setCampusAvatarUrl('')
+      setAvatarMode('photo')
+      setConfirmingRemove(false)
+    } catch (err) {
+      setAvatarActionError(err?.message || 'Could not remove your Campus Avatar. Please try again.')
+    } finally {
+      setRemovingAvatar(false)
+    }
   }
 
   const handleSave = async (event) => {
@@ -276,6 +323,104 @@ export default function EditProfilePage() {
             </label>
             <p className="mt-2 text-xs text-gray-400">Change profile photo</p>
           </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-blue-500" />
+              <p className="text-sm font-semibold text-gray-900">Campus Avatar</p>
+            </div>
+
+            {avatarActionError && <p className="mt-2 text-xs text-red-500">{avatarActionError}</p>}
+
+            {campusAvatarUrl ? (
+              <>
+                <div className="mt-3 flex items-center gap-3">
+                  <img src={campusAvatarUrl} alt="Your Campus Avatar" className="w-14 h-14 rounded-full object-cover flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-500">
+                      {avatarMode === 'avatar' ? 'Currently your Campinity identity' : 'Saved, but not in use'}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {avatarMode !== 'avatar' && (
+                        <button
+                          type="button"
+                          onClick={() => handleUseMode('avatar')}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors duration-200"
+                        >
+                          Use this avatar
+                        </button>
+                      )}
+                      {avatarMode === 'avatar' && photoPreview && (
+                        <button
+                          type="button"
+                          onClick={() => handleUseMode('photo')}
+                          className="text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                        >
+                          Use profile photo instead
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setAvatarFlowOpen(true)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors duration-200"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Change
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingRemove(true)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-600 transition-colors duration-200"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Remove
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  Turn a selfie into your Campinity identity — no real photo required.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setAvatarFlowOpen(true)}
+                  className="mt-3 rounded-full border border-blue-200 bg-blue-50 text-blue-600 text-xs font-semibold px-4 py-2 hover:bg-blue-100 transition-all duration-300"
+                >
+                  Create Campus Avatar
+                </button>
+              </>
+            )}
+          </div>
+
+          {confirmingRemove && (
+            <div className="rounded-xl border border-red-100 bg-red-50 p-3.5">
+              <p className="text-sm font-semibold text-gray-900">Remove Campus Avatar?</p>
+              <p className="mt-1 text-xs text-gray-500">
+                Your avatar won't be deleted from your account until you confirm.
+              </p>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmingRemove(false)}
+                  disabled={removingAvatar}
+                  className="flex-1 rounded-full border border-gray-200 text-gray-700 text-xs font-semibold py-2 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveAvatar}
+                  disabled={removingAvatar}
+                  className="flex-1 rounded-full bg-red-600 text-white text-xs font-semibold py-2 disabled:opacity-50"
+                >
+                  {removingAvatar ? 'Removing…' : 'Remove'}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div>
             <label htmlFor="edit-name" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
@@ -417,6 +562,15 @@ export default function EditProfilePage() {
           </div>
         </form>
       </div>
+
+      <CampusAvatarFlow
+        open={avatarFlowOpen}
+        onClose={() => setAvatarFlowOpen(false)}
+        onSaved={(url) => {
+          setCampusAvatarUrl(url)
+          setAvatarMode('avatar')
+        }}
+      />
     </div>
   )
 }

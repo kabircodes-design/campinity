@@ -7,6 +7,7 @@ import MessageBubble from '../components/MessageBubble.jsx'
 import MessageInput from '../components/MessageInput.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { useChat } from '../hooks/useChat.js'
 import { useMessages } from '../hooks/useMessages.js'
@@ -137,7 +138,7 @@ export default function ChatPage() {
                   initials={getInitials(displayName)}
                   colorClass={getAvatarColor(otherUid || chatId)}
                   size="sm"
-                  src={otherProfile?.avatar || undefined}
+                  src={getProfileIdentityImage(otherProfile) || undefined}
                 />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>

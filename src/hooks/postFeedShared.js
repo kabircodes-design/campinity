@@ -1,6 +1,7 @@
 import { getDocs, onSnapshot } from 'firebase/firestore'
 import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
 import { enrichWithAuthors } from './useAuthorEnrichment.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 /**
  * The ONE shared post-rendering pipeline — Following and For You both
@@ -59,7 +60,7 @@ export function mapPostForCard(raw, currentUid, liveProfile) {
     name: displayName,
     username,
     verified: useAnonymous ? false : Boolean(liveProfile?.verified),
-    avatarUrl: useAnonymous ? '' : liveProfile?.avatar || '',
+    avatarUrl: useAnonymous ? '' : getProfileIdentityImage(liveProfile) || '',
     initials: getInitials(displayName),
     avatarColor: getAvatarColor(avatarSeed),
     department: undefined,

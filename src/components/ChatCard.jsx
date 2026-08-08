@@ -3,6 +3,7 @@ import { Pin, Users, VolumeX } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
 import { auth } from '../firebase/firebase.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 /**
  * Props match MessagesPage.jsx's usage: <ChatCard chat={chat}
@@ -45,7 +46,7 @@ export default function ChatCard({ chat, profile }) {
           initials={getInitials(displayName)}
           colorClass={getAvatarColor(chat.otherUid || chat.id)}
           size="md"
-          src={profile?.avatar || undefined}
+          src={getProfileIdentityImage(profile) || undefined}
         />
       )}
 

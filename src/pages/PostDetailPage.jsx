@@ -25,6 +25,7 @@ import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { formatTimeAgo, getPostById } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { addComment, getComments, likePost, unlikePost, deletePost } from '../firebase/engagementService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
 
@@ -252,7 +253,7 @@ export default function PostDetailPage() {
       userId: uid,
       displayName: currentUser?.displayName || 'Student',
       username: currentUser?.username || '',
-      avatar: currentUser?.avatar || '',
+      avatar: getProfileIdentityImage(currentUser) || '',
       text,
       mentions: mentionedUids,
       parentCommentId: null,
@@ -270,7 +271,7 @@ export default function PostDetailPage() {
         uid,
         displayName: currentUser?.displayName,
         username: currentUser?.username,
-        avatar: currentUser?.avatar,
+        avatar: getProfileIdentityImage(currentUser) || '',
         text,
         mentionedUids
       })
@@ -299,7 +300,7 @@ export default function PostDetailPage() {
 
         <main className="pb-32">
           <div className="flex items-start gap-3 px-4 pt-4">
-            <Avatar initials={post.initials} colorClass={post.avatarColor} size="md" />
+            <Avatar initials={post.initials} colorClass={post.avatarColor} size="md" src={post.avatarUrl || undefined} />
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">

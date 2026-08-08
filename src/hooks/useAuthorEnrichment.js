@@ -62,6 +62,8 @@ async function fetchProfile(uid) {
         displayName: profile.displayName || FALLBACK_PROFILE.displayName,
         username: profile.username || '',
         avatar: profile.avatar || '',
+        campusAvatarUrl: profile.campusAvatarUrl || '',
+        avatarMode: profile.avatarMode || 'photo',
         verified: Boolean(profile.verified)
       }
     } catch {
