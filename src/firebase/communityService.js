@@ -40,9 +40,13 @@ import {
   serverTimestamp,
   setDoc,
   startAfter,
-  where
+  updateDoc,
+  where,
+  writeBatch
 } from 'firebase/firestore'
+import { deleteObject, getStorage, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { db } from './firebase.js'
+import { awardXP } from '../gamification/xpService.js'
 
 export const COMMUNITY_TYPES = [
   'official_club',
@@ -198,6 +202,8 @@ export async function getMembers(communityId, { pageSize = 30, cursor = null } =
 export async function joinCommunity(communityId, uid) {
   if (!uid) throw new Error('You need to be signed in to join.')
 
+  let joined = false
+
   await runTransaction(db, async (transaction) => {
     const communitySnap = await transaction.get(communityDocRef(communityId))
     if (!communitySnap.exists()) throw new Error('Community not found.')
@@ -208,6 +214,7 @@ export async function joinCommunity(communityId, uid) {
     const memberSnap = await transaction.get(memberDocRef(communityId, uid))
     if (memberSnap.exists()) return
 
+    joined = true
     transaction.set(memberDocRef(communityId, uid), {
       uid,
       communityId,
@@ -216,6 +223,10 @@ export async function joinCommunity(communityId, uid) {
     })
     transaction.update(communityDocRef(communityId), { membersCount: increment(1) })
   })
+
+  if (joined) {
+    await awardXP(uid, 'club_joined', { dedupeKey: `club_joined_${communityId}_${uid}` }).catch(() => {})
+  }
 }
 
 export async function leaveCommunity(communityId, uid) {
@@ -412,8 +423,6 @@ export async function deleteCommunity(communityId, ownerUid) {
     throw new Error('Only the owner can delete this community.')
   }
 
-  const { writeBatch } = await import('firebase/firestore')
-
   async function batchDeleteQuery(collectionQuery) {
     const snap = await getDocs(collectionQuery)
     const docs = snap.docs
@@ -437,7 +446,6 @@ export async function deleteCommunity(communityId, ownerUid) {
   for (const url of [community.coverImage, community.icon]) {
     if (!url) continue
     try {
-      const { getStorage, ref, deleteObject } = await import('firebase/storage')
       await deleteObject(ref(getStorage(), url))
     } catch {
       // URL wasn't a real Storage object, or it's already gone — the
@@ -473,13 +481,11 @@ export async function updateCommunityDetails(communityId, uid, updates) {
     throw new Error('Only the owner can change name, type, or privacy.')
   }
 
-  const { updateDoc: firestoreUpdateDoc } = await import('firebase/firestore')
-  await firestoreUpdateDoc(communityDocRef(communityId), updates)
+  await updateDoc(communityDocRef(communityId), updates)
 }
 
 /** Uploads a cover image or icon to Storage, returns its download URL. Path includes a timestamp so re-uploading doesn't silently overwrite a still-referenced old file before the community doc is updated. */
 export async function uploadCommunityAsset(communityId, file, kind) {
-  const { getStorage, ref, uploadBytes, getDownloadURL } = await import('firebase/storage')
   const storage = getStorage()
   const path = `communities/${communityId}/${kind}-${Date.now()}-${file.name}`
   const storageRef = ref(storage, path)

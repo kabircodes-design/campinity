@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 import { db, auth } from './firebase.js'
 import { getUserIdByUsername, ensureUsernameReservation } from './usernameService.js'
+import { awardXP } from '../gamification/xpService.js'
 
 const COLLECTION = 'users'
 
@@ -219,10 +220,37 @@ export async function getUserProfileByUsername(username) {
  * is real data rather than a fabricated online signal.
  */
 export async function getNearbyStudents(collegeId, excludeUid, { pageSize = 20 } = {}) {
-  if (!collegeId) return []
+  // Temporary diagnostic logging — added specifically to answer "why
+  // does the query return nothing" with real data instead of another
+  // guess. Safe to remove once the cause is confirmed from the
+  // console output.
+  console.log('[Radar] getNearbyStudents called with collegeId:', JSON.stringify(collegeId), 'type:', typeof collegeId)
+
+  if (!collegeId) {
+    console.log('[Radar] REJECTED before query: collegeId is falsy on the current viewer\'s own profile.')
+    return []
+  }
+
   const snap = await getDocs(
     query(collection(db, COLLECTION), where('collegeId', '==', collegeId), orderBy('createdAt', 'desc'), limit(pageSize + 1))
   )
+
+  console.log('[Radar] Query returned', snap.docs.length, 'raw documents for collegeId ==', JSON.stringify(collegeId))
+
+  // Separately: fetch a small unfiltered sample of users so their
+  // ACTUAL collegeId values are visible for comparison — this is the
+  // piece that answers "is it a naming mismatch, a missing field, or
+  // truly no one else" without needing direct Firestore console
+  // access.
+  const sampleSnap = await getDocs(query(collection(db, COLLECTION), limit(10)))
+  console.log('[Radar] Sample of', sampleSnap.docs.length, 'existing user documents (collegeId field only):')
+  sampleSnap.docs.forEach((d) => {
+    const data = d.data()
+    console.log(
+      `  uid=${d.id} collegeId=${JSON.stringify(data.collegeId)} (type: ${typeof data.collegeId}) college=${JSON.stringify(data.college)} displayName=${data.displayName}`
+    )
+  })
+
   return snap.docs
     .filter((d) => d.id !== excludeUid)
     .slice(0, pageSize)
@@ -304,15 +332,28 @@ export async function followUser(followerId, followingId) {
   if (!followerId) throw new Error('You need to be signed in to follow someone.')
   if (followerId === followingId) throw new Error("You can't follow yourself.")
 
+  let created = false
+
   await runTransaction(db, async (transaction) => {
     const followRef = followDocRef(followerId, followingId)
     const existing = await transaction.get(followRef)
     if (existing.exists()) return
 
+    created = true
     transaction.set(followRef, { followerId, followingId, createdAt: serverTimestamp() })
     transaction.update(doc(db, COLLECTION, followingId), { followersCount: increment(1) })
     transaction.update(doc(db, COLLECTION, followerId), { followingCount: increment(1) })
   })
+
+  // Gamification — only for a genuinely new follow relationship, not
+  // a no-op re-call. dedupeKey uses the same deterministic pair
+  // ordering the follow document itself already relies on, so this
+  // exact relationship can never award twice even independent of the
+  // transaction's own existence check.
+  if (created) {
+    await awardXP(followerId, 'follow', { dedupeKey: `follow_${followerId}_${followingId}` }).catch(() => {})
+    await awardXP(followingId, 'followed', { dedupeKey: `followed_${followerId}_${followingId}` }).catch(() => {})
+  }
 }
 
 export async function unfollowUser(followerId, followingId) {

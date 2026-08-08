@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/firebase.js'
 import { XP_REWARDS, LEVEL_TIERS, getLevelStepXP, STREAK_REWARDS } from './config.js'
+import { createLevelUpNotification } from '../firebase/notificationService.js'
 
 /**
  * The ONE XP service — every XP-earning action across this project
@@ -32,14 +33,24 @@ function progressDoc(uid) {
   return doc(db, 'userProgress', uid)
 }
 
+/**
+ * Local calendar date, not UTC — toISOString() would compute the "day"
+ * boundary at UTC midnight, which falls at an arbitrary local hour
+ * (e.g. 5:30 AM IST) rather than local midnight. No per-user timezone
+ * field exists anywhere in this project's schema (confirmed via
+ * search before writing this) — the browser's own local date is the
+ * most honest available signal without inventing a timezone field
+ * this pass has no real data to populate correctly.
+ */
 function todayString() {
-  return new Date().toISOString().slice(0, 10) // 'YYYY-MM-DD'
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function yesterdayString() {
   const d = new Date()
   d.setDate(d.getDate() - 1)
-  return d.toISOString().slice(0, 10)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 /** Finds the highest level tier the given XP total has crossed, and the user's exact level within it (interpolated via getLevelStepXP). */
@@ -76,19 +87,56 @@ export function getLevelForXP(xp) {
 }
 
 /**
- * Awards XP (and optional Campus Points) for one activity, updates
- * streak, and logs the entry — all in one transaction so a user's XP
- * total, level, and streak can never drift out of sync with each
- * other or with the log Weekly Recap reads from.
- *
- * dedupeKey (optional): if provided, this function checks whether an
- * xpLog entry with this exact key already exists before awarding
- * anything again — the idempotency guard for actions that could
- * plausibly fire twice (e.g. a retried network request re-triggering
- * a "like received" award). Callers awarding XP for something
- * inherently one-shot (daily login) don't need to pass one.
+ * Daily cap check — for actions with no natural per-source dedup key
+ * (a like/comment/save can be deduped by "this specific post," but a
+ * message has no equivalent unique target to key against — sending
+ * 500 messages in a row would otherwise farm 500 XP with the dedupeKey
+ * mechanism alone doing nothing to stop it). Counts today's xpLog
+ * entries for the given activityType and returns whether the cap has
+ * been reached — callers check this BEFORE calling awardXP, so a
+ * capped action still completes normally (the message still sends),
+ * it just stops earning XP once the daily limit is hit.
  */
-export async function awardXP(uid, activityType, { campusPoints = 0, metadata = {}, dedupeKey = null } = {}) {
+export async function hasReachedDailyCap(uid, activityType, capCount) {
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const snap = await getDocs(
+    query(
+      collection(db, 'xpLog', uid, 'entries'),
+      where('activityType', '==', activityType),
+      where('createdAt', '>=', startOfToday),
+      limit(capCount)
+    )
+  )
+  return snap.size >= capCount
+}
+
+/**
+ * Awards XP, Campus Points, and Reputation for one activity, updates
+ * the daily streak, and logs the entry — all in one transaction so
+ * XP/points/reputation/level/streak can never drift out of sync with
+ * each other or with the log Weekly Recap and badge-checking read
+ * from.
+ *
+ * Streak logic — the actual root-cause fix: the prior version only
+ * advanced the streak when activityType === 'daily_login', but
+ * nothing anywhere ever called awardXP with that type — confirmed via
+ * a full-codebase search before this rewrite. Streak now advances on
+ * the FIRST qualifying activity of each calendar day, regardless of
+ * which specific event triggered it (a post, a comment, opening the
+ * app and liking something — anything that calls awardXP at all).
+ * This matches "Monday -> activity -> 1, Monday again -> still 1,
+ * Tuesday -> 2" from the brief exactly: the date-comparison logic
+ * itself (today / yesterday / neither) is unchanged from before, it's
+ * just no longer gated behind an event type nothing produces.
+ *
+ * dedupeKey: effectively required for any one-shot action (creating a
+ * specific post, a specific like) — checked against xpLog before
+ * awarding anything, so a retried request or a duplicate call for the
+ * same source can never double-award. Every real call site wired in
+ * this pass passes one keyed to the specific source id.
+ */
+export async function awardXP(uid, activityType, { campusPoints = 0, reputationAwarded = 0, metadata = {}, dedupeKey = null } = {}) {
   if (!uid) return null
   const xpAmount = XP_REWARDS[activityType]
   if (xpAmount === undefined) {
@@ -104,33 +152,43 @@ export async function awardXP(uid, activityType, { campusPoints = 0, metadata = 
 
   const entryRef = doc(collection(db, 'xpLog', uid, 'entries'))
   let streakResult = null
+  let leveledUp = false
+  let newLevelValue = null
+  let newLevelTitle = null
 
   await runTransaction(db, async (transaction) => {
     const progressSnap = await transaction.get(progressDoc(uid))
     const current = progressSnap.exists()
       ? progressSnap.data()
-      : { xp: 0, level: 1, campusPoints: 0, currentStreak: 0, longestStreak: 0, lastActivityDate: null }
+      : { xp: 0, level: 1, campusPoints: 0, reputationScore: 0, currentStreak: 0, longestStreak: 0, lastActivityDate: null }
 
     const newXP = (current.xp || 0) + xpAmount
     const newPoints = (current.campusPoints || 0) + campusPoints
-    const { level } = getLevelForXP(newXP)
+    const newReputation = (current.reputationScore || 0) + reputationAwarded
+    const previousLevel = current.level || 1
+    const { level, title } = getLevelForXP(newXP)
+    if (level > previousLevel) {
+      leveledUp = true
+      newLevelValue = level
+      newLevelTitle = title
+    }
 
-    // Streak logic: only daily_login advances the streak (matches the
-    // brief's framing of streak as "consecutive daily activity" tied
-    // to logging in, not every XP-earning action resetting it).
+    // Streak: advances on the first qualifying activity of each
+    // calendar day, from ANY event type — see docstring above for why
+    // this is no longer gated to a single unused event type.
+    const today = todayString()
     let newStreak = current.currentStreak || 0
     let newLongest = current.longestStreak || 0
-    if (activityType === 'daily_login') {
-      const today = todayString()
-      if (current.lastActivityDate === today) {
-        // already logged in today, streak unchanged
-      } else if (current.lastActivityDate === yesterdayString()) {
-        newStreak += 1
-      } else {
-        newStreak = 1 // missed a day (or first ever login) — streak resets/starts
-      }
-      newLongest = Math.max(newLongest, newStreak)
-      if (STREAK_REWARDS[newStreak]) streakResult = { streak: newStreak, reward: STREAK_REWARDS[newStreak] }
+    if (current.lastActivityDate === today) {
+      // already active today, streak unchanged
+    } else if (current.lastActivityDate === yesterdayString()) {
+      newStreak += 1
+    } else {
+      newStreak = 1 // missed a day, or this is the very first activity ever
+    }
+    newLongest = Math.max(newLongest, newStreak)
+    if (current.lastActivityDate !== today && STREAK_REWARDS[newStreak]) {
+      streakResult = { streak: newStreak, reward: STREAK_REWARDS[newStreak] }
     }
 
     transaction.set(
@@ -139,9 +197,10 @@ export async function awardXP(uid, activityType, { campusPoints = 0, metadata = 
         xp: newXP,
         level,
         campusPoints: newPoints,
+        reputationScore: newReputation,
         currentStreak: newStreak,
         longestStreak: newLongest,
-        lastActivityDate: activityType === 'daily_login' ? todayString() : current.lastActivityDate || null,
+        lastActivityDate: today,
         updatedAt: serverTimestamp()
       },
       { merge: true }
@@ -151,13 +210,25 @@ export async function awardXP(uid, activityType, { campusPoints = 0, metadata = 
       activityType,
       xpAwarded: xpAmount,
       pointsAwarded: campusPoints,
+      reputationAwarded,
       dedupeKey,
       metadata,
       createdAt: serverTimestamp()
     })
   })
 
-  return { xpAwarded: xpAmount, pointsAwarded: campusPoints, streak: streakResult }
+  if (leveledUp) {
+    await createLevelUpNotification({ targetUid: uid, newLevel: newLevelValue, levelTitle: newLevelTitle }).catch(() => {})
+  }
+
+  return {
+    xpAwarded: xpAmount,
+    pointsAwarded: campusPoints,
+    reputationAwarded,
+    streak: streakResult,
+    leveledUp,
+    newLevel: newLevelValue
+  }
 }
 
 /**

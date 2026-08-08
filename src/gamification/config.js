@@ -11,12 +11,49 @@ export const XP_REWARDS = {
   story_uploaded: 10,
   comment_created: 5,
   comment_received: 6,
+  like_given: 2,
   like_received: 2,
+  share: 5,
+  save: 2,
+  follow: 3,
+  followed: 5,
+  message_sent: 1,
   club_joined: 20,
   event_attended: 40,
   profile_completed: 50,
   campus_verified: 100,
   contest_winner: 300
+}
+
+/**
+ * Campus Points — a distinct currency, not xp aliased under a
+ * different name (per the explicit "do not simply make points = xp").
+ * Only meaningful actions earn points; small/frequent actions
+ * (like_given, follow) earn XP but no points, matching "receiving
+ * likes/reactions" being worth more toward points than the act of
+ * giving one.
+ */
+export const POINTS_REWARDS = {
+  post_created: 10,
+  comment_created: 4,
+  share: 5,
+  like_received: 2,
+  save: 1
+}
+
+/**
+ * Reputation — reflects quality/contribution received FROM others,
+ * not activity you personally perform. Deliberately does NOT include
+ * like_given, save, or message_sent — reputation is about what the
+ * community thinks of your contributions, not how much you do
+ * yourself (per "avoid making reputation increase infinitely from
+ * trivial actions" and "should reflect quality/community
+ * contribution"). Only comment_received and like_received (both
+ * signals from OTHER people about YOUR content) award reputation.
+ */
+export const REPUTATION_ACTION_REWARDS = {
+  comment_received: 2,
+  like_received: 1
 }
 
 /**

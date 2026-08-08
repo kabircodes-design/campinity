@@ -7,6 +7,9 @@ import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { createPost, getAvatarColor, getInitials, uploadPostImage } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
+import { awardXP, getUserProgress } from '../gamification/xpService.js'
+import { checkAndAwardBadges } from '../gamification/badgeService.js'
+import { POINTS_REWARDS } from '../gamification/config.js'
 
 const categories = ['general', 'study', 'notes', 'event', 'club', 'marketplace']
 
@@ -178,7 +181,7 @@ export default function CreatePostPage() {
       const selectedCommunity =
         postTarget !== 'public' ? myCommunities.find((c) => c.id === postTarget) : null
 
-      await createPost({
+      const newPostId = await createPost({
         uid,
         text: postText.trim(),
         imageUrl,
@@ -192,6 +195,25 @@ export default function CreatePostPage() {
           })
         }
       })
+
+      // Gamification — deduped by the real, just-created post's own id.
+      // Honest scope: this protects against the SAME post id ever
+      // being awarded twice (e.g. if this award call itself were
+      // retried after a transient failure) — it does NOT prevent two
+      // genuinely separate posts from a true double-submit, since
+      // createPost always writes a fresh document with a fresh id
+      // regardless of dedup keys. The existing isPublishing guard
+      // above (and the Publish button's own disabled state) already
+      // prevents the common double-click case at the UI level before
+      // this code is ever reached a second time.
+      const postAward = await awardXP(uid, 'post_created', {
+        campusPoints: POINTS_REWARDS.post_created || 0,
+        dedupeKey: `post_created_${newPostId}`
+      }).catch(() => null)
+      if (postAward) {
+        const progress = await getUserProgress(uid).catch(() => null)
+        if (progress) await checkAndAwardBadges(uid, progress).catch(() => {})
+      }
 
       navigate('/home')
     } catch (err) {

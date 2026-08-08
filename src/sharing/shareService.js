@@ -1,6 +1,8 @@
 import { getOrCreateChat, sendMessage } from '../firebase/chatService.js'
 import { incrementShareCount } from '../firebase/engagementService.js'
 import { createShareNotification } from '../firebase/notificationService.js'
+import { awardXP, hasReachedDailyCap } from '../gamification/xpService.js'
+import { POINTS_REWARDS } from '../gamification/config.js'
 
 /**
  * Orchestrates a share to one or more recipients — reuses
@@ -80,6 +82,22 @@ export async function shareContentToRecipients({
   // shouldn't inflate the count.
   if (succeeded.length > 0 && referenceType === 'post') {
     await incrementShareCount(referenceId).catch(() => {})
+  }
+
+  // Gamification — once per share ACTION (not once per recipient,
+  // same reasoning already established for the share count above:
+  // sharing one post to 3 people is one share). No per-target
+  // dedupeKey makes sense here — sharing the same post to different
+  // people on different occasions are genuinely separate, legitimate
+  // actions, unlike a like/save which are binary per-post states.
+  // Daily-capped instead (same mechanism as message_sent) since
+  // that's the actual anti-farming concern for an action with no
+  // natural one-time-per-target identity.
+  if (succeeded.length > 0) {
+    const capped = await hasReachedDailyCap(currentUid, 'share', 15).catch(() => true)
+    if (!capped) {
+      await awardXP(currentUid, 'share', { campusPoints: POINTS_REWARDS.share || 0 }).catch(() => {})
+    }
   }
 
   return { succeeded, failedCount: failed.length }

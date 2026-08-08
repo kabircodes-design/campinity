@@ -10,6 +10,8 @@ import { getUserProfile, updateUserProfile } from '../firebase/profileService.js
 import { getAvatarColor } from '../firebase/postService.js'
 import { reserveUsername } from '../firebase/usernameService.js'
 import { useUsernameAvailability } from '../hooks/useUsernameAvailability.js'
+import { awardXP } from '../gamification/xpService.js'
+import { POINTS_REWARDS } from '../gamification/config.js'
 
 const years = ['FYJC', 'SYJC', 'FY', 'SY', 'TY', 'Final Year']
 
@@ -63,6 +65,21 @@ function TagInput({ label, values, onAdd, onRemove, placeholder }) {
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Gamification wiring, added this pass: profile_completed awards once
+ * the profile genuinely meets a completeness bar (name + username +
+ * bio + college + at least one skill and one interest) — checked
+ * AFTER a successful save, deduped by uid alone (a user can only
+ * complete their profile once; subsequent edits to an already-complete
+ * profile correctly award nothing again, since the dedupeKey would
+ * already exist).
+ */
+function isProfileComplete({ name, username, bio, selectedCollege, skills, interests }) {
+  return Boolean(
+    name.trim() && username.trim() && bio.trim() && selectedCollege && skills.length > 0 && interests.length > 0
   )
 }
 
@@ -180,6 +197,13 @@ export default function EditProfilePage() {
         skills,
         interests
       })
+
+      if (isProfileComplete({ name, username: reservedUsername, bio, selectedCollege, skills, interests })) {
+        await awardXP(uid, 'profile_completed', {
+          campusPoints: POINTS_REWARDS.profile_completed || 0,
+          dedupeKey: `profile_completed_${uid}`
+        }).catch(() => {})
+      }
 
       setOriginalUsername(reservedUsername)
       setUsername(reservedUsername)

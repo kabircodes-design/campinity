@@ -18,6 +18,8 @@ export const NOTIFICATION_ICONS = {
   comment_like: 'Heart',
   pin: 'Pin',
   share: 'Share2',
+  badge: 'Award',
+  level_up: 'Star',
   invite: 'Mail',
   announcement: 'Megaphone'
 }
@@ -48,6 +50,10 @@ export function getNotificationText(notification) {
       const entityLabel = { post: 'post', profile: 'profile', event: 'event', community: 'community', club: 'club' }[notification.entityType] || 'content'
       return { lead: name, action: `shared your ${entityLabel}`, preview: null }
     }
+    case 'badge':
+      return { lead: `${notification.badgeEmoji || '🏆'} Badge Unlocked`, action: notification.badgeLabel || 'New badge', preview: null }
+    case 'level_up':
+      return { lead: `⭐ Level ${notification.newLevel}`, action: notification.levelTitle ? `You're now ${notification.levelTitle}` : 'Level up!', preview: null }
     case 'invite':
       return {
         lead: notification.communityName || 'A club',

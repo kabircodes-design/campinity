@@ -20,6 +20,7 @@ import {
 import { db } from './firebase.js'
 import { checkIsFollowing } from './profileService.js'
 import { SHARE_TYPE_LABELS } from '../sharing/shareTypes.js'
+import { awardXP, hasReachedDailyCap } from '../gamification/xpService.js'
 
 /**
  * Correctly named this time — MessagesPage.jsx and ChatPage.jsx
@@ -218,6 +219,17 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
     }
     transaction.update(chatDoc(chatId), chatUpdate)
   })
+
+  // Gamification — daily-capped (20/day) since messages have no
+  // natural per-source dedup key the way a like/comment/save does
+  // (each is tied to one specific post; a message isn't tied to
+  // anything that would make "the same message twice" a meaningful
+  // concept to dedupe against). Sending never blocks on this — only
+  // XP stops accruing once the cap is hit for the day.
+  const dailyCapped = await hasReachedDailyCap(senderId, 'message_sent', 20).catch(() => true)
+  if (!dailyCapped) {
+    await awardXP(senderId, 'message_sent', {}).catch(() => {})
+  }
 
   return newMessageRef.id
 }

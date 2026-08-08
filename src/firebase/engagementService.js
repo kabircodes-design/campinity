@@ -28,6 +28,9 @@ import {
   createMentionNotification,
   createPinNotification
 } from './notificationService.js'
+import { awardXP, getUserProgress, hasReachedDailyCap } from '../gamification/xpService.js'
+import { checkAndAwardBadges } from '../gamification/badgeService.js'
+import { POINTS_REWARDS, REPUTATION_ACTION_REWARDS } from '../gamification/config.js'
 
 /**
  * ONE file, per this task's explicit instruction — no parallel
@@ -125,6 +128,30 @@ export async function likePost(postId, uid) {
 
   if (!alreadyLiked && postOwnerUid && postOwnerUid !== uid) {
     await createLikeNotification({ postOwnerUid, actorUid: uid, postId }).catch(() => {})
+  }
+
+  // Gamification — only for a genuinely NEW like (alreadyLiked=false
+  // means the transaction actually flipped it), and never for liking
+  // your own post (the explicit anti-abuse requirement this whole
+  // system was built to prevent). dedupeKey is per (postId, uid) pair
+  // — the same person unliking and reliking the same post can never
+  // re-earn this reward, since the key would already exist in xpLog.
+  if (!alreadyLiked) {
+    const likeGivenCapped = await hasReachedDailyCap(uid, 'like_given', 30).catch(() => true)
+    if (!likeGivenCapped) {
+      await awardXP(uid, 'like_given', { dedupeKey: `like_given_${postId}_${uid}` }).catch(() => {})
+    }
+    if (postOwnerUid && postOwnerUid !== uid) {
+      const awarded = await awardXP(postOwnerUid, 'like_received', {
+        campusPoints: POINTS_REWARDS.like_received || 0,
+        reputationAwarded: REPUTATION_ACTION_REWARDS.like_received || 0,
+        dedupeKey: `like_received_${postId}_${uid}`
+      }).catch(() => null)
+      if (awarded) {
+        const progress = await getUserProgress(postOwnerUid).catch(() => null)
+        if (progress) await checkAndAwardBadges(postOwnerUid, progress).catch(() => {})
+      }
+    }
   }
 }
 
@@ -226,6 +253,33 @@ export async function addComment(postId, { uid, displayName, username, avatar, t
       commentId: newCommentRef.id,
       commentText: text
     }).catch(() => {})
+  }
+
+  // Gamification — deduped by the comment's own real Firestore id,
+  // which only exists once this document has actually been created —
+  // structurally impossible to double-award for the "same" comment.
+  const commentAward = await awardXP(uid, 'comment_created', {
+    campusPoints: POINTS_REWARDS.comment_created || 0,
+    dedupeKey: `comment_created_${newCommentRef.id}`
+  }).catch(() => null)
+  if (commentAward) {
+    const progress = await getUserProgress(uid).catch(() => null)
+    if (progress) await checkAndAwardBadges(uid, progress).catch(() => {})
+  }
+
+  // Post owner's side — only for a genuinely new top-level comment
+  // from someone else (not a reply, and not commenting on your own
+  // post), same anti-abuse shape as like_received above.
+  if (!parentCommentId && postOwnerUid && postOwnerUid !== uid) {
+    const ownerAward = await awardXP(postOwnerUid, 'comment_received', {
+      campusPoints: 0,
+      reputationAwarded: REPUTATION_ACTION_REWARDS.comment_received || 0,
+      dedupeKey: `comment_received_${newCommentRef.id}`
+    }).catch(() => null)
+    if (ownerAward) {
+      const ownerProgress = await getUserProgress(postOwnerUid).catch(() => null)
+      if (ownerProgress) await checkAndAwardBadges(postOwnerUid, ownerProgress).catch(() => {})
+    }
   }
 
   return newCommentRef.id
@@ -435,6 +489,15 @@ function savedPostDoc(uid, postId) {
 export async function savePost(uid, postId) {
   if (!uid) throw new Error('You need to be signed in to save a post.')
   await setDoc(savedPostDoc(uid, postId), { postId, savedAt: serverTimestamp() })
+
+  const awarded = await awardXP(uid, 'save', {
+    campusPoints: POINTS_REWARDS.save || 0,
+    dedupeKey: `save_${postId}_${uid}`
+  }).catch(() => null)
+  if (awarded) {
+    const progress = await getUserProgress(uid).catch(() => null)
+    if (progress) await checkAndAwardBadges(uid, progress).catch(() => {})
+  }
 }
 
 export async function unsavePost(uid, postId) {

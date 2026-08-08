@@ -186,6 +186,35 @@ export async function createPinNotification({
 }
 
 /**
+ * Gamification — badge/level-up notifications. actorUid is the same
+ * user being notified (a badge is "awarded by the system," not by
+ * another person) — same shape every other creator here uses, just
+ * with no distinct actor.
+ */
+export async function createBadgeNotification({ targetUid, badgeId, badgeLabel, badgeEmoji }) {
+  return createNotification(targetUid, {
+    actorUid: targetUid,
+    actorName: 'Campinity',
+    actorAvatar: '',
+    type: 'badge',
+    badgeId,
+    badgeLabel,
+    badgeEmoji
+  })
+}
+
+export async function createLevelUpNotification({ targetUid, newLevel, levelTitle }) {
+  return createNotification(targetUid, {
+    actorUid: targetUid,
+    actorName: 'Campinity',
+    actorAvatar: '',
+    type: 'level_up',
+    newLevel,
+    levelTitle
+  })
+}
+
+/**
  * Sharing System (Phase 1) — one new notification type, same pattern
  * as every creator above. `entityType`/`entityId` cover all share
  * targets generically ("Kabir shared your post" / "Rahul shared your
