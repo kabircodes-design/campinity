@@ -62,6 +62,13 @@ export async function maybeUpdateMyLocation(uid, coords, lastWrite) {
     updatedAt: serverTimestamp()
   })
 
+  // TEMPORARY — remove once cross-device visibility is confirmed.
+  // Confirms the write actually completed (setDoc resolved without
+  // throwing) rather than assuming success from the absence of a UI
+  // error — a rejected promise the caller silently swallowed would
+  // otherwise look identical to a successful write from the outside.
+  console.log('[Radar] location write confirmed:', { uid, lat: latitude, lng: longitude, accuracy })
+
   return { lat: latitude, lng: longitude, timestamp: now }
 }
 
@@ -103,6 +110,9 @@ export async function findNearbyUserLocations(currentUid, lat, lng, { pageSize =
   const centerCell = geohashPrefixForQuery(lat, lng)
   const cellsToQuery = geohashNeighborhood(centerCell)
 
+  // TEMPORARY — remove once cross-device visibility is confirmed.
+  console.log('[Radar] query start:', { currentUid, currentGeohash: centerCell, currentLat: lat, currentLng: lng, cellsQueried: cellsToQuery })
+
   const snapshots = await Promise.all(
     cellsToQuery.map((cellPrefix) =>
       getDocs(
@@ -115,6 +125,9 @@ export async function findNearbyUserLocations(currentUid, lat, lng, { pageSize =
       )
     )
   )
+
+  // TEMPORARY — remove once confirmed. Per-cell result counts.
+  snapshots.forEach((snap, i) => console.log(`[Radar] cell ${cellsToQuery[i]}: ${snap.docs.length} documents`))
 
   const seenUids = new Set()
   const candidates = []
@@ -130,15 +143,33 @@ export async function findNearbyUserLocations(currentUid, lat, lng, { pageSize =
   const nearby = []
 
   candidates.forEach((d) => {
-    if (d.id === currentUid) return // current user never appears as their own Radar signal
-
     const data = d.data()
+
+    if (d.id === currentUid) {
+      console.log(`[Radar] excluded: current user (${d.id})`) // TEMPORARY
+      return
+    }
+
     const updatedAtMs = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : 0
-    if (now - updatedAtMs > STALE_THRESHOLD_MS) return // stale — not "nearby right now"
+    const ageMs = now - updatedAtMs
+    if (ageMs > STALE_THRESHOLD_MS) {
+      console.log(`[Radar] excluded: stale (${d.id}), age=${Math.round(ageMs / 1000)}s, threshold=${STALE_THRESHOLD_MS / 1000}s`) // TEMPORARY
+      return
+    }
+
+    if (data.lat == null || data.lng == null) {
+      console.log(`[Radar] excluded: missing coordinates (${d.id})`) // TEMPORARY
+      return
+    }
 
     // The real, final distance decision — never the geohash cell membership itself.
     const distanceMeters = haversineMeters(lat, lng, data.lat, data.lng)
-    if (distanceMeters > RADAR_RADIUS_METERS) return
+    if (distanceMeters > RADAR_RADIUS_METERS) {
+      console.log(`[Radar] excluded: outside 10m (${d.id}), distance=${distanceMeters.toFixed(1)}m, candidateAccuracy=${data.accuracy}`) // TEMPORARY
+      return
+    }
+
+    console.log(`[Radar] included: ${d.id}, distance=${distanceMeters.toFixed(1)}m, age=${Math.round(ageMs / 1000)}s, candidateAccuracy=${data.accuracy}`) // TEMPORARY
 
     nearby.push({
       uid: d.id,
@@ -146,6 +177,8 @@ export async function findNearbyUserLocations(currentUid, lat, lng, { pageSize =
       accuracy: data.accuracy ?? null
     })
   })
+
+  console.log('[Radar] final nearby matches:', nearby.length) // TEMPORARY
 
   return nearby.sort((a, b) => a.distanceMeters - b.distanceMeters)
 }

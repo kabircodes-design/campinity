@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Search, MapPin, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Search, MapPin, AlertTriangle, Info } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { auth } from '../firebase/firebase.js'
 import { useProfile } from '../radar/useProfileOnce.js'
 import { useRadarPresence } from '../radar/useRadarPresence.js'
 import RadarScanner from '../radar/RadarScanner.jsx'
 import RadarProfileSheet from '../radar/RadarProfileSheet.jsx'
+import { getAccuracyTier, ACCURACY_MESSAGES } from '../radar/accuracyPolicy.js'
 
 /**
  * Rewired for real physical proximity — see radarService.js's own
@@ -21,9 +22,6 @@ const FILTERS = [
   { key: 'interests', label: 'Shared Interests' },
   { key: 'verified', label: 'Verified' }
 ]
-
-const POOR_ACCURACY_THRESHOLD_METERS = 50
-const SEVERE_ACCURACY_THRESHOLD_METERS = 100 // beyond this, the device genuinely cannot distinguish "5m away" from "95m away" — showing a match list at all would be pretending precision that doesn't exist
 
 export default function RadarPage() {
   const navigate = useNavigate()
@@ -52,9 +50,9 @@ export default function RadarPage() {
     return true
   })
 
-  const poorAccuracy = currentPosition?.accuracy != null && currentPosition.accuracy > POOR_ACCURACY_THRESHOLD_METERS
-  const severeAccuracy = currentPosition?.accuracy != null && currentPosition.accuracy > SEVERE_ACCURACY_THRESHOLD_METERS
-  const effectiveMatches = severeAccuracy ? [] : filteredMatches
+  const accuracyTier = getAccuracyTier(currentPosition?.accuracy)
+  const accuracyMessage = accuracyTier ? ACCURACY_MESSAGES[accuracyTier] : null
+  const effectiveMatches = filteredMatches // never gated by accuracy tier — the 10m haversine check in radarLocationService.js is the only distance decision that exists
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
@@ -98,14 +96,25 @@ export default function RadarPage() {
             <p className="text-[12.5px] text-red-600">{locationError}</p>
           </div>
         )}
-        {poorAccuracy && status === 'granted' && (
-          <div className="mx-4 mt-3 flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-3">
-            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-            <p className="text-[12.5px] text-amber-800">
-              {severeAccuracy
-                ? `Your location signal is too weak (±${Math.round(currentPosition.accuracy)}m) to show nearby people accurately — hidden until your signal improves.`
-                : `Your location signal is weak (±${Math.round(currentPosition.accuracy)}m) — nearby results may not be precise right now.`}
-            </p>
+        {accuracyMessage && accuracyTier !== 'good' && status === 'granted' && (
+          <div
+            className={`mx-4 mt-3 flex items-start gap-2.5 rounded-xl border px-3.5 py-3 ${
+              accuracyTier === 'very_poor' ? 'bg-red-50 border-red-200' : accuracyTier === 'poor' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'
+            }`}
+          >
+            {accuracyTier === 'fair' ? (
+              <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+            ) : (
+              <AlertTriangle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${accuracyTier === 'very_poor' ? 'text-red-600' : 'text-amber-600'}`} />
+            )}
+            <div>
+              <p className={`text-[12.5px] font-semibold ${accuracyTier === 'very_poor' ? 'text-red-800' : accuracyTier === 'poor' ? 'text-amber-800' : 'text-blue-800'}`}>
+                {accuracyMessage.title} (±{Math.round(currentPosition.accuracy)}m)
+              </p>
+              <p className={`text-[12px] mt-0.5 ${accuracyTier === 'very_poor' ? 'text-red-700' : accuracyTier === 'poor' ? 'text-amber-700' : 'text-blue-700'}`}>
+                {accuracyMessage.detail}
+              </p>
+            </div>
           </div>
         )}
 
@@ -139,6 +148,15 @@ export default function RadarPage() {
             <p className="text-center text-sm text-gray-400 py-8">Scanning your campus...</p>
           ) : matchesError ? (
             <p className="text-center text-sm text-gray-400 py-8">{matchesError}</p>
+          ) : effectiveMatches.length === 0 && (accuracyTier === 'poor' || accuracyTier === 'very_poor') ? (
+            <div className="py-10 text-center">
+              <p className="text-sm font-semibold text-gray-900">Can't confirm nearby people right now.</p>
+              <p className="mt-1 text-sm text-gray-400 max-w-[280px] mx-auto leading-relaxed">
+                No one showed up within 10m of your current position — but that position itself is uncertain
+                (±{currentPosition?.accuracy ? Math.round(currentPosition.accuracy) : '?'}m), so this isn't the same
+                as confirming no one is actually nearby. Improve your location accuracy for a reliable result.
+              </p>
+            </div>
           ) : effectiveMatches.length === 0 ? (
             <div className="py-10 text-center">
               <p className="text-sm font-semibold text-gray-900">No one nearby right now.</p>
