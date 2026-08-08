@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -24,7 +25,7 @@ import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { formatTimeAgo, getPostById } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
-import { addComment, getComments, likePost, unlikePost } from '../firebase/engagementService.js'
+import { addComment, getComments, likePost, unlikePost, deletePost } from '../firebase/engagementService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
 
 /**
@@ -72,6 +73,10 @@ export default function PostDetailPage() {
   const navigate = useNavigate()
 
   const [post, setPost] = useState(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -85,6 +90,21 @@ export default function PostDetailPage() {
   const [comments, setComments] = useState([])
   const [commentsLoading, setCommentsLoading] = useState(true)
   const [commentsError, setCommentsError] = useState('')
+
+  const isOwner = Boolean(post?.userId) && post.userId === auth.currentUser?.uid
+
+  const handleDeletePost = async () => {
+    if (deleting) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      await deletePost(postId, auth.currentUser?.uid)
+      navigate('/home')
+    } catch (err) {
+      setDeleteError(err?.message || 'Could not delete this post. Please try again.')
+      setDeleting(false)
+    }
+  }
 
   useScrollToCommentAnchor(!commentsLoading)
 
@@ -288,13 +308,32 @@ export default function PostDetailPage() {
                     {[post.department, post.year, post.college].filter(Boolean).join(' · ')}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  aria-label="Post options"
-                  className="flex-shrink-0 text-gray-300 hover:text-gray-500 transition-all duration-300"
-                >
-                  <MoreHorizontal className="w-[18px] h-[18px]" />
-                </button>
+                {isOwner && (
+                  <div className="relative flex-shrink-0">
+                    <button
+                      type="button"
+                      aria-label="Post options"
+                      onClick={() => setMenuOpen((v) => !v)}
+                      className="text-gray-300 hover:text-gray-500 transition-all duration-300"
+                    >
+                      <MoreHorizontal className="w-[18px] h-[18px]" />
+                    </button>
+                    {menuOpen && (
+                      <div className="absolute right-0 top-6 w-36 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            setConfirmingDelete(true)
+                          }}
+                          className="w-full text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-all duration-150"
+                        >
+                          Delete post
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="mt-1.5 flex items-center gap-2">
@@ -462,6 +501,44 @@ export default function PostDetailPage() {
       </div>
 
       <BottomNav />
+
+      {confirmingDelete &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center px-6">
+            <button
+              type="button"
+              aria-label="Cancel"
+              onClick={() => !deleting && setConfirmingDelete(false)}
+              className="absolute inset-0 bg-black/40"
+            />
+            <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5 shadow-xl">
+              <p className="text-base font-bold text-gray-900">Delete post?</p>
+              <p className="mt-1.5 text-sm text-gray-500 leading-relaxed">
+                This will permanently remove your post and its comments. This action cannot be undone.
+              </p>
+              {deleteError && <p className="mt-2 text-xs text-red-500">{deleteError}</p>}
+              <div className="mt-5 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={deleting}
+                  className="flex-1 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold py-2.5 hover:border-gray-300 disabled:opacity-50 transition-all duration-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeletePost}
+                  disabled={deleting}
+                  className="flex-1 rounded-full bg-red-600 text-white text-sm font-semibold py-2.5 hover:bg-red-700 disabled:opacity-50 transition-all duration-300"
+                >
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

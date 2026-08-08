@@ -96,7 +96,18 @@ export default function ProfilePage() {
       if (!uid) return
       try {
         const data = await getUserPosts(uid, uid)
-        if (!cancelled) setMyPosts(data)
+        // Guarantee userId on every post — every post fetched here is,
+        // by construction, this user's own (getUserPosts(uid, uid)
+        // fetches exactly this uid's posts). PostCard.jsx's isOwner
+        // check depends entirely on post.userId; if postService.js's
+        // own mapping doesn't already include it (unverified — that
+        // file has never been shown to me, and mapPostForCard in
+        // postFeedShared.js had exactly this gap until it was found
+        // and fixed earlier in this project), the 3-dot menu would
+        // silently never render here even though it works correctly
+        // on Home, which uses a different, verified mapping function.
+        const postsWithOwner = (data || []).map((post) => ({ ...post, userId: post.userId || uid }))
+        if (!cancelled) setMyPosts(postsWithOwner)
       } catch (err) {
         if (!cancelled) setPostsError(err?.message || 'Could not load your posts.')
       }
@@ -118,7 +129,14 @@ export default function ProfilePage() {
     Promise.all(profile.pinnedPostIds.map((id) => getPostById(id, currentUid).catch(() => null)))
       .then((results) => {
         if (!cancelled) {
-          setPinnedPosts(results.filter(Boolean))
+          // Same fix as myPosts above, same reasoning: every pinned
+          // post on this page belongs to the current user (you can
+          // only pin your own posts to your own profile) — guarantee
+          // userId regardless of what getPostById's own mapping
+          // includes, so PostCard.jsx's isOwner check works correctly
+          // here too.
+          const pinnedWithOwner = results.filter(Boolean).map((post) => ({ ...post, userId: post.userId || currentUid }))
+          setPinnedPosts(pinnedWithOwner)
           setPinnedLoadedOnce(true)
         }
       })
@@ -284,7 +302,11 @@ export default function ProfilePage() {
             ) : (
               <div>
                 {myPosts.map((post) => (
-                  <PostCard key={post.id} post={post} />
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    onDeleted={(deletedId) => setMyPosts((prev) => prev.filter((p) => p.id !== deletedId))}
+                  />
                 ))}
               </div>
             ))}
@@ -302,7 +324,20 @@ export default function ProfilePage() {
             ) : (
               <div>
                 {pinnedPosts.map((post) => (
-                  <PostCard key={post.id} post={post} />
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    onDeleted={(deletedId) => {
+                      setPinnedPosts((prev) => prev.filter((p) => p.id !== deletedId))
+                      // A deleted post can no longer be pinned either —
+                      // keep myPosts in sync too, since deleting a
+                      // pinned post from the Pinned tab should also
+                      // update the Posts tab/count without requiring a
+                      // manual refresh, matching the same-post-same-
+                      // behavior-everywhere requirement.
+                      setMyPosts((prev) => prev.filter((p) => p.id !== deletedId))
+                    }}
+                  />
                 ))}
               </div>
             ))}

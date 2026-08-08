@@ -296,7 +296,32 @@ export async function deleteComment(postId, commentId, uid) {
   const snap = await getDoc(commentDoc(postId, commentId))
   if (!snap.exists()) return
   const data = snap.data()
-  if (data.userId !== uid) throw new Error('You can only delete your own comments.')
+
+  const isCommentAuthor = data.userId === uid
+  let isAuthorized = isCommentAuthor
+
+  if (!isAuthorized) {
+    const postSnap = await getDoc(postDoc(postId))
+    if (postSnap.exists()) {
+      const postData = postSnap.data()
+      if (postData.userId === uid) {
+        isAuthorized = true // post owner may remove comments on their own post
+      } else if (postData.communityId) {
+        // Community post — that community's owner/admins may also
+        // moderate its comments, matching the existing owner+admins
+        // authority model already used for community membership.
+        const communitySnap = await getDoc(doc(db, 'communities', postData.communityId))
+        if (communitySnap.exists()) {
+          const communityData = communitySnap.data()
+          isAuthorized = communityData.ownerId === uid || (communityData.admins || []).includes(uid)
+        }
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    throw new Error('You can only delete your own comments.')
+  }
 
   const repliesSnap = await getDocs(query(commentsCollection(postId), where('parentCommentId', '==', commentId)))
 
@@ -543,4 +568,68 @@ export function subscribeToPostShareCount(postId, callback) {
   return onSnapshot(doc(db, 'posts', postId), (snap) => {
     callback(snap.exists() ? snap.data().shareCount || 0 : 0)
   })
+}
+
+/* ============================================================
+   POST DELETE — new. Firestore rule (posts/{postId}, allow delete)
+   already existed and was already correct (owner-only,
+   resource.data.userId == request.auth.uid) — confirmed by reading it
+   directly before writing this function, not assumed. This function
+   is what actually calls that delete, plus the cascade cleanup that's
+   genuinely reachable from here.
+   ============================================================ */
+
+export async function deletePost(postId, uid) {
+  if (!uid) throw new Error('You need to be signed in.')
+
+  const postSnap = await getDoc(postDoc(postId))
+  if (!postSnap.exists()) return // already gone — treat as success, not an error
+  if (postSnap.data().userId !== uid) {
+    throw new Error('You can only delete your own posts.')
+  }
+
+  // Comments (and their replies — same subcollection, parentCommentId
+  // distinguishes them) — genuinely owned by this post, safely batch-
+  // deletable in one query + one batch since it's a bounded
+  // subcollection read, not a broad collection scan.
+  const commentsSnap = await getDocs(commentsCollection(postId))
+  const batch = writeBatch(db)
+  commentsSnap.docs.forEach((d) => batch.delete(d.ref))
+  batch.delete(postDoc(postId))
+  await batch.commit()
+
+  // What is deliberately NOT cleaned up here, and why:
+  //
+  // - Other users' savedItems/{uid}/items/{postId} references: that
+  //   subcollection is owner-write-only by rule (verified before
+  //   writing this) — this function has no permission to touch
+  //   another user's saved list, and a collection-group scan across
+  //   every user to find references would be exactly the "expensive,
+  //   dangerous broad collection scan" this task explicitly warns
+  //   against. SavedItemCard.jsx and SharedCard.jsx already render
+  //   "Post unavailable" for a missing post (confirmed by reading
+  //   both before writing this), so an orphaned save reference
+  //   degrades gracefully in the UI rather than crashing — this is a
+  //   real, accepted limitation, not a silently ignored one.
+  //
+  // - Notifications pointing at this postId (likes/comments/shares/
+  //   mentions received on it): each lives in the RECIPIENT's own
+  //   users/{uid}/notifications — same cross-user ownership problem
+  //   as saves. NotificationCard.jsx's existing click-through
+  //   (navigate to /post/{postId}) would land on a 404-equivalent
+  //   "post not found" state — not cleaned up, not crashing either.
+  //
+  // - xpLog entries and userProgress XP/points/reputation totals: NOT
+  //   reversed. The existing gamification design has no reward-
+  //   reversal mechanism anywhere (confirmed — no such function
+  //   exists), and XP/points here already function as a historical
+  //   record of activity performed, not a live-recomputed balance
+  //   tied to content still existing. Reversing it would also open a
+  //   real farming vector this system doesn't currently need to
+  //   guard against: post, get XP, delete, repost identical content,
+  //   get XP again — the dedupeKey (post_created_${postId}) already
+  //   prevents the SAME post id from earning twice, but a genuinely
+  //   NEW post id from a recreated post is legitimately a new award
+  //   under the existing architecture, same as it would be for any
+  //   two different real posts.
 }
