@@ -29,9 +29,12 @@ export default function RadarScanner({ matches, onSelectMatch, size = 320 }) {
   const minRadius = size * 0.22
   const maxRadius = size * 0.46
 
-  const positioned = useMemo(() => {
-    return matches.map((match, index) => {
-      const radiusFraction = matches.length > 1 ? index / (matches.length - 1) : 0
+  const MAX_TRACKED_DISTANCE = 10 // meters — matches RADAR_RADIUS_METERS in radarLocationService.js; anything beyond this was already filtered out server-query-side, this is just the positioning scale
+
+const positioned = useMemo(() => {
+    return matches.map((match) => {
+      const clampedDistance = Math.min(match.distanceMeters ?? MAX_TRACKED_DISTANCE, MAX_TRACKED_DISTANCE)
+      const radiusFraction = clampedDistance / MAX_TRACKED_DISTANCE
       const radius = minRadius + radiusFraction * (maxRadius - minRadius)
       const angleDeg = angleForUid(match.uid)
       const angleRad = (angleDeg * Math.PI) / 180

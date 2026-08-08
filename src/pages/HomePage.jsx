@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Radar, Search, UserPlus } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
@@ -120,7 +120,63 @@ export default function HomePage() {
     isFollowingAnyone
   } = useFollowingFeed(auth.currentUser?.uid)
 
-  const { posts: forYouPosts, loading: forYouLoading, error: forYouError } = useForYouFeed(auth.currentUser?.uid)
+  const {
+    posts: forYouPosts,
+    loading: forYouLoading,
+    error: forYouError,
+    loadMore: loadMoreForYou,
+    loadingMore: forYouLoadingMore,
+    hasMore: forYouHasMore
+  } = useForYouFeed(auth.currentUser?.uid)
+
+  // Callback ref, not useRef+useEffect — the prior version's effect
+  // dependency array never included forYouLoading, so on the very
+  // first load the effect ran once while the sentinel div didn't
+  // exist yet (it's only rendered in the "loaded" branch of the
+  // loading/error/empty/loaded ternary), found sentinelRef.current
+  // null, and exited. Nothing in the dependency list changed again
+  // when loading finished and the real sentinel mounted, so the
+  // effect never re-ran and the observer was never attached to
+  // anything — confirmed as the actual cause, not assumed. A callback
+  // ref fires exactly when React attaches/detaches the DOM node,
+  // independent of any other state, which is the correct fix for a
+  // conditionally-rendered observation target.
+  const forYouObserverRef = useRef(null)
+
+  const forYouSentinelCallbackRef = useCallback(
+    (node) => {
+      if (forYouObserverRef.current) {
+        forYouObserverRef.current.disconnect()
+        forYouObserverRef.current = null
+      }
+      if (!node) return // node is null on unmount — nothing to observe
+
+      forYouObserverRef.current = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            console.log('[ForYou] sentinel intersecting — observer fired') // TEMPORARY — remove once confirmed
+            loadMoreForYouRef.current()
+          }
+        },
+        { rootMargin: '600px' } // triggers well before the sentinel is visible, so the next page is ready before the user hits the true bottom
+      )
+      forYouObserverRef.current.observe(node)
+      console.log('[ForYou] observer attached to real sentinel node; scroll root: window (verified — no overflow/height constraint found in App.jsx, SwipeablePage.jsx, or this page\'s own outer wrapper)') // TEMPORARY — remove once confirmed
+    },
+    [] // stable identity — the callback itself never needs to change; loadMoreForYouRef (below) always calls the latest loadMore/hasMore/loadingMore via a ref, so this doesn't need them as dependencies either
+  )
+
+  // loadMoreForYouRef always points at a fresh closure over the
+  // current loadMore/hasMore/loadingMore — this is what lets the
+  // IntersectionObserver's callback (created once, via the stable
+  // forYouSentinelCallbackRef above) always see current state instead
+  // of a stale closure from whenever the observer was first created.
+  const loadMoreForYouRef = useRef(() => {})
+  useEffect(() => {
+    loadMoreForYouRef.current = () => {
+      if (forYouHasMore && !forYouLoadingMore) loadMoreForYou()
+    }
+  }, [forYouHasMore, forYouLoadingMore, loadMoreForYou])
 
   const [communities, setCommunities] = useState([])
   const [communitiesLoading, setCommunitiesLoading] = useState(false)
@@ -395,7 +451,20 @@ export default function HomePage() {
                 <p className="mt-1 text-sm text-gray-400">Be the first student to post.</p>
               </div>
             ) : (
-              forYouPosts.map((post) => <PostCard key={post.id} post={post} />)
+              <>
+                {forYouPosts.map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+                <div ref={forYouSentinelCallbackRef} />
+                {forYouLoadingMore && (
+                  <div className="py-6 flex justify-center">
+                    <Loader size="sm" tone="dark" />
+                  </div>
+                )}
+                {!forYouHasMore && forYouPosts.length > 0 && (
+                  <p className="py-8 text-center text-xs text-gray-400">You're all caught up.</p>
+                )}
+              </>
             )
           ) : error ? (
             <div className="px-6 py-16 text-center">

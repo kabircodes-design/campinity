@@ -1,4 +1,4 @@
-import { onSnapshot } from 'firebase/firestore'
+import { getDocs, onSnapshot } from 'firebase/firestore'
 import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
 import { enrichWithAuthors } from './useAuthorEnrichment.js'
 
@@ -88,6 +88,15 @@ export function mapPostForCard(raw, currentUid, liveProfile) {
  * older snapshot's enrichment is still in flight, the older result is
  * dropped rather than allowed to overwrite the newer one.
  *
+ * onUpdate now also receives the raw last QueryDocumentSnapshot from
+ * this batch — an additive second argument, not a breaking change.
+ * useFollowingFeed.js's existing (enriched) => {...} callback still
+ * works unmodified (it just never reads the second argument).
+ * useForYouFeed.js uses it as the pagination cursor: Firestore's
+ * startAfter() needs the actual document snapshot, not a value, and
+ * this is the only place that snapshot exists before mapping discards
+ * it.
+ *
  * Returns the unsubscribe function — caller is responsible for
  * cleanup, same as calling onSnapshot directly would require.
  */
@@ -99,6 +108,7 @@ export function subscribeToEnrichedPostsQuery(postsQuery, currentUid, onUpdate, 
     (snap) => {
       const thisSequence = ++sequence
       const rawDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      const lastRawDoc = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null
 
       enrichWithAuthors(
         rawDocs,
@@ -106,11 +116,32 @@ export function subscribeToEnrichedPostsQuery(postsQuery, currentUid, onUpdate, 
         (raw, profile) => mapPostForCard(raw, currentUid, profile)
       ).then((enriched) => {
         if (sequence !== thisSequence) return // a newer snapshot already arrived; drop this stale result
-        onUpdate(enriched)
+        onUpdate(enriched, lastRawDoc)
       })
     },
     (err) => {
       onError?.(err)
     }
   )
+}
+
+/**
+ * One-time (not live) paginated fetch — the "load next page" half of
+ * cursor pagination. Same enrichment pipeline as the live subscription
+ * above (mapPostForCard, enrichWithAuthors), so a paginated post and a
+ * live-subscribed post are visually and structurally identical, never
+ * two different code paths a user could notice diverge.
+ */
+export async function fetchEnrichedPostsPage(postsQuery, currentUid) {
+  const snap = await getDocs(postsQuery)
+  const rawDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const lastRawDoc = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null
+
+  const enriched = await enrichWithAuthors(
+    rawDocs,
+    (raw) => (raw.isAnonymous ? null : raw.userId),
+    (raw, profile) => mapPostForCard(raw, currentUid, profile)
+  )
+
+  return { posts: enriched, lastRawDoc, isLastPage: snap.docs.length === 0 }
 }

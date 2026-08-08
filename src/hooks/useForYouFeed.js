@@ -1,42 +1,61 @@
-import { useEffect, useState } from 'react'
-import { collection, limit, orderBy, query, where } from 'firebase/firestore'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { collection, limit, orderBy, query, startAfter, where } from 'firebase/firestore'
 import { db } from '../firebase/firebase.js'
-import { subscribeToEnrichedPostsQuery } from './postFeedShared.js'
+import { subscribeToEnrichedPostsQuery, fetchEnrichedPostsPage } from './postFeedShared.js'
 
 const PAGE_SIZE = 50
 
 /**
- * For You feed — direct Firestore query + the same shared
- * enrichment/mapping pipeline useFollowingFeed.js uses
- * (postFeedShared.js), instead of routing through postService.js's
- * getFeedPosts(). That's a deliberate scope decision, not an
- * accident: the reported bug ("category always shows General") lives
- * inside getFeedPosts()'s own mapping, in a file I don't have access
- * to. Bypassing it for this tab, using the exact same pipeline
- * Following already proved correct, fixes the bug without needing to
- * guess at or patch code I can't see — and satisfies this task's own
- * "zero duplicated logic, both feeds render identically" requirement
- * more directly than trying to patch two different mappers to agree.
+ * Root cause of the 50-post ceiling, confirmed by reading this file's
+ * prior version directly: a single limit(50) live onSnapshot with no
+ * pagination mechanism at all — not a bug in a filter or a query
+ * condition, just no "next page" ever existed.
  *
- * Query is intentionally simple: all public posts, newest first,
- * capped at PAGE_SIZE. I don't know if "For You" in this project
- * means something more personalized than that (e.g. campus-scoped,
- * ranked) — postService.js might already do more here. If it does,
- * this is a narrower feed than before, not a wrong one; flagged
- * plainly rather than silently assumed to be a complete replacement of
- * whatever personalization may have existed.
+ * Architecture: live subscription for the newest page (so new posts
+ * appear without a refresh, per "handle realtime/new posts
+ * correctly"), one-time cursor-paginated fetches for everything older
+ * (fetchEnrichedPostsPage, added to postFeedShared.js this pass) —
+ * exactly the split this task's own brief suggested as a good
+ * approach. The two are merged by id on every update, so a post that
+ * exists in both the live window and an already-loaded page is never
+ * duplicated, and a brand-new post arriving via the live subscription
+ * is prepended without disturbing already-loaded older pages.
  *
- * Same composite-index requirement as posts queries elsewhere in this
- * project: (visibility ASC, createdAt DESC).
+ * Cursor correctness: Firestore's startAfter() takes an actual
+ * QueryDocumentSnapshot, not a value — it anchors to that document's
+ * real field values regardless of what's currently in any live
+ * window, so it stays valid even as the live portion's top-50 shifts
+ * from new posts arriving. The cursor is updated to the last document
+ * of whichever fetch (live or paginated) most recently extended the
+ * loaded range.
+ *
+ * Same composite-index requirement as before: (visibility ASC,
+ * createdAt DESC) — unchanged, no new index needed for pagination
+ * itself since startAfter uses the same query shape.
  */
 export function useForYouFeed(uid) {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+
+  const cursorRef = useRef(null)
+  const postsMapRef = useRef(new Map()) // id -> post, the source of truth merged into `posts` on every change
+
+  const mergeAndSet = useCallback((newPosts) => {
+    newPosts.forEach((post) => postsMapRef.current.set(post.id, post))
+    const merged = Array.from(postsMapRef.current.values()).sort((a, b) => b._createdAtMs - a._createdAtMs)
+    setPosts(merged)
+    return merged
+  }, [])
 
   useEffect(() => {
     setLoading(true)
     setError('')
+    setHasMore(true)
+    postsMapRef.current = new Map()
+    cursorRef.current = null
 
     const postsQuery = query(
       collection(db, 'posts'),
@@ -48,9 +67,17 @@ export function useForYouFeed(uid) {
     const unsubscribe = subscribeToEnrichedPostsQuery(
       postsQuery,
       uid,
-      (enriched) => {
-        setPosts(enriched)
+      (enriched, lastRawDoc) => {
+        const merged = mergeAndSet(enriched)
+        // Only advance the cursor from the live window if no page has
+        // been loaded beyond it yet — once the user has paginated
+        // further, the live window's own last doc is no longer the
+        // right "next page" starting point.
+        if (!cursorRef.current) cursorRef.current = lastRawDoc
         setLoading(false)
+        // TEMPORARY — remove once pagination is confirmed working in
+        // the running app.
+        console.log('[ForYou] initial/live page:', enriched.length, 'accumulated:', merged.length, 'cursor set:', Boolean(cursorRef.current))
       },
       (err) => {
         setError(err?.message || 'Could not load the feed.')
@@ -59,7 +86,38 @@ export function useForYouFeed(uid) {
     )
 
     return () => unsubscribe()
-  }, [uid])
+  }, [uid, mergeAndSet])
 
-  return { posts, loading, error }
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || !cursorRef.current) {
+      // TEMPORARY — remove once confirmed. Logs exactly why a
+      // pagination attempt was skipped, if it was.
+      console.log('[ForYou] loadMore skipped:', { loadingMore, hasMore, hasCursor: Boolean(cursorRef.current) })
+      return
+    }
+    console.log('[ForYou] loadMore started') // TEMPORARY — remove once confirmed
+    setLoadingMore(true)
+    try {
+      const pageQuery = query(
+        collection(db, 'posts'),
+        where('visibility', '==', 'public'),
+        orderBy('createdAt', 'desc'),
+        startAfter(cursorRef.current),
+        limit(PAGE_SIZE)
+      )
+      const { posts: page, lastRawDoc, isLastPage } = await fetchEnrichedPostsPage(pageQuery, uid)
+      const merged = mergeAndSet(page)
+      if (lastRawDoc) cursorRef.current = lastRawDoc
+      const exhausted = isLastPage || page.length < PAGE_SIZE
+      if (exhausted) setHasMore(false)
+      // TEMPORARY — remove once confirmed.
+      console.log('[ForYou] loadMore completed:', { newPageCount: page.length, mergedTotal: merged.length, hasMore: !exhausted })
+    } catch (err) {
+      setError(err?.message || 'Could not load more posts.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, hasMore, uid, mergeAndSet])
+
+  return { posts, loading, error, loadMore, loadingMore, hasMore }
 }

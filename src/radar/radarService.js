@@ -1,20 +1,27 @@
-import { collection, getDocs, limit, onSnapshot, orderBy, query } from 'firebase/firestore'
-import { db } from '../firebase/firebase.js'
-import { getMutualFollowers } from '../firebase/profileService.js'
+import { getUserProfile, getMutualFollowers } from '../firebase/profileService.js'
 import { getUserCommunityMemberships } from '../firebase/communityService.js'
+import { findNearbyUserLocations } from './radarLocationService.js'
 
 /**
- * Real scoring, not a hard filter — this is what sidesteps the exact
- * bug just being debugged in getNearbyStudents (a strict collegeId
- * equality filter returning zero on any data inconsistency). Fetches
- * a bounded candidate pool, scores every candidate on real signals,
- * sorts, returns the top N. A collegeId mismatch now degrades one
- * candidate's rank instead of making the whole feature fail.
+ * Root cause of the prior bug, confirmed by reading the previous
+ * version of this file directly: it answered "who is registered on
+ * my campus" (a broad social-matching pool with no physical location
+ * involved at all), not "who is physically near me." This rewrite
+ * makes physical proximity (findNearbyUserLocations,
+ * radarLocationService.js — real GPS + geohash query) the PRIMARY
+ * result set. A user only appears here at all if they are within
+ * RADAR_RADIUS_METERS right now, per radarLocationService.js's own
+ * freshness and distance filtering.
  *
- * Scoring weights match the brief's own stated priority order (same
- * college > department > year > interests > mutual communities >
- * mutual friends) — each factor contributes decreasing weight down
- * that list.
+ * Social scoring (college/department/year/interests/mutual
+ * communities/mutual friends) is layered ON TOP of the nearby set,
+ * not used to build the pool — it now answers "how compatible is
+ * this physically-nearby person," which drives the compatibility
+ * ring color and the "why you matched" list, while distanceMeters
+ * (real, from GPS) drives positioning on the radar visualization.
+ * This is the "keep existing visual design/functionality, fix the
+ * underlying data logic" instruction applied directly: the ring-color
+ * and match-reasons UI is unchanged, what feeds it changed.
  */
 
 const SCORE_WEIGHTS = {
@@ -26,12 +33,9 @@ const SCORE_WEIGHTS = {
   perMutualFriend: 2
 }
 
-const CANDIDATE_POOL_SIZE = 80 // bounded fetch — never scans the whole users collection
-const MAX_RESULTS = 20
-
-async function computeMatch(currentProfile, currentUid, candidateDoc, currentCommunityIds, currentInterests) {
-  const data = candidateDoc.data()
-  const uid = candidateDoc.id
+async function computeCompatibility(currentProfile, currentUid, candidateUid, currentCommunityIds, currentInterests) {
+  const data = await getUserProfile(candidateUid)
+  if (!data) return null
 
   let score = 0
   const reasons = []
@@ -56,12 +60,7 @@ async function computeMatch(currentProfile, currentUid, candidateDoc, currentCom
     reasons.push(`${sharedInterests.length} shared interest${sharedInterests.length > 1 ? 's' : ''}`)
   }
 
-  // Mutual communities — cheap set intersection, no extra Firestore
-  // read per candidate (currentCommunityIds is fetched once, up front,
-  // by the caller; candidate's own memberships need one read per
-  // candidate, which IS an N+1 pattern — accepted here because the
-  // pool is bounded to CANDIDATE_POOL_SIZE, not unbounded).
-  const candidateCommunities = await getUserCommunityMemberships(uid).catch(() => [])
+  const candidateCommunities = await getUserCommunityMemberships(candidateUid).catch(() => [])
   const candidateCommunityIds = candidateCommunities.map((m) => m.communityId)
   const mutualCommunityCount = candidateCommunityIds.filter((id) => currentCommunityIds.includes(id)).length
   if (mutualCommunityCount > 0) {
@@ -69,20 +68,19 @@ async function computeMatch(currentProfile, currentUid, candidateDoc, currentCom
     reasons.push(`${mutualCommunityCount} mutual communit${mutualCommunityCount > 1 ? 'ies' : 'y'}`)
   }
 
-  const mutualFriends = await getMutualFollowers(currentUid, uid, { limit: 5 }).catch(() => [])
+  const mutualFriends = await getMutualFollowers(currentUid, candidateUid, { limit: 5 }).catch(() => [])
   if (mutualFriends.length > 0) {
     score += mutualFriends.length * SCORE_WEIGHTS.perMutualFriend
     reasons.push(`${mutualFriends.length} mutual friend${mutualFriends.length > 1 ? 's' : ''}`)
   }
 
   return {
-    uid,
-    displayName: data.displayName ?? data.fullName ?? '',
+    uid: candidateUid,
+    displayName: data.displayName ?? '',
     username: data.username ?? '',
-    avatar: data.avatar ?? data.photoURL ?? '',
+    avatar: data.avatar ?? '',
     course: data.course ?? '',
     year: data.year ?? '',
-    collegeId: data.collegeId ?? null,
     interests: candidateInterests,
     verifiedCampus: data.verifiedCampus ?? false,
     mutualCommunityCount,
@@ -94,57 +92,38 @@ async function computeMatch(currentProfile, currentUid, candidateDoc, currentCom
 }
 
 /**
- * One-time fetch + score. Real-time updates (subscribeToRadarMatches
- * below) re-run this same scoring logic whenever the candidate pool's
- * underlying query snapshot changes — no separate live-scoring code
- * path to keep in sync with this one.
+ * One-time fetch: finds physically nearby users (real GPS query),
+ * then enriches each with compatibility scoring for display. Not a
+ * live subscription itself — the caller (useRadarPresence.js) re-runs
+ * this periodically as the user's own location updates, since a
+ * geohash-prefix query has no live onSnapshot equivalent that also
+ * handles the moving-query-center case cleanly.
  */
-export async function getRadarMatches(currentUid, currentProfile) {
-  if (!currentUid) return []
+export async function getNearbyMatches(currentUid, currentProfile, lat, lng) {
+  if (!currentUid || lat == null || lng == null) return []
+
+  const nearbyLocations = await findNearbyUserLocations(currentUid, lat, lng)
+  if (nearbyLocations.length === 0) return []
 
   const currentInterests = Array.isArray(currentProfile?.interests) ? currentProfile.interests : []
   const currentCommunities = await getUserCommunityMemberships(currentUid).catch(() => [])
   const currentCommunityIds = currentCommunities.map((m) => m.communityId)
 
-  const poolSnap = await getDocs(query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(CANDIDATE_POOL_SIZE)))
-  const candidates = poolSnap.docs.filter((d) => d.id !== currentUid)
-
-  const scored = await Promise.all(
-    candidates.map((d) => computeMatch(currentProfile || {}, currentUid, d, currentCommunityIds, currentInterests))
+  const enriched = await Promise.all(
+    nearbyLocations.map(async (loc) => {
+      const compatibility = await computeCompatibility(
+        currentProfile || {},
+        currentUid,
+        loc.uid,
+        currentCommunityIds,
+        currentInterests
+      )
+      if (!compatibility) return null
+      return { ...compatibility, distanceMeters: loc.distanceMeters, locationAccuracy: loc.accuracy }
+    })
   )
 
-  return scored.sort((a, b) => b.score - a.score).slice(0, MAX_RESULTS)
-}
-
-/**
- * Live version — re-scores whenever the underlying candidate pool
- * changes (a new signup, a profile update within the pool window).
- * Scoring itself isn't a live listener (mutual-community/mutual-
- * friend lookups are one-time reads per candidate) — this re-runs the
- * full score on every pool change, which is fine at
- * CANDIDATE_POOL_SIZE=80, not designed to scale to a live listener on
- * a much larger pool without further work.
- */
-export function subscribeToRadarMatches(currentUid, currentProfile, callback) {
-  if (!currentUid) {
-    callback([])
-    return () => {}
-  }
-
-  const poolQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(CANDIDATE_POOL_SIZE))
-
-  return onSnapshot(poolQuery, async (snap) => {
-    const currentInterests = Array.isArray(currentProfile?.interests) ? currentProfile.interests : []
-    const currentCommunities = await getUserCommunityMemberships(currentUid).catch(() => [])
-    const currentCommunityIds = currentCommunities.map((m) => m.communityId)
-
-    const candidates = snap.docs.filter((d) => d.id !== currentUid)
-    const scored = await Promise.all(
-      candidates.map((d) => computeMatch(currentProfile || {}, currentUid, d, currentCommunityIds, currentInterests))
-    )
-
-    callback(scored.sort((a, b) => b.score - a.score).slice(0, MAX_RESULTS))
-  })
+  return enriched.filter(Boolean).sort((a, b) => a.distanceMeters - b.distanceMeters)
 }
 
 export function matchTier(score) {
