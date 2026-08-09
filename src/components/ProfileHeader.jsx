@@ -1,8 +1,11 @@
-import { useState } from 'react'
-import { BadgeCheck, Calendar, Link as LinkIcon, MessageCircle, Share2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { BadgeCheck, Calendar, Link as LinkIcon, MessageCircle, MoreVertical, Share2 } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import VerifiedBadge from './VerifiedBadge.jsx'
+import ReportModal from './ReportModal.jsx'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { auth } from '../firebase/firebase.js'
+import { blockUser, isBlocking, unblockUser } from '../firebase/blockService.js'
 
 /**
  * Complete redesign — built fresh since this is an explicit redesign
@@ -36,6 +39,37 @@ export default function ProfileHeader({
   mutualFollowers = []
 }) {
   const [followBusy, setFollowBusy] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [blocked, setBlocked] = useState(false)
+  const [blockBusy, setBlockBusy] = useState(false)
+
+  useEffect(() => {
+    if (isOwnProfile || !profile?.uid) return
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+    isBlocking(uid, profile.uid).then(setBlocked).catch(() => {})
+  }, [isOwnProfile, profile?.uid])
+
+  const handleToggleBlock = async () => {
+    const uid = auth.currentUser?.uid
+    if (!uid || !profile?.uid || blockBusy) return
+    setBlockBusy(true)
+    try {
+      if (blocked) {
+        await unblockUser(uid, profile.uid)
+        setBlocked(false)
+      } else {
+        await blockUser(uid, profile.uid)
+        setBlocked(true)
+      }
+    } catch {
+      // best-effort — menu stays open, state simply doesn't flip
+    } finally {
+      setBlockBusy(false)
+      setMenuOpen(false)
+    }
+  }
 
   const joinedLabel = profile.createdAt?.toDate
     ? profile.createdAt.toDate().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
@@ -182,7 +216,49 @@ export default function ProfileHeader({
         >
           <Share2 className="w-4 h-4" />
         </button>
+        {!isOwnProfile && (
+          <div className="relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="More options"
+              className="w-11 h-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 transition-all duration-300"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-12 w-40 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    setReportOpen(true)
+                  }}
+                  className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                >
+                  Report
+                </button>
+                <button
+                  type="button"
+                  onClick={handleToggleBlock}
+                  disabled={blockBusy}
+                  className="w-full text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-all duration-150 disabled:opacity-50"
+                >
+                  {blocked ? 'Unblock' : 'Block'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      <ReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        targetType="user"
+        targetId={profile?.uid}
+        targetOwnerUid={profile?.uid}
+      />
     </div>
   )
 }

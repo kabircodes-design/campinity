@@ -622,9 +622,16 @@ export async function deletePost(postId, uid) {
     }
   }
 
-  if (!isAuthorized) {
-    throw new Error('You can only delete your own posts.')
-  }
+  // isAuthorized above is informational only for owner/community-admin
+  // cases — it's NOT the actual security gate. A platform admin is a
+  // valid third caller now too (firestore.rules' own posts delete rule
+  // covers all three), but platformAdmins/{uid} can never be read by
+  // any client (locked to `if false` even for the admin themselves —
+  // see firestore.rules), so no client-side check can ever confirm
+  // that case in advance. The real deleteDoc call below is the actual
+  // authorization check; it fails with a genuine Firestore permission
+  // error for anyone who isn't the owner, a community admin, or a
+  // platform admin — never silently succeeds for someone unauthorized.
 
   // Comments (and their replies — same subcollection, parentCommentId
   // distinguishes them) — genuinely owned by this post, safely batch-

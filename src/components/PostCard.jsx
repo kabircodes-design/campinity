@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import VerifiedBadge from './VerifiedBadge.jsx'
+import ReportModal from './ReportModal.jsx'
 import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
 import SaveBottomSheet from '../saved/SaveBottomSheet.jsx'
 import { subscribeToIsItemSaved } from '../saved/savedService.js'
@@ -61,6 +62,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
   const isOwner = auth.currentUser?.uid && post.userId === auth.currentUser.uid
   const [shareCount, setShareCount] = useState(post.shareCount || 0)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -179,8 +181,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
                 {post.year && ` · ${post.year}`} · {post.college}
               </p>
             </button>
-            {(isOwner || canModerate) && (
-              <div className="relative flex-shrink-0">
+            <div className="relative flex-shrink-0">
                 <button
                   type="button"
                   aria-label="Post options"
@@ -205,20 +206,33 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
                         Edit post
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        setConfirmingDelete(true)
-                      }}
-                      className="w-full text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-all duration-150"
-                    >
-                      Delete post
-                    </button>
+                    {(isOwner || canModerate) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          setConfirmingDelete(true)
+                        }}
+                        className="w-full text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-all duration-150"
+                      >
+                        Delete post
+                      </button>
+                    )}
+                    {!isOwner && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          setReportOpen(true)
+                        }}
+                        className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                      >
+                        Report post
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
-            )}
           </div>
 
           <div className="mt-1.5 flex items-center gap-2">
@@ -446,6 +460,14 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         </div>,
         document.body
       )}
+
+      <ReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        targetType="post"
+        targetId={post.id}
+        targetOwnerUid={post.userId}
+      />
     </>
   )
 }

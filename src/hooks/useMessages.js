@@ -79,7 +79,11 @@ export function useMessages(chatId, otherUid) {
       await sendMessageToFirestore(chatId, uid, text || '', { type, imageUrl })
     } catch (err) {
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimisticEntry.id))
-      setError(err?.message || 'Could not send this message.')
+      if (err?.code === 'permission-denied') {
+        setError("You can't message this person right now.")
+      } else {
+        setError(err?.message || 'Could not send this message.')
+      }
     } finally {
       setSending(false)
     }
