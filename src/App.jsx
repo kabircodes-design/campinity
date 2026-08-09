@@ -34,6 +34,7 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage.jsx'))
 const NotificationDetailPage = lazy(() => import('./pages/NotificationDetailPage.jsx'))
 const AddCollegePage = lazy(() => import('./pages/AddCollegePage.jsx'))
 const CollegePage = lazy(() => import('./pages/CollegePage.jsx'))
+const CollegeRequestsAdminPage = lazy(() => import('./pages/CollegeRequestsAdminPage.jsx'))
 const FollowersPage = lazy(() => import('./pages/FollowersPage.jsx'))
 const FollowingPage = lazy(() => import('./pages/FollowingPage.jsx'))
 const CreateCommunityPage = lazy(() => import('./pages/CreateCommunityPage.jsx'))
@@ -206,6 +207,14 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <CollegePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/college-requests"
+          element={
+            <ProtectedRoute stage="home">
+              <CollegeRequestsAdminPage />
             </ProtectedRoute>
           }
         />

@@ -1,59 +1,68 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Check } from 'lucide-react'
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { auth, db } from '../firebase/firebase.js'
 
+/**
+ * College data in this app is local/static (dummyColleges.js), not a
+ * Firestore collection — confirmed by tracing every real usage before
+ * writing this page. That means this page cannot actually add to the
+ * live college list; a real "creation" flow doesn't exist and inventing
+ * one would mean fabricating authoritative data no other part of the
+ * app would ever see, since dummyColleges.js is a static file, not
+ * something this page could safely rewrite from the client.
+ *
+ * What's implemented instead: a genuine request/submission flow — the
+ * user's suggestion is written to a new collegeRequests collection for
+ * manual review, never merged into the authoritative list automatically.
+ * This matches the explicit instruction: no arbitrary user should be
+ * able to silently create/modify authoritative college records, and no
+ * admin/moderation system exists for colleges to build a fake approval
+ * flow on top of.
+ *
+ * New Firestore dependency, reported explicitly per the scope-lock
+ * instruction: collegeRequests/{requestId} needs its own rule (create
+ * by the authenticated requester only, no public read/write) since
+ * nothing else in firestore.rules currently covers it — without this,
+ * the default deny-all catch-all at the bottom of the rules file would
+ * reject every submission.
+ */
 export default function AddCollegePage() {
   const navigate = useNavigate()
 
   const [name, setName] = useState('')
-  const [city, setCity] = useState('')
-  const [state, setState] = useState('')
-  const [errors, setErrors] = useState({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [location, setLocation] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-
-  const validate = () => {
-    const next = {}
-    if (!name.trim()) next.name = 'College name is required'
-    if (!city.trim()) next.city = 'City is required'
-    if (!state.trim()) next.state = 'State is required'
-    setErrors(next)
-    return Object.keys(next).length === 0
-  }
+  const [error, setError] = useState('')
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    if (!validate() || isSubmitting) return
+    if (!name.trim() || submitting) return
 
-    setIsSubmitting(true)
-    // TODO(firebase): write to a "collegeRequests" collection for review once Firebase is wired up.
-    await new Promise((resolve) => setTimeout(resolve, 600))
-    setIsSubmitting(false)
-    setSubmitted(true)
-  }
+    const uid = auth.currentUser?.uid
+    if (!uid) {
+      setError('You need to be signed in.')
+      return
+    }
 
-  if (submitted) {
-    return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-        <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm flex items-center justify-center px-6 text-center">
-          <div>
-            <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto text-emerald-600">
-              <CheckCircle2 className="w-7 h-7" strokeWidth={1.7} />
-            </div>
-            <p className="mt-4 text-sm font-semibold text-gray-900 max-w-[260px] mx-auto leading-relaxed">
-              Thanks! We'll review your college and add it soon.
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className="mt-5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
-            >
-              Back
-            </button>
-          </div>
-        </div>
-      </div>
-    )
+    setSubmitting(true)
+    setError('')
+    try {
+      await addDoc(collection(db, 'collegeRequests'), {
+        name: name.trim(),
+        location: location.trim(),
+        requestedBy: uid,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      })
+      setSubmitted(true)
+    } catch (err) {
+      setError(err?.message || 'Could not submit your request. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -73,79 +82,74 @@ export default function AddCollegePage() {
           </div>
         </header>
 
-        <form onSubmit={handleSubmit} className="px-4 py-5 space-y-5">
-          <p className="text-sm text-gray-500 leading-relaxed">
-            Can't find your college in our verified list? Tell us about it and we'll review and add it.
-          </p>
-
-          <div>
-            <label
-              htmlFor="add-college-name"
-              className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5"
+        {submitted ? (
+          <div className="px-6 py-16 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center">
+              <Check className="w-5 h-5 text-emerald-600" />
+            </div>
+            <p className="mt-3 text-sm font-semibold text-gray-900">Request submitted</p>
+            <p className="mt-1 text-sm text-gray-400 max-w-[280px] mx-auto">
+              We'll review your college and add it soon. Thanks for helping grow Campinity.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="mt-5 rounded-full bg-blue-600 text-white text-sm font-semibold px-6 py-2.5 hover:bg-blue-700 transition-all duration-300"
             >
-              College name
-            </label>
-            <input
-              id="add-college-name"
-              type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              disabled={isSubmitting}
-              className={`w-full rounded-xl border bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
-                errors.name ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
-              }`}
-            />
-            {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
+              Done
+            </button>
           </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="px-4 py-5 space-y-5">
+            <p className="text-sm text-gray-500">
+              Don't see your college in the list? Submit it here and we'll review it for the campus directory.
+            </p>
 
-          <div>
-            <label
-              htmlFor="add-college-city"
-              className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5"
+            <div>
+              <label htmlFor="college-name" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                College name
+              </label>
+              <input
+                id="college-name"
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                disabled={submitting}
+                placeholder="e.g. St. Xavier's College"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="college-location" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                Location
+              </label>
+              <input
+                id="college-location"
+                type="text"
+                value={location}
+                onChange={(event) => setLocation(event.target.value)}
+                disabled={submitting}
+                placeholder="e.g. Mumbai, Maharashtra"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+              />
+            </div>
+
+            {error && (
+              <p role="alert" className="rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={!name.trim() || submitting}
+              className="w-full rounded-full bg-blue-600 text-white text-sm font-semibold py-3 hover:bg-blue-700 disabled:opacity-50 transition-all duration-300"
             >
-              City
-            </label>
-            <input
-              id="add-college-city"
-              type="text"
-              value={city}
-              onChange={(event) => setCity(event.target.value)}
-              disabled={isSubmitting}
-              className={`w-full rounded-xl border bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
-                errors.city ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
-              }`}
-            />
-            {errors.city && <p className="mt-1 text-xs text-red-500">{errors.city}</p>}
-          </div>
-
-          <div>
-            <label
-              htmlFor="add-college-state"
-              className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5"
-            >
-              State
-            </label>
-            <input
-              id="add-college-state"
-              type="text"
-              value={state}
-              onChange={(event) => setState(event.target.value)}
-              disabled={isSubmitting}
-              className={`w-full rounded-xl border bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
-                errors.state ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
-              }`}
-            />
-            {errors.state && <p className="mt-1 text-xs text-red-500">{errors.state}</p>}
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-full bg-blue-600 text-white text-sm font-semibold py-3 hover:bg-blue-700 disabled:opacity-50 transition-all duration-300"
-          >
-            {isSubmitting ? 'Submitting…' : 'Submit'}
-          </button>
-        </form>
+              {submitting ? 'Submitting…' : 'Submit Request'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   )

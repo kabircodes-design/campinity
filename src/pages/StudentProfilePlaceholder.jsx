@@ -134,6 +134,21 @@ export default function StudentProfilePlaceholder() {
     }
   }, [activeTab, profile, communitiesLoadedOnce])
 
+  const [college, setCollege] = useState(null)
+  useEffect(() => {
+    if (!profile?.collegeId) {
+      setCollege(null)
+      return
+    }
+    let cancelled = false
+    getCollegeById(profile.collegeId).then((result) => {
+      if (!cancelled) setCollege(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.collegeId])
+
   const handleFollow = async () => {
     if (!currentUid || !profile) return
     await followUser(currentUid, profile.uid)
@@ -192,7 +207,6 @@ export default function StudentProfilePlaceholder() {
     )
   }
 
-  const college = getCollegeById(profile.collegeId)
   const tabs = [
     { key: 'posts', label: 'Posts' },
     { key: 'pinned', label: 'Pinned' },

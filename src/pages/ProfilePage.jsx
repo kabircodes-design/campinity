@@ -168,6 +168,21 @@ export default function ProfilePage() {
     }
   }, [activeTab, currentUid, communitiesLoadedOnce])
 
+  const [college, setCollege] = useState(null)
+  useEffect(() => {
+    if (!profile?.collegeId) {
+      setCollege(null)
+      return
+    }
+    let cancelled = false
+    getCollegeById(profile.collegeId).then((result) => {
+      if (!cancelled) setCollege(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.collegeId])
+
   const toggleGridLayout = () => {
     const next = gridLayout === 'grid' ? 'list' : 'grid'
     setGridLayout(next)
@@ -192,8 +207,6 @@ export default function ProfilePage() {
       </div>
     )
   }
-
-  const college = getCollegeById(profile.collegeId)
 
   const displayProfile = {
     ...profile,

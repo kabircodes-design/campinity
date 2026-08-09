@@ -132,7 +132,7 @@ export default function EditProfilePage() {
           setUsername(profile.username || '')
           setOriginalUsername(profile.username || '')
           setBio(profile.bio || '')
-          setSelectedCollege(getCollegeById(profile.collegeId))
+          setSelectedCollege(await getCollegeById(profile.collegeId))
           setDepartment(profile.course || '')
           setYear(profile.year || years[0])
           setSkills(profile.skills || [])
