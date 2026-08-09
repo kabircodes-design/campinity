@@ -54,15 +54,19 @@ export function useMessages(chatId, otherUid) {
     markChatRead(chatId, uid).catch(() => {})
   }, [chatId, uid])
 
-  const sendMessage = async (text) => {
-    if (!chatId || !uid || !text?.trim()) return
+  const sendMessage = async (text, options = {}) => {
+    const { type = 'text', imageUrl = null } = options
+    if (!chatId || !uid) return
+    if (type === 'text' && !text?.trim()) return
     setSending(true)
     setError('')
 
     const optimisticEntry = {
       id: `optimistic-${Date.now()}`,
       senderId: uid,
-      text: text.trim(),
+      text: text?.trim() || '',
+      type,
+      imageUrl,
       read: false,
       edited: false,
       deletedFor: [],
@@ -72,7 +76,7 @@ export function useMessages(chatId, otherUid) {
     setOptimisticMessages((prev) => [...prev, optimisticEntry])
 
     try {
-      await sendMessageToFirestore(chatId, uid, text)
+      await sendMessageToFirestore(chatId, uid, text || '', { type, imageUrl })
     } catch (err) {
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimisticEntry.id))
       setError(err?.message || 'Could not send this message.')

@@ -57,8 +57,8 @@ export default function StoryComposer({ onClose, onCreated }) {
     setUploading(true)
     setError('')
     try {
-      const mediaUrl = await uploadStoryMedia(uid, file)
-      await createStory({ uid, mediaUrl, mediaType, author })
+      const { mediaUrl, storagePath } = await uploadStoryMedia(uid, file)
+      await createStory({ uid, mediaUrl, storagePath, mediaType, author })
       onCreated?.()
       onClose()
     } catch (err) {

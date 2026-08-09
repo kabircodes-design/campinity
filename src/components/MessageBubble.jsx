@@ -1,4 +1,6 @@
-import { Check, CheckCheck, Clock } from 'lucide-react'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Check, CheckCheck, Clock, X } from 'lucide-react'
 import SharedCard from '../sharing/SharedCard.jsx'
 
 /**
@@ -7,9 +9,19 @@ import SharedCard from '../sharing/SharedCard.jsx'
  * optimistic send) shows a clock icon instead of a real timestamp —
  * that field only exists client-side before Firestore confirms the
  * write, so it's the correct signal for "still sending," not a guess.
+ *
+ * type==='image' is a new, dedicated branch — the prior version
+ * always rendered SharedCard for any non-text type, which is correct
+ * for shared posts but wrong for a real chat image message. imageUrl
+ * itself was already a fully-supported field on sendMessage()
+ * (confirmed by reading that function directly) — only the rendering
+ * side was missing.
  */
 export default function MessageBubble({ message, isMine, currentUid }) {
   const type = message.type || 'text' // existing messages have no `type` field at all — this is what makes them render exactly as before, through this same branch
+  const [enlarged, setEnlarged] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [imageFailed, setImageFailed] = useState(false)
 
   const time = message.pending
     ? null
@@ -20,12 +32,34 @@ export default function MessageBubble({ message, isMine, currentUid }) {
   return (
     <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[75%] rounded-2xl px-3.5 py-2 ${
+        className={`max-w-[75%] rounded-2xl ${type === 'image' ? 'p-1' : 'px-3.5 py-2'} ${
           isMine ? 'bg-blue-600 text-white rounded-br-md' : 'bg-gray-100 text-gray-900 rounded-bl-md'
         } ${message.pending ? 'opacity-60' : 'opacity-100'} transition-opacity duration-300`}
       >
         {type === 'text' ? (
           <p className="text-[14px] leading-relaxed whitespace-pre-wrap break-words">{message.text}</p>
+        ) : type === 'image' ? (
+          <div>
+            {imageFailed ? (
+              <div className="w-48 h-32 rounded-xl flex items-center justify-center bg-black/10 text-xs">
+                Couldn't load image
+              </div>
+            ) : (
+              <button type="button" onClick={() => setEnlarged(true)} className="block relative">
+                {!imageLoaded && <div className="w-48 h-32 rounded-xl bg-black/10 animate-pulse" />}
+                <img
+                  src={message.imageUrl}
+                  alt=""
+                  onLoad={() => setImageLoaded(true)}
+                  onError={() => setImageFailed(true)}
+                  className={`max-w-[220px] rounded-xl ${imageLoaded ? 'block' : 'hidden'}`}
+                />
+              </button>
+            )}
+            {message.text && (
+              <p className="mt-1.5 px-2 text-[14px] leading-relaxed whitespace-pre-wrap break-words">{message.text}</p>
+            )}
+          </div>
         ) : (
           <div className={isMine ? '[&_button]:bg-white/10' : ''}>
             <SharedCard message={message} currentUid={currentUid} />
@@ -34,7 +68,7 @@ export default function MessageBubble({ message, isMine, currentUid }) {
             )}
           </div>
         )}
-        <div className={`mt-0.5 flex items-center gap-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+        <div className={`mt-0.5 ${type === 'image' ? 'px-2 pb-1' : ''} flex items-center gap-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
           {message.edited && (
             <span className={`text-[10px] ${isMine ? 'text-white/60' : 'text-gray-400'}`}>Edited</span>
           )}
@@ -52,6 +86,22 @@ export default function MessageBubble({ message, isMine, currentUid }) {
           )}
         </div>
       </div>
+
+      {enlarged &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center px-4">
+            <button
+              type="button"
+              onClick={() => setEnlarged(false)}
+              aria-label="Close"
+              className="absolute top-4 right-4 text-white/90 hover:text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img src={message.imageUrl} alt="" className="max-w-full max-h-full object-contain rounded-lg" />
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

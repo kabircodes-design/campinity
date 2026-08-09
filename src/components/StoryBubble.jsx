@@ -23,7 +23,7 @@ import StoryViewer from './StoryViewer.jsx'
  * COMPOSER, which creates a new stories/{storyId} document — never a
  * post, never CreatePostPage.
  */
-export default function StoryBubble({ story }) {
+export default function StoryBubble({ story, seen = false, onViewed, onDeleted }) {
   const [composerOpen, setComposerOpen] = useState(false)
   const [viewerOpen, setViewerOpen] = useState(false)
 
@@ -46,7 +46,11 @@ export default function StoryBubble({ story }) {
       >
         <div
           className={`relative w-14 h-14 rounded-full flex items-center justify-center ${
-            hasActiveStory ? 'p-[2px] bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-500' : ''
+            hasActiveStory
+              ? seen
+                ? 'p-[2px] bg-gray-300'
+                : 'p-[2px] bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-500'
+              : ''
           }`}
         >
           <div className={hasActiveStory ? 'w-full h-full rounded-full bg-white p-[2px]' : 'w-full h-full'}>
@@ -69,7 +73,9 @@ export default function StoryBubble({ story }) {
       {composerOpen && (
         <StoryComposer onClose={() => setComposerOpen(false)} onCreated={() => window.location.reload()} />
       )}
-      {viewerOpen && hasActiveStory && <StoryViewer group={story} onClose={() => setViewerOpen(false)} />}
+      {viewerOpen && hasActiveStory && (
+        <StoryViewer group={story} onClose={() => setViewerOpen(false)} onDeleted={onDeleted} onViewed={onViewed} />
+      )}
     </>
   )
 }

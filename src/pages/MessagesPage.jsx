@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, MoreVertical, Users } from 'lucide-react'
+import { ArrowLeft, MoreVertical, Search, Users } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import ChatCard from '../components/ChatCard.jsx'
 import EmptyChat from '../components/EmptyChat.jsx'
@@ -20,6 +20,7 @@ export default function MessagesPage() {
   const [profiles, setProfiles] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [chatSearchTerm, setChatSearchTerm] = useState('')
   const fetchedUidsRef = useRef(new Set())
 
   useEffect(() => {
@@ -108,6 +109,24 @@ export default function MessagesPage() {
     return bMs - aMs
   })
 
+  // Chat-only search — filters the already-loaded allChats list
+  // locally using data already in this component's own state
+  // (profiles map + each chat's own fields). No new Firestore query,
+  // no connection to the app's global Search page.
+  const normalizedSearch = chatSearchTerm.trim().toLowerCase()
+  const visibleChats = normalizedSearch
+    ? allChats.filter((chat) => {
+        if (chat.type === 'group') {
+          return (chat.groupName || '').toLowerCase().includes(normalizedSearch)
+        }
+        const profile = profiles[chat.otherUid]
+        const nameMatch = (profile?.displayName || '').toLowerCase().includes(normalizedSearch)
+        const usernameMatch = (profile?.username || '').toLowerCase().includes(normalizedSearch)
+        const lastMessageMatch = (chat.lastMessage || '').toLowerCase().includes(normalizedSearch)
+        return nameMatch || usernameMatch || lastMessageMatch
+      })
+    : allChats
+
   if (loading) {
     return (
       <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
@@ -171,6 +190,20 @@ export default function MessagesPage() {
           </div>
         </header>
 
+        <div className="px-4 pt-3 pb-1">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              value={chatSearchTerm}
+              onChange={(event) => setChatSearchTerm(event.target.value)}
+              placeholder="Search chats..."
+              aria-label="Search chats"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+            />
+          </div>
+        </div>
+
         <main className="pb-24">
           {error ? (
             <div className="px-6 py-16 text-center">
@@ -178,9 +211,14 @@ export default function MessagesPage() {
             </div>
           ) : allChats.length === 0 ? (
             <EmptyChat />
+          ) : visibleChats.length === 0 ? (
+            <div className="px-6 py-16 text-center">
+              <p className="text-sm font-semibold text-gray-900">No chats found</p>
+              <p className="mt-1 text-sm text-gray-400">Try a different name or username.</p>
+            </div>
           ) : (
             <div>
-              {allChats.map((chat) => (
+              {visibleChats.map((chat) => (
                 <ChatCard key={chat.id} chat={chat} profile={profiles[chat.otherUid]} />
               ))}
             </div>

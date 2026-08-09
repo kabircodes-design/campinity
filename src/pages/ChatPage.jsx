@@ -7,6 +7,7 @@ import MessageBubble from '../components/MessageBubble.jsx'
 import MessageInput from '../components/MessageInput.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
+import { markChatRead } from '../firebase/chatService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { useChat } from '../hooks/useChat.js'
@@ -47,6 +48,12 @@ export default function ChatPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    if (!uid || !chatId) return
+    markChatRead(chatId, uid).catch(() => {})
+  }, [chatId, messages.length])
 
   const groupedMessages = useMemo(() => {
     const groups = []
@@ -185,7 +192,7 @@ export default function ChatPage() {
               You've sent your message — you can reply again once they accept.
             </p>
           ) : (
-            <MessageInput onSend={sendMessage} disabled={sending} />
+            <MessageInput onSend={sendMessage} disabled={sending} chatId={chatId} />
           )}
         </div>
       </div>

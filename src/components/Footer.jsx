@@ -51,11 +51,11 @@ export default function Footer() {
             </p>
             <ul className="space-y-3 text-[13.5px]">
               <li className="theme-text-secondary">
-                Founder — <span className="theme-text-primary font-medium">It's Secret Gng😜</span>
+                Founder — <span className="theme-text-primary font-medium">Kabir Saiyed</span>
               </li>
               <li>
                 <a
-                  href="https://wa.me/9173********"
+                  href="https://wa.me/917387097365"
                   className="flex items-center gap-2 theme-text-secondary hover:theme-accent transition-colors duration-200"
                 >
                   <Icon name="whatsapp" className="w-4 h-4" strokeWidth={1.4} />

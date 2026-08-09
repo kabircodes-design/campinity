@@ -17,7 +17,8 @@ import {
   where,
   writeBatch
 } from 'firebase/firestore'
-import { db } from './firebase.js'
+import { db, storage } from './firebase.js'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { checkIsFollowing } from './profileService.js'
 import { SHARE_TYPE_LABELS } from '../sharing/shareTypes.js'
 import { awardXP, hasReachedDailyCap } from '../gamification/xpService.js'
@@ -341,6 +342,21 @@ export async function getOlderMessages(chatId, cursor, { pageSize = 50 } = {}) {
     messages: snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse(),
     nextCursor: snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1] : null
   }
+}
+
+/**
+ * Dedicated chatMedia/{chatId}/{uid}/... path — deliberately never
+ * postImages, per explicit instruction. The caller passes the result
+ * straight into sendMessage(chatId, senderId, '', { type: 'image',
+ * imageUrl }) — that function already fully supports this (confirmed
+ * by reading it directly), so this upload helper is the only new
+ * piece actually needed on the service layer.
+ */
+export async function uploadChatImage(chatId, uid, file) {
+  const path = `chatMedia/${chatId}/${uid}/${Date.now()}-${file.name}`
+  const fileRef = ref(storage, path)
+  await uploadBytes(fileRef, file)
+  return getDownloadURL(fileRef)
 }
 
 export async function markChatRead(chatId, uid) {

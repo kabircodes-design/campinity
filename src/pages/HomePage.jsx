@@ -10,7 +10,7 @@ import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getFeedPosts, getAvatarColor, getInitials } from '../firebase/postService.js'
-import { getFeedStories } from '../firebase/storyService.js'
+import { getFeedStories, getViewedStoryIds } from '../firebase/storyService.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
 import { getTrendingCommunities } from '../firebase/communityService.js'
 import CommunityCard from '../components/CommunityCard.jsx'
@@ -57,6 +57,7 @@ export default function HomePage() {
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
   const [stories, setStories] = useState([])
+  const [viewedStoryIds, setViewedStoryIds] = useState(new Set())
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -78,10 +79,15 @@ export default function HomePage() {
 
     const loadFeed = async () => {
       try {
-        const [postsData, storiesData] = await Promise.all([getFeedPosts(uid), getFeedStories()])
+        const [postsData, storiesData, viewedIds] = await Promise.all([
+          getFeedPosts(uid),
+          getFeedStories(),
+          getViewedStoryIds(uid)
+        ])
         if (!cancelled) {
           setPosts(postsData)
           setStories(storiesData)
+          setViewedStoryIds(viewedIds)
         }
       } catch (err) {
         if (!cancelled) setError(err?.message || 'Could not load the feed.')
@@ -359,9 +365,27 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         <section className="pb-3.5 border-b border-gray-100">
           <div className="flex items-start gap-3.5 px-4 overflow-x-auto scroll-hidden">
-            {storyBubbles.map((story) => (
-              <StoryBubble key={story.id} story={story} />
-            ))}
+            {storyBubbles.map((story) => {
+              const seen =
+                !story.isAdd && !story.isMore && story.stories?.length > 0
+                  ? story.stories.every((s) => viewedStoryIds.has(s.id))
+                  : false
+              return (
+                <StoryBubble
+                  key={story.id}
+                  story={story}
+                  seen={seen}
+                  onViewed={(storyId) => setViewedStoryIds((prev) => new Set(prev).add(storyId))}
+                  onDeleted={(storyId) => {
+                    setStories((prev) =>
+                      prev
+                        .map((group) => ({ ...group, stories: group.stories.filter((s) => s.id !== storyId) }))
+                        .filter((group) => group.stories.length > 0)
+                    )
+                  }}
+                />
+              )
+            })}
           </div>
         </section>
 
