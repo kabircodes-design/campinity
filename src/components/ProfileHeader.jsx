@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BadgeCheck, Calendar, Link as LinkIcon, MessageCircle, Share2 } from 'lucide-react'
 import Avatar from './Avatar.jsx'
+import VerifiedBadge from './VerifiedBadge.jsx'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 /**
@@ -70,9 +71,7 @@ export default function ProfileHeader({
         <div className="flex-1 min-w-0 pt-1">
           <div className="flex items-center gap-1.5">
             <h1 className="text-lg font-bold text-gray-900 truncate">{profile.displayName}</h1>
-            {profile.verifiedCampus && (
-              <BadgeCheck className="w-4 h-4 text-blue-600 flex-shrink-0" fill="currentColor" fillOpacity={0.15} />
-            )}
+            <VerifiedBadge verified={profile.verifiedCampus} size="lg" />
           </div>
           <p className="text-sm text-gray-400">@{profile.username}</p>
           {profile.verifiedCampus && (

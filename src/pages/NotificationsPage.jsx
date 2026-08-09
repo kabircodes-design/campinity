@@ -80,7 +80,7 @@ export default function NotificationsPage() {
             actorName: profile.displayName,
             actorAvatar: getProfileIdentityImage(profile) || '',
             actorUsername: profile.username,
-            actorVerified: profile.verified
+            actorVerified: profile.verifiedCampus
           })
         )
 

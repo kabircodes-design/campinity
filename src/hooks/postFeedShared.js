@@ -59,7 +59,7 @@ export function mapPostForCard(raw, currentUid, liveProfile) {
     imagePreviewUrl: raw.imageUrl || null,
     name: displayName,
     username,
-    verified: useAnonymous ? false : Boolean(liveProfile?.verified),
+    verified: useAnonymous ? false : Boolean(liveProfile?.verifiedCampus),
     avatarUrl: useAnonymous ? '' : getProfileIdentityImage(liveProfile) || '',
     initials: getInitials(displayName),
     avatarColor: getAvatarColor(avatarSeed),

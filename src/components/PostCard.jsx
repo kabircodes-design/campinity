@@ -19,6 +19,7 @@ import {
   Users
 } from 'lucide-react'
 import Avatar from './Avatar.jsx'
+import VerifiedBadge from './VerifiedBadge.jsx'
 import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
 import SaveBottomSheet from '../saved/SaveBottomSheet.jsx'
 import { subscribeToIsItemSaved } from '../saved/savedService.js'
@@ -169,7 +170,10 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <button type="button" onClick={goToProfile} className="min-w-0 text-left">
-              <p className="text-sm font-semibold text-gray-900 truncate">{post.name}</p>
+              <p className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+                <span className="truncate min-w-0">{post.name}</span>
+                <VerifiedBadge verified={post.verified} size="sm" />
+              </p>
               <p className="text-xs text-gray-400 truncate">
                 {post.department}
                 {post.year && ` · ${post.year}`} · {post.college}

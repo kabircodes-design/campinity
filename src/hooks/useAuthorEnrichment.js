@@ -48,7 +48,7 @@ const FALLBACK_PROFILE = {
   displayName: 'Student',
   username: '',
   avatar: '',
-  verified: false
+  verifiedCampus: false
 }
 
 async function fetchProfile(uid) {
@@ -64,7 +64,7 @@ async function fetchProfile(uid) {
         avatar: profile.avatar || '',
         campusAvatarUrl: profile.campusAvatarUrl || '',
         avatarMode: profile.avatarMode || 'photo',
-        verified: Boolean(profile.verified)
+        verifiedCampus: Boolean(profile.verifiedCampus)
       }
     } catch {
       return FALLBACK_PROFILE

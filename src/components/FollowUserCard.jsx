@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BadgeCheck } from 'lucide-react'
 import Avatar from './Avatar.jsx'
+import VerifiedBadge from './VerifiedBadge.jsx'
 import { auth } from '../firebase/firebase.js'
 import { followUser, unfollowUser } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
@@ -60,9 +60,7 @@ export default function FollowUserCard({ user, mutualCount = 0 }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
           <p className="text-sm font-semibold text-gray-900 truncate">{user.displayName}</p>
-          {user.verifiedCampus && (
-            <BadgeCheck className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="currentColor" fillOpacity={0.15} />
-          )}
+          <VerifiedBadge verified={user.verifiedCampus} size="sm" />
         </div>
         <p className="text-xs text-gray-400 truncate">@{user.username}</p>
         {mutualCount > 0 && (
