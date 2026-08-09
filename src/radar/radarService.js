@@ -94,12 +94,16 @@ async function computeCompatibility(currentProfile, currentUid, candidateUid, cu
 }
 
 /**
- * One-time fetch: finds physically nearby users (real GPS query),
- * then enriches each with compatibility scoring for display. Not a
- * live subscription itself — the caller (useRadarPresence.js) re-runs
- * this periodically as the user's own location updates, since a
- * geohash-prefix query has no live onSnapshot equivalent that also
- * handles the moving-query-center case cleanly.
+ * One-time fetch: finds physically nearby users (real GPS query, the
+ * ONLY visibility decision), then best-effort enriches each with
+ * compatibility scoring for display only. Root-cause fix: the prior
+ * version let a failed/null compatibility lookup silently drop an
+ * already-distance-verified nearby user via .filter(Boolean) — a
+ * person could be 2m away, correctly found by findNearbyUserLocations,
+ * and still vanish from the result if computeCompatibility's extra
+ * getUserProfile call hiccuped for any reason. Distance decides who
+ * appears; compatibility only decides how they're annotated once
+ * they're already in the list.
  */
 export async function getNearbyMatches(currentUid, currentProfile, lat, lng) {
   if (!currentUid || lat == null || lng == null) return []
@@ -119,13 +123,42 @@ export async function getNearbyMatches(currentUid, currentProfile, lat, lng) {
         loc.uid,
         currentCommunityIds,
         currentInterests
-      )
-      if (!compatibility) return null
-      return { ...compatibility, distanceMeters: loc.distanceMeters, locationAccuracy: loc.accuracy }
+      ).catch(() => null)
+
+      // A failed/missing compatibility lookup no longer removes this
+      // person from Radar — they were already confirmed within range
+      // by real GPS distance. They still show, with a minimal
+      // fallback identity (their uid is always known — it came from
+      // the location document itself) and zero score, rather than
+      // disappearing entirely.
+      const base = compatibility || {
+        uid: loc.uid,
+        displayName: '',
+        username: '',
+        avatar: '',
+        campusAvatarUrl: '',
+        avatarMode: 'photo',
+        course: '',
+        year: '',
+        interests: [],
+        verifiedCampus: false,
+        mutualCommunityCount: 0,
+        mutualFriendCount: 0,
+        sharedInterestCount: 0,
+        score: 0,
+        reasons: []
+      }
+
+      // TEMPORARY — remove once cross-device visibility is confirmed.
+      if (!compatibility) {
+        console.log(`[Radar] compatibility lookup failed for ${loc.uid} (distance=${loc.distanceMeters.toFixed(1)}m) — showing with fallback identity instead of hiding them, per the root-cause fix.`)
+      }
+
+      return { ...base, distanceMeters: loc.distanceMeters, locationAccuracy: loc.accuracy }
     })
   )
 
-  return enriched.filter(Boolean).sort((a, b) => a.distanceMeters - b.distanceMeters)
+  return enriched.sort((a, b) => a.distanceMeters - b.distanceMeters)
 }
 
 export function matchTier(score) {

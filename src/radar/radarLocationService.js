@@ -26,7 +26,7 @@ import { encodeGeohash, geohashPrefixForQuery, geohashNeighborhood, haversineMet
  */
 
 const STALE_THRESHOLD_MS = 5 * 60 * 1000 // 5 minutes — a location older than this isn't shown as "nearby right now"
-const RADAR_RADIUS_METERS = 10
+const RADAR_RADIUS_METERS = 15
 const MIN_UPDATE_DISTANCE_METERS = 5 // don't write to Firestore unless the user has actually moved at least this far
 const MIN_UPDATE_INTERVAL_MS = 15000 // ...or at least this much time has passed, whichever comes first — throttling to avoid draining battery/writes
 

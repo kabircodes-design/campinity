@@ -24,9 +24,6 @@ function usePrefersReducedMotion() {
   return reduced
 }
 
-// A handful of tiny "AI node" points connected by thin lines — same
-// idea as Hero's existing decorative motifs, just deliberately sparse
-// so it reads as ambient texture, not a diagram.
 const AI_NODES = [
   { x: 12, y: 22 },
   { x: 28, y: 14 },
@@ -42,21 +39,6 @@ const AI_LINKS = [
   [3, 5]
 ]
 
-/**
- * Premium ambient background for HeroPremium — layered gradient base
- * (navy/midnight/royal/electric-blue/cyan/indigo, never pure black),
- * glow rings, floating particles, twinkling stars, a few AI-node
- * connection lines, and a soft glow that follows the cursor.
- *
- * Continuous ambient loops here are CSS-driven (cheaper for many
- * simultaneous infinite animations than a JS-driven approach); Framer
- * Motion is reserved for HeroPremium's and the mascot's discrete
- * animations — this matches how the rest of this codebase already
- * splits the two.
- *
- * Pauses its CSS animations when the tab is hidden (visibilitychange)
- * and respects prefers-reduced-motion throughout.
- */
 export default function AnimatedBackgroundPremium() {
   const [tier, setTier] = useState(getViewportTier)
   const [paused, setPaused] = useState(false)
@@ -76,9 +58,6 @@ export default function AnimatedBackgroundPremium() {
     return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [])
 
-  // Cursor glow — a single soft blob that eases toward the pointer
-  // (CSS transition does the easing, not JS), rather than a full
-  // multi-point particle trail, to keep this genuinely lightweight.
   useEffect(() => {
     if (reducedMotion || tier === 'mobile') return undefined
     let frame = null
@@ -110,11 +89,7 @@ export default function AnimatedBackgroundPremium() {
   }))
 
   return (
-    <div
-      ref={rootRef}
-      className={`chp-bg ${paused ? 'chp-bg--paused' : ''}`.trim()}
-      aria-hidden="true"
-    >
+    <div ref={rootRef} className={`chp-bg ${paused ? 'chp-bg--paused' : ''}`.trim()} aria-hidden="true">
       <div className="chp-bg__gradient" />
       <div className="chp-bg__bloom" />
       {tier !== 'mobile' && !reducedMotion && <div className="chp-bg__cursor-glow" />}
@@ -150,11 +125,7 @@ export default function AnimatedBackgroundPremium() {
       <FloatingParticles count={particleCount} />
 
       {stars.map((star) => (
-        <span
-          key={star.id}
-          className="chp-star"
-          style={{ top: star.top, left: star.left, '--chp-delay': `${star.delay}s` }}
-        />
+        <span key={star.id} className="chp-star" style={{ top: star.top, left: star.left, '--chp-delay': `${star.delay}s` }} />
       ))}
     </div>
   )
