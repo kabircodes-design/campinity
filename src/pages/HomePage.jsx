@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Radar, Search, UserPlus } from 'lucide-react'
+import { Bell, Plus, Radar, Search, UserPlus } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import StoryBubble from '../components/StoryBubble.jsx'
 import PostCard from '../components/PostCard.jsx'
@@ -285,6 +285,15 @@ export default function HomePage() {
             </button>
 
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Create post"
+                onClick={() => navigate('/create')}
+                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+
               <button
                 type="button"
                 aria-label="Radar"

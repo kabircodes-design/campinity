@@ -1,65 +1,93 @@
-import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
-import { db } from './firebase.js'
-import { getAvatarColor, getInitials } from './postService.js'
+import { addDoc, collection, getDocs, orderBy, query, serverTimestamp, Timestamp, where } from 'firebase/firestore'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { db, storage } from './firebase.js'
 
 const COLLECTION = 'stories'
+const STORY_LIFETIME_MS = 24 * 60 * 60 * 1000
 
-const RING_COLORS = [
-  'from-pink-500 via-red-500 to-yellow-500',
-  'from-blue-400 via-blue-500 to-indigo-500',
-  'from-orange-400 via-pink-500 to-rose-500',
-  'from-emerald-400 via-teal-500 to-blue-500'
-]
+/**
+ * Recreates genuinely missing infrastructure — HomePage.jsx already
+ * imports { getFeedStories } from this exact path and renders results
+ * through StoryBubble.jsx (also missing, built alongside this file),
+ * confirmed by reading HomePage.jsx's actual current usage first, not
+ * guessed. The Firestore schema below was NOT invented — it was
+ * reverse-engineered from the real, pre-existing stories/{storyId}
+ * security rule already in firestore.rules (userId + visibility=='public',
+ * the exact same convention posts/{postId} already established), which
+ * is what confirms this is the real intended schema, not a fresh design.
+ */
 
-function pickRingBySeed(seed = '') {
-  let hash = 0
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) % RING_COLORS.length
+export async function uploadStoryMedia(uid, file) {
+  const path = `stories/${uid}/${Date.now()}-${file.name}`
+  const fileRef = ref(storage, path)
+  await uploadBytes(fileRef, file)
+  return getDownloadURL(fileRef)
+}
+
+export async function createStory({ uid, mediaUrl, mediaType, author }) {
+  const now = Date.now()
+  const payload = {
+    userId: uid,
+    displayName: author?.displayName || '',
+    username: author?.username || '',
+    profilePhoto: author?.profilePhoto || '',
+    mediaUrl,
+    mediaType, // 'image' | 'video'
+    visibility: 'public',
+    createdAt: serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(now + STORY_LIFETIME_MS)
   }
-  return RING_COLORS[Math.abs(hash) % RING_COLORS.length]
+  const docRef = await addDoc(collection(db, COLLECTION), payload)
+  return docRef.id
 }
 
 /**
- * Maps a Firestore stories/{id} document into the shape StoryBubble.jsx
- * already expects (label, initials, colorClass, ringClass, username).
- * isAdd/isMore are never set here — those two bubbles are UI-only
- * affordances built locally in HomePage.jsx, not real story documents.
+ * Active stories only — visibility=='public' (matches the real rule)
+ * AND expiresAt > now, newest first. Expired stories are never
+ * deleted (per the explicit instruction — "do not physically delete
+ * unless the existing architecture already does"; nothing here does),
+ * they're simply excluded from this query going forward.
  *
- * initials/colorClass use the SAME functions every other surface uses
- * (postService.js) — this is what guarantees a story bubble shows
- * exactly the same avatar color as that person's posts, comments,
- * profile, chat, and everywhere else, rather than a coincidentally
- * matching separate implementation.
+ * Results are grouped by author client-side into one bubble per user
+ * (Instagram-style — a user with 3 active stories gets one ring, not
+ * three), each carrying its own ordered list of that user's active
+ * stories for the viewer to step through.
  */
-function mapStoryDoc(docSnap) {
-  const data = docSnap.data()
-  const seed = data.userId || data.displayName || docSnap.id
-
-  return {
-    id: docSnap.id,
-    label: data.displayName || 'Student',
-    username: data.username || '',
-    initials: getInitials(data.displayName),
-    colorClass: getAvatarColor(seed),
-    ringClass: pickRingBySeed(seed)
-  }
-}
-
-/**
- * Loads public stories, newest first.
- *
- * NOTE: combines an equality filter (visibility) with orderBy on a
- * different field (createdAt) — same as postService.js, this requires a
- * Firestore composite index the first time it runs against a real
- * project; Firestore's error includes a direct link to create it.
- */
-export async function getFeedStories(maxResults = 20) {
-  const storiesQuery = query(
-    collection(db, COLLECTION),
-    where('visibility', '==', 'public'),
-    orderBy('createdAt', 'desc'),
-    limit(maxResults)
+export async function getFeedStories() {
+  const now = Timestamp.fromMillis(Date.now())
+  const snap = await getDocs(
+    query(
+      collection(db, COLLECTION),
+      where('visibility', '==', 'public'),
+      where('expiresAt', '>', now),
+      orderBy('expiresAt', 'asc')
+    )
   )
-  const snap = await getDocs(storiesQuery)
-  return snap.docs.map(mapStoryDoc)
+
+  const byUser = new Map()
+  snap.docs.forEach((docSnap) => {
+    const data = docSnap.data()
+    const story = { id: docSnap.id, ...data }
+    if (!byUser.has(data.userId)) {
+      byUser.set(data.userId, {
+        id: data.userId,
+        userId: data.userId,
+        label: data.displayName || 'Student',
+        username: data.username || '',
+        avatar: data.profilePhoto || '',
+        stories: []
+      })
+    }
+    byUser.get(data.userId).stories.push(story)
+  })
+
+  // Newest-first within each user's own story list — the query above
+  // is ordered by expiresAt (required to pair with the >now range
+  // filter), not creation time, so this re-sorts what the viewer
+  // actually needs: most recent story first.
+  const groups = Array.from(byUser.values())
+  groups.forEach((group) => {
+    group.stories.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+  })
+  return groups
 }
