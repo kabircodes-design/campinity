@@ -11,7 +11,7 @@ import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getAvatarColor, getInitials, getUserPosts, getPostById } from '../firebase/postService.js'
-import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
+import { getUserCommunityMemberships, getCommunityById, getOwnedCommunities } from '../firebase/communityService.js'
 
 const GRID_LAYOUT_KEY = 'campinity:profileGridLayout'
 
@@ -152,13 +152,66 @@ export default function ProfilePage() {
     if (activeTab !== 'communities' || communitiesLoadedOnce || !currentUid) return
     let cancelled = false
     setCommunitiesLoading(true)
-    getUserCommunityMemberships(currentUid)
-      .then((memberships) => Promise.all(memberships.map((m) => getCommunityById(m.communityId).catch(() => null))))
+    console.log('[Communities Debug] Starting fetch. currentUid =', currentUid)
+    Promise.all([
+      getUserCommunityMemberships(currentUid),
+      getOwnedCommunities(currentUid).catch((err) => {
+        console.error('[Communities Debug] getOwnedCommunities THREW:', err)
+        return []
+      })
+    ])
+      .then(([memberships, ownedCommunities]) => {
+        console.log('[Communities Debug] getUserCommunityMemberships returned', memberships.length, 'documents:')
+        memberships.forEach((m, i) => {
+          console.log(`[Communities Debug]   [${i}]`, JSON.stringify(m))
+        })
+        console.log('[Communities Debug] getOwnedCommunities (direct ownerId query, independent of communityMembers) returned', ownedCommunities.length, 'communities:', ownedCommunities.map((c) => c.id))
+
+        return Promise.all(
+          memberships.map((m) =>
+            getCommunityById(m.communityId)
+              .then((community) => {
+                if (!community) {
+                  console.warn('[Communities Debug] getCommunityById returned null for communityId =', m.communityId)
+                }
+                return community ? { ...community, role: m.role } : null
+              })
+              .catch((err) => {
+                console.error('[Communities Debug] getCommunityById THREW for communityId =', m.communityId, err)
+                return null
+              })
+          )
+        ).then((membershipResults) => {
+          // Merge, deduped by id. A community already found via
+          // membership keeps its real role; one found ONLY via the
+          // direct ownerId fallback (meaning its communityMembers doc
+          // is missing/inconsistent) is added with role forced to
+          // 'owner', since ownerId==uid is unambiguous ground truth
+          // regardless of the membership collection's state.
+          const merged = new Map()
+          membershipResults.filter(Boolean).forEach((c) => merged.set(c.id, c))
+          ownedCommunities.forEach((c) => {
+            if (!merged.has(c.id)) merged.set(c.id, { ...c, role: 'owner' })
+          })
+          return Array.from(merged.values())
+        })
+      })
       .then((results) => {
+        console.log('[Communities Debug] Final community objects after merge:', results.map((c) => ({ id: c.id, name: c.name, role: c.role })))
         if (!cancelled) {
-          setCommunities(results.filter(Boolean))
+          setCommunities(results)
           setCommunitiesLoadedOnce(true)
         }
+      })
+      .catch((err) => {
+        // Previously there was no .catch() on this outer chain at
+        // all. If the fetch threw for any reason, the whole chain
+        // silently died — state never updated, but .finally() below
+        // still marked loading complete, so the UI rendered the empty
+        // state exactly as if the query had genuinely returned zero
+        // results. Now surfaced loudly instead of vanishing.
+        console.error('[Communities Debug] FETCH FAILED — this is why the UI may show 0 communities:', err)
+        if (!cancelled) setCommunitiesLoadedOnce(true)
       })
       .finally(() => {
         if (!cancelled) setCommunitiesLoading(false)
@@ -362,14 +415,35 @@ export default function ProfilePage() {
               </div>
             ) : communities.length === 0 ? (
               <div className="px-6 py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">No communities joined</p>
-                <p className="mt-1 text-sm text-gray-400">Communities you join will show up here.</p>
+                <p className="text-sm font-semibold text-gray-900">No communities yet</p>
+                <p className="mt-1 text-sm text-gray-400">Join a community or create your own.</p>
               </div>
             ) : (
-              <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {communities.map((community) => (
-                  <CommunityCard key={community.id} community={community} />
-                ))}
+              <div className="px-4 py-4 space-y-5">
+                {communities.some((c) => c.role === 'owner') && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Owned by you</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {communities
+                        .filter((c) => c.role === 'owner')
+                        .map((community) => (
+                          <CommunityCard key={community.id} community={community} membershipState="owner" />
+                        ))}
+                    </div>
+                  </div>
+                )}
+                {communities.some((c) => c.role !== 'owner') && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Joined</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {communities
+                        .filter((c) => c.role !== 'owner')
+                        .map((community) => (
+                          <CommunityCard key={community.id} community={community} membershipState="member" />
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
 

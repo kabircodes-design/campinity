@@ -559,6 +559,14 @@ export async function searchCommunitiesByCategory(type, { pageSize = 20 } = {}) 
 }
 
 /** Joined/owned/created communities for a profile — three separate, cheap queries. */
+export async function getUserPendingRequests(uid) {
+  if (!uid) return []
+  const snap = await getDocs(
+    query(collection(db, 'communityRequests'), where('uid', '==', uid), where('status', '==', 'pending'))
+  )
+  return snap.docs.map((d) => d.data())
+}
+
 export async function getUserCommunityMemberships(uid) {
   const snap = await getDocs(query(collection(db, 'communityMembers'), where('uid', '==', uid)))
   return snap.docs.map((d) => d.data())

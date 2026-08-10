@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Plus, Radar, Search, UserPlus } from 'lucide-react'
+import { Bell, Plus, Radar, Search, Sparkles, UserPlus } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import StoryBubble from '../components/StoryBubble.jsx'
 import PostCard from '../components/PostCard.jsx'
@@ -473,10 +473,11 @@ export default function HomePage() {
               </div>
             ) : followingPosts.length === 0 ? (
               <div className="px-6 py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">No posts yet</p>
-                <p className="mt-1 text-sm text-gray-400">
-                  The people you follow haven't posted anything yet.
-                </p>
+                <div className="mx-auto w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center">
+                  <UserPlus className="w-4.5 h-4.5 text-blue-500" />
+                </div>
+                <p className="mt-3 text-sm font-semibold text-gray-900">Your feed is waiting.</p>
+                <p className="mt-1 text-sm text-gray-400">Follow people to see what they're sharing.</p>
               </div>
             ) : (
               followingPosts.map((post) => <PostCard key={post.id} post={post} />)
@@ -492,8 +493,11 @@ export default function HomePage() {
               </div>
             ) : forYouPosts.length === 0 ? (
               <div className="px-6 py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">No posts yet.</p>
-                <p className="mt-1 text-sm text-gray-400">Be the first student to post.</p>
+                <div className="mx-auto w-11 h-11 rounded-full bg-amber-50 flex items-center justify-center">
+                  <Sparkles className="w-4.5 h-4.5 text-amber-500" />
+                </div>
+                <p className="mt-3 text-sm font-semibold text-gray-900">Your campus is quiet... for now.</p>
+                <p className="mt-1 text-sm text-gray-400">Be the first to share something.</p>
               </div>
             ) : (
               <>
@@ -517,8 +521,11 @@ export default function HomePage() {
             </div>
           ) : visiblePosts.length === 0 ? (
             <div className="px-6 py-16 text-center">
-              <p className="text-sm font-semibold text-gray-900">No posts yet.</p>
-              <p className="mt-1 text-sm text-gray-400">Be the first student to post.</p>
+              <div className="mx-auto w-11 h-11 rounded-full bg-amber-50 flex items-center justify-center">
+                <Sparkles className="w-4.5 h-4.5 text-amber-500" />
+              </div>
+              <p className="mt-3 text-sm font-semibold text-gray-900">Your campus is quiet... for now.</p>
+              <p className="mt-1 text-sm text-gray-400">Be the first to share something.</p>
             </div>
           ) : (
             visiblePosts.map((post) => <PostCard key={post.id} post={post} />)

@@ -181,6 +181,17 @@ export default function CommunitySettingsPage() {
           </div>
         </header>
 
+        <div className="px-4 pt-4">
+          <button
+            type="button"
+            onClick={() => navigate(`/community/${communityId}/requests`)}
+            className="w-full flex items-center justify-between rounded-xl border border-gray-100 px-3.5 py-3 hover:border-gray-200 transition-all duration-300"
+          >
+            <span className="text-sm font-semibold text-gray-900">Join Requests</span>
+            <span className="text-xs text-gray-400">Manage pending requests</span>
+          </button>
+        </div>
+
         <form onSubmit={handleSave} className="px-4 py-5 space-y-5 pb-10">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Cover Image</p>

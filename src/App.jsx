@@ -38,6 +38,7 @@ const CollegeRequestsAdminPage = lazy(() => import('./pages/CollegeRequestsAdmin
 const VerifyCollegePage = lazy(() => import('./pages/VerifyCollegePage.jsx'))
 const VerificationRequestsAdminPage = lazy(() => import('./pages/VerificationRequestsAdminPage.jsx'))
 const ModerationDashboardPage = lazy(() => import('./pages/ModerationDashboardPage.jsx'))
+const CommunityJoinRequestsPage = lazy(() => import('./pages/CommunityJoinRequestsPage.jsx'))
 const FollowersPage = lazy(() => import('./pages/FollowersPage.jsx'))
 const FollowingPage = lazy(() => import('./pages/FollowingPage.jsx'))
 const CreateCommunityPage = lazy(() => import('./pages/CreateCommunityPage.jsx'))
@@ -307,6 +308,14 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <CommunitySettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/community/:communityId/requests"
+          element={
+            <ProtectedRoute stage="home">
+              <CommunityJoinRequestsPage />
             </ProtectedRoute>
           }
         />

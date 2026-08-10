@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Lock, Users } from 'lucide-react'
+import { Check, Clock, Crown, Lock, Users } from 'lucide-react'
+import { auth } from '../firebase/firebase.js'
+import { joinCommunity, requestToJoin } from '../firebase/communityService.js'
 
 const typeLabels = {
   official_club: 'Official Club',
@@ -13,41 +16,65 @@ const typeLabels = {
 }
 
 /**
- * Reusable community card. Structure per the exact spec: cover ->
- * avatar -> name -> @handle -> description -> category badge / member
- * count -> Join button.
+ * `membershipState` replaces the old boolean `joined` prop — a real
+ * state machine now: 'owner' | 'member' | 'pending' | null (not a
+ * member). This is what makes "owner sees Manage, never Join" (the
+ * task's own "biggest logic issue") and the private-community
+ * request flow both actually correct, not just a binary joined/not.
+ * Passed down by the caller (fetched once per page, not per card —
+ * same N+1-avoidance reasoning as the previous `joined` prop).
  *
- * Defensive hardening applied even though the existing code already
- * had the standard-correct pattern (relative parent, fixed height,
- * absolute+object-cover image, overflow-hidden on the outer element):
- * added `overflow-hidden` directly on the cover div too (not just the
- * outer container), and made the outer element explicitly `flex
- * flex-col`. Neither of these can make anything worse; if a subtler
- * cause was producing the reported overflow, this closes off the most
- * likely candidates without touching anything visual.
- *
- * Outer element is a `div` with `role="button"`/keyboard handling, not
- * a real `<button>` — this card now contains a real nested Join
- * `<button>`, and HTML doesn't allow interactive elements nested
- * inside a `<button>`. This was actually wrong in an earlier version
- * of this file (a real `<button>` wrapping everything) before the
- * Join button existed; fixed as part of adding it.
- *
- * Join button deliberately does NOT perform a live per-card membership
- * check or join/leave action itself — doing that here would mean one
- * extra Firestore read PER CARD rendered in a grid (N+1 reads just to
- * decide whether a button says "Join" or "Joined"), which conflicts
- * with this project's own "avoid unnecessary reads" standard elsewhere.
- * It navigates to the community page instead, where real membership
- * state and the actual join/leave/request flow already exist
- * (CommunityDetailPage.jsx) — same destination as tapping the card,
- * just with an explicit, stopPropagation'd action for users who expect
- * a dedicated button.
+ * The button now performs the REAL action directly — join() for
+ * public communities, requestToJoin() for private ones — rather than
+ * only ever navigating away. Both existing service functions were
+ * already fully built (confirmed by reading them directly); this
+ * just wires them to this UI for the first time. onStateChange lets
+ * the parent page update its own membership Set immediately, so the
+ * button's label updates live without a page reload.
  */
-export default function CommunityCard({ community }) {
+export default function CommunityCard({ community, membershipState = null, onStateChange }) {
   const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
+  const [localState, setLocalState] = useState(null)
+  const [hasOverride, setHasOverride] = useState(false)
 
+  const state = hasOverride ? localState : membershipState
   const goToCommunity = () => navigate(`/community/${community.id}`)
+
+  const handleAction = async (event) => {
+    event.stopPropagation()
+    const uid = auth.currentUser?.uid
+    if (!uid || busy || state) return
+    setBusy(true)
+    try {
+      if (community.privacy === 'private') {
+        await requestToJoin(community.id, uid)
+        setLocalState('pending')
+        setHasOverride(true)
+        onStateChange?.(community.id, 'pending')
+      } else {
+        await joinCommunity(community.id, uid)
+        setLocalState('member')
+        setHasOverride(true)
+        onStateChange?.(community.id, 'member')
+      }
+    } catch {
+      // best-effort — button simply stays in its current state on failure
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const buttonConfig = {
+    owner: { label: 'Manage', className: 'bg-gray-100 text-gray-700', icon: <Crown className="w-3 h-3" />, action: goToCommunity },
+    member: { label: 'Open', className: 'bg-gray-100 text-gray-700', icon: <Check className="w-3 h-3" strokeWidth={2.5} />, action: goToCommunity },
+    pending: { label: 'Request Sent', className: 'bg-gray-100 text-gray-400', icon: <Clock className="w-3 h-3" />, action: null }
+  }[state] || {
+    label: community.privacy === 'private' ? 'Request to Join' : 'Join',
+    className: 'bg-blue-600 text-white hover:bg-blue-700',
+    icon: null,
+    action: handleAction
+  }
 
   return (
     <div
@@ -60,56 +87,64 @@ export default function CommunityCard({ community }) {
           goToCommunity()
         }
       }}
-      className="w-full flex flex-col text-left rounded-2xl border border-gray-100 bg-white overflow-hidden hover:border-gray-200 hover:shadow-sm transition-all duration-300 cursor-pointer"
+      className="w-full flex flex-col text-left rounded-2xl border border-gray-100 bg-white p-3.5 hover:border-gray-200 hover:shadow-sm active:scale-[0.99] transition-all duration-200 cursor-pointer"
     >
-      <div className="relative h-20 flex-shrink-0 overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700">
-        {community.coverImage && (
-          <img src={community.coverImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
-        )}
-      </div>
-
-      <div className="px-3.5 pb-3.5">
-        <div className="-mt-6 flex items-end justify-between">
-          <div className="w-12 h-12 rounded-xl bg-white border-4 border-white shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
-            {community.icon ? (
-              <img src={community.icon} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <Users className="w-5 h-5 text-blue-600" strokeWidth={1.7} />
-            )}
-          </div>
-          <span className="mb-0.5 inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-500 text-[10px] font-medium px-2 py-0.5">
-            {community.privacy === 'private' && <Lock className="w-2.5 h-2.5" />}
-            {community.privacy === 'private' ? 'Private' : 'Public'}
-          </span>
+      <div className="flex items-start gap-3">
+        <div className="relative w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+          {community.coverImage && (
+            <img src={community.coverImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          )}
+          {community.icon ? (
+            <img
+              src={community.icon}
+              alt=""
+              className={community.coverImage ? 'relative w-7 h-7 rounded-lg object-cover ring-2 ring-white/80' : 'w-full h-full object-cover'}
+            />
+          ) : (
+            !community.coverImage && <Users className="w-5 h-5 text-white" strokeWidth={1.7} />
+          )}
         </div>
 
-        <p className="mt-2 text-sm font-bold text-gray-900 truncate">{community.name}</p>
-        <p className="text-xs text-gray-400 truncate">@{community.handle}</p>
-
-        {community.description && (
-          <p className="mt-1.5 text-xs text-gray-500 leading-relaxed line-clamp-2">{community.description}</p>
-        )}
-
-        <div className="mt-2.5 flex items-center gap-2.5 text-[11px] text-gray-400">
-          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-600 font-semibold px-2 py-0.5">
-            {typeLabels[community.type] || 'Community'}
-          </span>
-          <span className="flex items-center gap-1">
-            <Users className="w-3 h-3" />
-            {community.membersCount}
-          </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-bold text-gray-900 truncate">{community.name}</p>
+            {community.privacy === 'private' && <Lock className="w-3 h-3 text-gray-400 flex-shrink-0" />}
+          </div>
+          <p className="text-xs text-gray-400 truncate">@{community.handle}</p>
         </div>
 
         <button
           type="button"
           onClick={(event) => {
-            event.stopPropagation()
-            goToCommunity()
+            if (buttonConfig.action === goToCommunity) {
+              event.stopPropagation()
+              goToCommunity()
+            } else if (buttonConfig.action) {
+              buttonConfig.action(event)
+            } else {
+              event.stopPropagation()
+            }
           }}
-          className="mt-3 w-full text-center rounded-full bg-blue-600 text-white text-xs font-semibold py-2 hover:bg-blue-700 transition-all duration-300"
+          disabled={busy}
+          className={`flex-shrink-0 flex items-center gap-1 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 disabled:opacity-60 ${buttonConfig.className}`}
         >
-          Join
+          {buttonConfig.icon}
+          {busy ? '...' : buttonConfig.label}
         </button>
+      </div>
+
+      {community.description && (
+        <p className="mt-2 text-xs text-gray-500 leading-relaxed line-clamp-2">{community.description}</p>
+      )}
+
+      <div className="mt-2.5 flex items-center gap-2.5 text-[11px] text-gray-400">
+        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-600 font-semibold px-2 py-0.5">
+          {typeLabels[community.type] || 'Community'}
+        </span>
+        <span className="flex items-center gap-1">
+          <Users className="w-3 h-3" />
+          {community.membersCount}
+        </span>
       </div>
     </div>
   )

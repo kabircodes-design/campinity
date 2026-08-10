@@ -117,10 +117,16 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
     }
   }
 
+  const [justLiked, setJustLiked] = useState(false)
+
   const toggleLike = async () => {
     const nextLiked = !liked
     setLiked(nextLiked)
     setLikeCount((prev) => (nextLiked ? prev + 1 : prev - 1))
+    if (nextLiked) {
+      setJustLiked(true)
+      window.setTimeout(() => setJustLiked(false), 300)
+    }
 
     const uid = auth.currentUser?.uid
     if (!uid) return
@@ -365,7 +371,10 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
             liked ? 'text-red-500' : 'text-gray-500 hover:text-blue-600'
           }`}
         >
-          <Heart className="w-[18px] h-[18px]" fill={liked ? 'currentColor' : 'none'} />
+          <Heart
+            className={`w-[18px] h-[18px] transition-transform duration-300 ${justLiked ? 'scale-125' : 'scale-100'}`}
+            fill={liked ? 'currentColor' : 'none'}
+          />
           {likeCount}
         </button>
         <button

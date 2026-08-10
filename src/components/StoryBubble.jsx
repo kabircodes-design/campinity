@@ -53,14 +53,14 @@ export default function StoryBubble({ story, seen = false, onViewed, onDeleted }
       <button
         type="button"
         onClick={handleClick}
-        className="flex flex-col items-center gap-1 w-16 flex-shrink-0"
+        className="flex flex-col items-center gap-1.5 w-16 flex-shrink-0 active:scale-95 transition-transform duration-150"
       >
         <div
-          className={`relative w-14 h-14 rounded-full flex items-center justify-center ${
+          className={`relative w-[60px] h-[60px] rounded-full flex items-center justify-center transition-all duration-300 ${
             hasActiveStory
               ? seen
                 ? 'p-[2px] bg-gray-300'
-                : 'p-[2px] bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-500'
+                : 'p-[2.5px] bg-gradient-to-tr from-amber-400 via-pink-500 to-fuchsia-600 shadow-[0_0_0_1px_rgba(236,72,153,0.08)]'
               : ''
           }`}
         >
@@ -79,13 +79,13 @@ export default function StoryBubble({ story, seen = false, onViewed, onDeleted }
               onClick={handleAddClick}
               onKeyDown={(e) => e.key === 'Enter' && handleAddClick(e)}
               aria-label="Add to your story"
-              className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center"
+              className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-blue-600 border-[2.5px] border-white flex items-center justify-center shadow-sm"
             >
               <Plus className="w-3 h-3 text-white" strokeWidth={3} />
             </span>
           )}
         </div>
-        <span className="text-[11px] text-gray-600 truncate w-full text-center">{story.label}</span>
+        <span className="text-[11px] leading-none text-gray-600 truncate w-full text-center">{story.label}</span>
       </button>
 
       {composerOpen && (
