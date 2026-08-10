@@ -7,35 +7,46 @@ import StoryViewer from './StoryViewer.jsx'
 
 /**
  * Matches HomePage.jsx's exact existing call site — <StoryBubble
- * story={story} />, no other prop — confirmed by reading that usage
- * directly before writing this. Since no callback/sibling-list prop
- * is passed down, this component owns its own modal state (composer
- * or viewer), opened per-bubble on click.
+ * story={story} seen={boolean} onViewed onDeleted />.
  *
- * Three shapes of `story`, matching HomePage.jsx's storyBubbles array
- * exactly: { isAdd: true } for "Your Story", { isMore: true } for the
- * trailing "More" bubble (rendered inert — no real destination exists
- * for it, so it's not wired to open anything rather than faking one),
- * and a real story GROUP ({ userId, label, avatar, stories: [...] })
- * for every other user — this is what makes the Story button's real
- * fix concrete: tapping a real bubble opens the VIEWER
- * (stories/{storyId} documents), tapping "Your Story" opens the
- * COMPOSER, which creates a new stories/{storyId} document — never a
- * post, never CreatePostPage.
+ * Three shapes of `story`: { isMore: true } for the trailing "More"
+ * bubble (inert, no destination exists for it); a real story GROUP
+ * ({ userId, label, avatar, stories: [...] }) for every other user;
+ * and { isAdd: true, stories: [...] } for "Your Story" — this last
+ * one is now genuinely dual-purpose, fixing the earlier bug where it
+ * only ever opened the composer even when the user already had active
+ * stories. HomePage.jsx now filters the current user's own group out
+ * of every other bubble and merges it into this one instead — so this
+ * story object is the ONLY place the current user's stories ever
+ * appear, never duplicated as a second, indistinguishable bubble.
+ *
+ * Click behavior: tapping the main avatar opens the VIEWER if
+ * story.stories has entries (own or otherwise), else opens the
+ * COMPOSER for "Your Story" with none yet. The small "+" badge (only
+ * shown on "Your Story") is now its own stopPropagation'd target that
+ * always opens the composer, regardless of whether they already have
+ * active stories — matching "optionally provide a subtle add-story
+ * affordance" even when the ring already shows their own story.
  */
 export default function StoryBubble({ story, seen = false, onViewed, onDeleted }) {
   const [composerOpen, setComposerOpen] = useState(false)
   const [viewerOpen, setViewerOpen] = useState(false)
 
+  const hasActiveStory = !story.isMore && story.stories?.length > 0
+
   const handleClick = () => {
-    if (story.isAdd) {
-      setComposerOpen(true)
-    } else if (!story.isMore) {
+    if (story.isMore) return
+    if (hasActiveStory) {
       setViewerOpen(true)
+    } else if (story.isAdd) {
+      setComposerOpen(true)
     }
   }
 
-  const hasActiveStory = !story.isAdd && !story.isMore && story.stories?.length > 0
+  const handleAddClick = (event) => {
+    event.stopPropagation()
+    setComposerOpen(true)
+  }
 
   return (
     <>
@@ -62,7 +73,14 @@ export default function StoryBubble({ story, seen = false, onViewed, onDeleted }
             />
           </div>
           {story.isAdd && (
-            <span className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center">
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={handleAddClick}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddClick(e)}
+              aria-label="Add to your story"
+              className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center"
+            >
               <Plus className="w-3 h-3 text-white" strokeWidth={3} />
             </span>
           )}

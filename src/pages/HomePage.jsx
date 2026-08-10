@@ -217,15 +217,26 @@ export default function HomePage() {
   const myColorClass = getAvatarColor(auth.currentUser?.uid || displayName)
 
   const storyBubbles = useMemo(() => {
+    const uid = auth.currentUser?.uid
+    const myGroup = uid ? stories.find((s) => s.userId === uid) : null
+    const otherGroups = uid ? stories.filter((s) => s.userId !== uid) : stories
+
     const addStory = {
       id: 'write',
       label: 'Your Story',
       initials,
       colorClass: myColorClass,
-      isAdd: true
+      avatar: myGroup?.avatar || '',
+      isAdd: true,
+      // Carries the real story data when present — StoryBubble.jsx
+      // uses this to open the viewer on tap (real avatar, real ring)
+      // instead of only ever being able to open the composer, while
+      // still exposing the add affordance separately. Deliberately
+      // never duplicated into otherGroups below.
+      stories: myGroup?.stories || []
     }
     const moreStory = { id: 'more', label: 'More', isMore: true }
-    return [addStory, ...stories, moreStory]
+    return [addStory, ...otherGroups, moreStory]
   }, [stories, initials, myColorClass])
 
   const { showModal, showBanner, closeModal, dismissBanner } = useCampusVerificationReminder(profile)
