@@ -6,7 +6,7 @@ import Switch from '../components/Switch.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { createPost, getAvatarColor, getInitials, uploadPostImage } from '../firebase/postService.js'
+import { createPost, getAvatarColor, getInitials, uploadPostDocument, uploadPostImage } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
 import { awardXP, getUserProgress } from '../gamification/xpService.js'
 import { checkAndAwardBadges } from '../gamification/badgeService.js'
@@ -175,6 +175,12 @@ export default function CreatePostPage() {
         imageUrl = await uploadPostImage(uid, imageFile)
       }
 
+      let fileData = null
+      if (pdfFile) {
+        const fileUrl = await uploadPostDocument(uid, pdfFile)
+        fileData = { name: pdfFile.name, size: formatFileSize(pdfFile.size), url: fileUrl, mimeType: 'application/pdf' }
+      }
+
       const author = isAnonymous
         ? { displayName: 'Anonymous', username: 'anonymous', profilePhoto: '' }
         : { displayName, username, profilePhoto: profile?.avatar || '' }
@@ -190,6 +196,7 @@ export default function CreatePostPage() {
         extra: {
           category,
           isAnonymous,
+          ...(fileData && { file: fileData }),
           ...(selectedCommunity && {
             communityId: selectedCommunity.id,
             communityName: selectedCommunity.name

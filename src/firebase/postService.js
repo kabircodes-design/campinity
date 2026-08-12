@@ -70,6 +70,7 @@ function mapPostDoc(docSnap, currentUid) {
     time: formatTimeAgo(data.createdAt),
     text: data.text || '',
     imagePreviewUrl: data.image || undefined,
+    file: data.file || null,
     likes: data.likesCount || 0,
     comments: data.commentsCount || 0,
     likedByMe: currentUid ? likedBy.includes(currentUid) : false,
@@ -150,6 +151,22 @@ export async function getPostById(postId, currentUid) {
  * collide.
  */
 export async function uploadPostImage(uid, file) {
+  const path = `postImages/${uid}/${Date.now()}-${file.name}`
+  const fileRef = ref(storage, path)
+  await uploadBytes(fileRef, file)
+  return getDownloadURL(fileRef)
+}
+
+/**
+ * Root-cause fix for PDF posts silently failing: the composer already
+ * had a working PDF picker/preview, but nothing ever actually
+ * uploaded the selected file — this is the missing piece. Reuses the
+ * exact same postImages/{uid}/... Storage path and mechanism as
+ * uploadPostImage (confirmed to do zero image-specific processing),
+ * per the explicit instruction to integrate into the existing
+ * architecture rather than build a separate one.
+ */
+export async function uploadPostDocument(uid, file) {
   const path = `postImages/${uid}/${Date.now()}-${file.name}`
   const fileRef = ref(storage, path)
   await uploadBytes(fileRef, file)

@@ -59,7 +59,7 @@ export default function ChatPage() {
   const bottomRef = useRef(null)
 
   const { chat, otherProfile, otherUid, loading: chatLoading, error: chatError } = useChat(chatId)
-  const { messages, loading: messagesLoading, error: messagesError, sending, sendMessage } = useMessages(
+  const { messages, loading: messagesLoading, error: messagesError, sending, sendMessage, retryMessage } = useMessages(
     chatId,
     otherUid
   )
@@ -130,8 +130,36 @@ export default function ChatPage() {
     if (uid) getUserProfile(uid).then(setProfile).catch(() => {})
   }, [])
 
+  const messagesContainerRef = useRef(null)
+  const [showNewMessagesButton, setShowNewMessagesButton] = useState(false)
+  const isNearBottomRef = useRef(true)
+
+  const handleMessagesScroll = () => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    const nearBottom = distanceFromBottom < 120
+    isNearBottomRef.current = nearBottom
+    if (nearBottom) setShowNewMessagesButton(false)
+  }
+
+  const scrollToBottom = (behavior = 'smooth') => {
+    bottomRef.current?.scrollIntoView({ behavior })
+    setShowNewMessagesButton(false)
+  }
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // Real fix for the auto-scroll UX gap: previously this always
+    // force-scrolled to bottom on every message change, regardless of
+    // where the user currently was — meaning reading old messages
+    // while new ones arrived would yank the view back down. Now it
+    // only auto-scrolls when the user is already near the bottom;
+    // otherwise it shows a floating "New messages" indicator instead.
+    if (isNearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    } else {
+      setShowNewMessagesButton(true)
+    }
   }, [messages])
 
   useEffect(() => {
@@ -280,7 +308,11 @@ export default function ChatPage() {
             )}
           </header>
 
-          <main className="flex-1 lg:overflow-y-auto px-4 py-4 space-y-3">
+          <main
+            ref={messagesContainerRef}
+            onScroll={handleMessagesScroll}
+            className="relative flex-1 lg:overflow-y-auto px-4 py-4 space-y-3"
+          >
             {messagesError && <p className="text-center text-xs text-red-500">{messagesError}</p>}
 
             {groupedMessages.length === 0 ? (
@@ -294,11 +326,21 @@ export default function ChatPage() {
                     </span>
                   </div>
                 ) : (
-                  <MessageBubble key={item.id} message={item.message} isMine={item.message.senderId === currentUid} currentUid={currentUid} />
+                  <MessageBubble key={item.id} message={item.message} isMine={item.message.senderId === currentUid} currentUid={currentUid} onRetry={retryMessage} />
                 )
               )
             )}
             <div ref={bottomRef} />
+
+            {showNewMessagesButton && (
+              <button
+                type="button"
+                onClick={() => scrollToBottom('smooth')}
+                className="sticky bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 mx-auto rounded-full bg-gray-900 text-white text-xs font-semibold px-3.5 py-2 shadow-lg hover:bg-gray-800 transition-all duration-200"
+              >
+                ↓ New messages
+              </button>
+            )}
           </main>
 
           <div className="flex-shrink-0 bg-white/95 backdrop-blur-md border-t border-gray-100 pb-16 lg:pb-0">

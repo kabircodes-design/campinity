@@ -17,7 +17,7 @@ import SharedCard from '../sharing/SharedCard.jsx'
  * (confirmed by reading that function directly) — only the rendering
  * side was missing.
  */
-export default function MessageBubble({ message, isMine, currentUid }) {
+export default function MessageBubble({ message, isMine, currentUid, onRetry }) {
   const type = message.type || 'text' // existing messages have no `type` field at all — this is what makes them render exactly as before, through this same branch
   const [enlarged, setEnlarged] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
@@ -74,12 +74,23 @@ export default function MessageBubble({ message, isMine, currentUid }) {
           {message.edited && (
             <span className={`text-[10px] ${isMine ? 'text-white/60' : 'text-gray-400'}`}>Edited</span>
           )}
-          {message.pending ? (
+          {message.failed ? (
+            <span className="flex items-center gap-1 text-[10px] text-red-100">
+              Failed to send
+              <button
+                type="button"
+                onClick={() => onRetry?.(message.id)}
+                className="font-semibold underline underline-offset-2"
+              >
+                Retry
+              </button>
+            </span>
+          ) : message.pending ? (
             <Clock className={`w-3 h-3 ${isMine ? 'text-white/60' : 'text-gray-400'}`} />
           ) : (
             <span className={`text-[10px] ${isMine ? 'text-white/60' : 'text-gray-400'}`}>{time}</span>
           )}
-          {isMine && !message.pending && (
+          {isMine && !message.pending && !message.failed && (
             message.read ? (
               <CheckCheck className="w-3 h-3 text-white/80" />
             ) : (
