@@ -68,6 +68,7 @@ function mapPostDoc(docSnap, currentUid) {
     year: '',
     college: '',
     time: formatTimeAgo(data.createdAt),
+    createdAtMs: data.createdAt?.toMillis ? data.createdAt.toMillis() : 0,
     text: data.text || '',
     imagePreviewUrl: data.image || undefined,
     file: data.file || null,
@@ -139,6 +140,31 @@ export async function getUserPosts(userId, currentUid, maxResults = 50) {
  * Loads a single post by its Firestore document id — used by
  * PostDetailPage.jsx. Returns null if the document doesn't exist.
  */
+/**
+ * Loads posts tagged with the existing 'notes' category, newest
+ * first — used by Home's Notes tab. Reuses category='notes', which
+ * was already a real, user-selectable option in the post composer
+ * before this feature existed; no new field was invented. Same
+ * index-avoidance reasoning as getUserPosts just above: two equality
+ * filters (category, visibility) stay index-free, so sorting happens
+ * client-side rather than via orderBy.
+ */
+export async function getNotesPosts(currentUid, maxResults = 100) {
+  const postsQuery = query(
+    collection(db, COLLECTION),
+    where('category', '==', 'notes'),
+    where('visibility', '==', 'public'),
+    limit(maxResults)
+  )
+  const snap = await getDocs(postsQuery)
+  const posts = snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+  return posts.sort((a, b) => {
+    const aMs = a.createdAtMs || 0
+    const bMs = b.createdAtMs || 0
+    return bMs - aMs
+  })
+}
+
 export async function getPostById(postId, currentUid) {
   const snap = await getDoc(doc(db, COLLECTION, postId))
   if (!snap.exists()) return null

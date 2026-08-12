@@ -7,6 +7,7 @@ import PostCard from '../components/PostCard.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 import DesktopSidebar from '../components/DesktopSidebar.jsx'
 import DesktopRightRail from '../components/DesktopRightRail.jsx'
+import NotesView from '../components/NotesView.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
@@ -15,7 +16,6 @@ import { getFeedPosts, getAvatarColor, getInitials } from '../firebase/postServi
 import { getFeedStories, getViewedStoryIds } from '../firebase/storyService.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
 import { getTrendingCommunities } from '../firebase/communityService.js'
-import CommunityCard from '../components/CommunityCard.jsx'
 import ProgressWidget from '../gamification/ProgressWidget.jsx'
 import SwipeablePage from '../components/SwipeablePage.jsx'
 import { useFollowingFeed } from '../hooks/useFollowingFeed.js'
@@ -30,7 +30,7 @@ const feedTabs = [
   { label: 'For You', key: 'forYou' },
   { label: 'Following', key: 'following' },
   { label: 'Campus', key: 'campus' },
-  { label: 'Clubs', key: 'clubs' }
+  { label: 'Notes', key: 'notes' }
 ]
 
 /**
@@ -459,34 +459,8 @@ export default function HomePage() {
         {/* Feed — Firestore posts                                    */}
         {/* -------------------------------------------------------- */}
         <main className="pb-24">
-          {activeTab === 'clubs' ? (
-            communitiesLoading ? (
-              <div className="py-16 flex justify-center">
-                <Loader size="md" tone="dark" />
-              </div>
-            ) : communitiesError ? (
-              <div className="px-6 py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">Couldn't load communities</p>
-                <button
-                  type="button"
-                  onClick={() => setCommunitiesLoaded(false)}
-                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
-                >
-                  Try Again
-                </button>
-              </div>
-            ) : communities.length === 0 ? (
-              <div className="px-6 py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">No communities yet.</p>
-                <p className="mt-1 text-sm text-gray-400">Be the first to create one.</p>
-              </div>
-            ) : (
-              <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {communities.map((community) => (
-                  <CommunityCard key={community.id} community={community} />
-                ))}
-              </div>
-            )
+          {activeTab === 'notes' ? (
+            <NotesView />
           ) : activeTab === 'following' ? (
             followingError ? (
               <div className="px-6 py-16 text-center">
