@@ -73,6 +73,7 @@ export default function ProfilePage() {
   const [communities, setCommunities] = useState([])
   const [communitiesLoading, setCommunitiesLoading] = useState(false)
   const [communitiesLoadedOnce, setCommunitiesLoadedOnce] = useState(false)
+  const [communitiesError, setCommunitiesError] = useState(false)
   const [pinnedLoadedOnce, setPinnedLoadedOnce] = useState(false)
 
   useEffect(() => {
@@ -152,32 +153,21 @@ export default function ProfilePage() {
     if (activeTab !== 'communities' || communitiesLoadedOnce || !currentUid) return
     let cancelled = false
     setCommunitiesLoading(true)
-    console.log('[Communities Debug] Starting fetch. currentUid =', currentUid)
+    setCommunitiesError(false)
     Promise.all([
       getUserCommunityMemberships(currentUid),
       getOwnedCommunities(currentUid).catch((err) => {
-        console.error('[Communities Debug] getOwnedCommunities THREW:', err)
+        console.error('Could not load owned communities:', err)
         return []
       })
     ])
-      .then(([memberships, ownedCommunities]) => {
-        console.log('[Communities Debug] getUserCommunityMemberships returned', memberships.length, 'documents:')
-        memberships.forEach((m, i) => {
-          console.log(`[Communities Debug]   [${i}]`, JSON.stringify(m))
-        })
-        console.log('[Communities Debug] getOwnedCommunities (direct ownerId query, independent of communityMembers) returned', ownedCommunities.length, 'communities:', ownedCommunities.map((c) => c.id))
-
-        return Promise.all(
+      .then(([memberships, ownedCommunities]) =>
+        Promise.all(
           memberships.map((m) =>
             getCommunityById(m.communityId)
-              .then((community) => {
-                if (!community) {
-                  console.warn('[Communities Debug] getCommunityById returned null for communityId =', m.communityId)
-                }
-                return community ? { ...community, role: m.role } : null
-              })
+              .then((community) => (community ? { ...community, role: m.role } : null))
               .catch((err) => {
-                console.error('[Communities Debug] getCommunityById THREW for communityId =', m.communityId, err)
+                console.error('Could not load community', m.communityId, err)
                 return null
               })
           )
@@ -195,23 +185,26 @@ export default function ProfilePage() {
           })
           return Array.from(merged.values())
         })
-      })
+      )
       .then((results) => {
-        console.log('[Communities Debug] Final community objects after merge:', results.map((c) => ({ id: c.id, name: c.name, role: c.role })))
         if (!cancelled) {
           setCommunities(results)
           setCommunitiesLoadedOnce(true)
         }
       })
       .catch((err) => {
-        // Previously there was no .catch() on this outer chain at
-        // all. If the fetch threw for any reason, the whole chain
-        // silently died — state never updated, but .finally() below
-        // still marked loading complete, so the UI rendered the empty
-        // state exactly as if the query had genuinely returned zero
-        // results. Now surfaced loudly instead of vanishing.
-        console.error('[Communities Debug] FETCH FAILED — this is why the UI may show 0 communities:', err)
-        if (!cancelled) setCommunitiesLoadedOnce(true)
+        // A real fix, not a debugging aid: this chain previously had
+        // no outer .catch() at all — a failure here would silently
+        // leave communities at its initial empty array while still
+        // marking loading complete, rendering the empty state as if
+        // the query had genuinely returned zero results. Now surfaced
+        // to the console (not to the user — see the error-state UI
+        // below) instead of vanishing.
+        console.error('Could not load your communities:', err)
+        if (!cancelled) {
+          setCommunitiesError(true)
+          setCommunitiesLoadedOnce(true)
+        }
       })
       .finally(() => {
         if (!cancelled) setCommunitiesLoading(false)
@@ -412,6 +405,19 @@ export default function ProfilePage() {
             (communitiesLoading ? (
               <div className="py-16 flex justify-center">
                 <Loader size="md" tone="dark" />
+              </div>
+            ) : communitiesError ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">Couldn't load communities</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCommunitiesLoadedOnce(false)
+                  }}
+                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
+                >
+                  Try Again
+                </button>
               </div>
             ) : communities.length === 0 ? (
               <div className="px-6 py-16 text-center">

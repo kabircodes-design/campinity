@@ -1,15 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, MoreVertical, Search, Users } from 'lucide-react'
+import { ArrowLeft, MessageCircle, MoreVertical, Users } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
-import ChatCard from '../components/ChatCard.jsx'
-import EmptyChat from '../components/EmptyChat.jsx'
+import DesktopSidebar from '../components/DesktopSidebar.jsx'
+import ChatListPanel from '../components/ChatListPanel.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import CreateGroupFlow from '../messaging/CreateGroupFlow.jsx'
 import { auth } from '../firebase/firebase.js'
 import { subscribeToUserChats, subscribeToSentPendingChats, subscribeToMessageRequests } from '../firebase/chatService.js'
 import { getUserProfile } from '../firebase/profileService.js'
 
+/**
+ * Phase 1 foundation change: the list-rendering JSX that used to live
+ * directly in this file's <main> is now ChatListPanel.jsx — a pure
+ * presentational extraction, not a rewrite. Every data-fetching effect
+ * below (subscribeToUserChats, subscribeToSentPendingChats,
+ * subscribeToMessageRequests, profile enrichment) is completely
+ * unchanged from before this pass, byte-for-byte the same logic, just
+ * still living here rather than being duplicated into the panel
+ * component. This is what lets ChatPage.jsx (a separate route) also
+ * render the identical panel in a later pass without copying the
+ * list-item markup a second time.
+ *
+ * Desktop (lg+): sidebar + this list panel (widened) + a third column
+ * showing "select a conversation" — since no chat is active at this
+ * route specifically. Mobile is the exact same single-panel view as
+ * before Phase 1, unchanged.
+ */
 export default function MessagesPage() {
   const navigate = useNavigate()
   const [chats, setChats] = useState([])
@@ -21,6 +38,7 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [chatSearchTerm, setChatSearchTerm] = useState('')
+  const [profile, setProfile] = useState(null)
   const fetchedUidsRef = useRef(new Set())
 
   useEffect(() => {
@@ -30,6 +48,8 @@ export default function MessagesPage() {
       setLoading(false)
       return undefined
     }
+
+    getUserProfile(uid).then(setProfile).catch(() => {})
 
     const unsubscribe = subscribeToUserChats(
       uid,
@@ -119,9 +139,9 @@ export default function MessagesPage() {
         if (chat.type === 'group') {
           return (chat.groupName || '').toLowerCase().includes(normalizedSearch)
         }
-        const profile = profiles[chat.otherUid]
-        const nameMatch = (profile?.displayName || '').toLowerCase().includes(normalizedSearch)
-        const usernameMatch = (profile?.username || '').toLowerCase().includes(normalizedSearch)
+        const p = profiles[chat.otherUid]
+        const nameMatch = (p?.displayName || '').toLowerCase().includes(normalizedSearch)
+        const usernameMatch = (p?.username || '').toLowerCase().includes(normalizedSearch)
         const lastMessageMatch = (chat.lastMessage || '').toLowerCase().includes(normalizedSearch)
         return nameMatch || usernameMatch || lastMessageMatch
       })
@@ -136,97 +156,83 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
-          <div className="h-14 flex items-center gap-2 px-3">
-            <button
-              type="button"
-              aria-label="Back"
-              onClick={() => navigate('/home')}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <span className="text-base font-bold tracking-tight text-gray-900 flex-1">Messages</span>
-            <button
-              type="button"
-              onClick={() => navigate('/messages/requests')}
-              className="flex-shrink-0 flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-gray-300 transition-all duration-300"
-            >
-              Requests
-              {incomingRequestCount > 0 && (
-                <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
-                  {incomingRequestCount}
-                </span>
-              )}
-            </button>
+    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+      <DesktopSidebar profile={profile} />
 
-            <div className="relative flex-shrink-0">
+      <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:w-[380px] lg:flex-shrink-0 lg:border-r lg:border-gray-100 overflow-x-hidden bg-gray-50">
+        <div className="mx-auto max-w-[480px] lg:max-w-none min-h-screen lg:min-h-0 bg-white lg:shadow-none">
+          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+            <div className="h-14 flex items-center gap-2 px-3">
               <button
                 type="button"
-                aria-label="More options"
-                onClick={() => setMenuOpen((v) => !v)}
-                className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+                aria-label="Back"
+                onClick={() => navigate('/home')}
+                className="lg:hidden w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
               >
-                <MoreVertical className="w-5 h-5" />
+                <ArrowLeft className="w-5 h-5" />
               </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-11 w-44 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false)
-                      setCreateGroupOpen(true)
-                    }}
-                    className="w-full flex items-center gap-2.5 text-left px-3.5 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    <Users className="w-4 h-4 text-gray-400" />
-                    Create Group
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
+              <span className="text-base font-bold tracking-tight text-gray-900 flex-1">Chats</span>
 
-        <div className="px-4 pt-3 pb-1">
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            <input
-              type="text"
-              value={chatSearchTerm}
-              onChange={(event) => setChatSearchTerm(event.target.value)}
-              placeholder="Search chats..."
-              aria-label="Search chats"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
-            />
-          </div>
+              <div className="relative flex-shrink-0">
+                <button
+                  type="button"
+                  aria-label="More options"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+                >
+                  <MoreVertical className="w-5 h-5" />
+                </button>
+                {menuOpen && (
+                  <div className="absolute right-0 top-11 w-44 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setCreateGroupOpen(true)
+                      }}
+                      className="w-full flex items-center gap-2.5 text-left px-3.5 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Users className="w-4 h-4 text-gray-400" />
+                      Create Group
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </header>
+
+          <ChatListPanel
+            error={error}
+            allChats={allChats}
+            visibleChats={visibleChats}
+            profiles={profiles}
+            searchTerm={chatSearchTerm}
+            onSearchChange={setChatSearchTerm}
+            onOpenRequests={() => navigate('/messages/requests')}
+            incomingRequestCount={incomingRequestCount}
+          />
         </div>
-
-        <main className="pb-24">
-          {error ? (
-            <div className="px-6 py-16 text-center">
-              <p className="text-sm text-gray-400">{error}</p>
-            </div>
-          ) : allChats.length === 0 ? (
-            <EmptyChat />
-          ) : visibleChats.length === 0 ? (
-            <div className="px-6 py-16 text-center">
-              <p className="text-sm font-semibold text-gray-900">No chats found</p>
-              <p className="mt-1 text-sm text-gray-400">Try a different name or username.</p>
-            </div>
-          ) : (
-            <div>
-              {visibleChats.map((chat) => (
-                <ChatCard key={chat.id} chat={chat} profile={profiles[chat.otherUid]} />
-              ))}
-            </div>
-          )}
-        </main>
       </div>
 
-      <BottomNav />
+      {/* Desktop third column — no conversation is active at this
+          route, so this is a real, honest placeholder rather than
+          leaving a blank white area. Only shown at lg:+. */}
+      <div className="hidden lg:flex lg:flex-1 lg:items-center lg:justify-center lg:h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-200 to-indigo-200 blur-xl opacity-60" />
+            <div className="relative w-14 h-14 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center">
+              <MessageCircle className="w-6 h-6 text-indigo-400" />
+            </div>
+          </div>
+          <p className="mt-4 text-sm font-semibold text-gray-900">Your conversations start here.</p>
+          <p className="mt-1 text-sm text-gray-400">Pick a chat from the left to start messaging.</p>
+        </div>
+      </div>
+
+      <div className="lg:hidden">
+        <BottomNav />
+      </div>
       <CreateGroupFlow open={createGroupOpen} onClose={() => setCreateGroupOpen(false)} />
     </div>
   )

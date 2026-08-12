@@ -32,8 +32,10 @@ export default function MessageBubble({ message, isMine, currentUid }) {
   return (
     <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[75%] rounded-2xl ${type === 'image' ? 'p-1' : 'px-3.5 py-2'} ${
-          isMine ? 'bg-blue-600 text-white rounded-br-md' : 'bg-gray-100 text-gray-900 rounded-bl-md'
+        className={`max-w-[78%] lg:max-w-[68%] rounded-2xl ${type === 'image' ? 'p-1' : 'px-3.5 py-2'} ${
+          isMine
+            ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-br-md shadow-sm'
+            : 'bg-white text-gray-900 rounded-bl-md border border-gray-100 shadow-sm'
         } ${message.pending ? 'opacity-60' : 'opacity-100'} transition-opacity duration-300`}
       >
         {type === 'text' ? (

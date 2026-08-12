@@ -5,6 +5,8 @@ import Avatar from '../components/Avatar.jsx'
 import StoryBubble from '../components/StoryBubble.jsx'
 import PostCard from '../components/PostCard.jsx'
 import BottomNav from '../components/BottomNav.jsx'
+import DesktopSidebar from '../components/DesktopSidebar.jsx'
+import DesktopRightRail from '../components/DesktopRightRail.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
@@ -188,11 +190,13 @@ export default function HomePage() {
   const [communities, setCommunities] = useState([])
   const [communitiesLoading, setCommunitiesLoading] = useState(false)
   const [communitiesLoaded, setCommunitiesLoaded] = useState(false)
+  const [communitiesError, setCommunitiesError] = useState(false)
 
   useEffect(() => {
-    if (activeTab !== 'clubs' || communitiesLoaded) return
+    if (communitiesLoaded) return
     let cancelled = false
     setCommunitiesLoading(true)
+    setCommunitiesError(false)
     getTrendingCommunities({ pageSize: 30 })
       .then((data) => {
         if (!cancelled) {
@@ -200,8 +204,12 @@ export default function HomePage() {
           setCommunitiesLoaded(true)
         }
       })
-      .catch(() => {
-        if (!cancelled) setCommunitiesLoaded(true)
+      .catch((err) => {
+        console.error('Could not load communities:', err)
+        if (!cancelled) {
+          setCommunitiesError(true)
+          setCommunitiesLoaded(true)
+        }
       })
       .finally(() => {
         if (!cancelled) setCommunitiesLoading(false)
@@ -209,7 +217,7 @@ export default function HomePage() {
     return () => {
       cancelled = true
     }
-  }, [activeTab, communitiesLoaded])
+  }, [communitiesLoaded])
 
   const displayName = profile?.displayName || ''
   const firstName = displayName.split(' ')[0] || 'there'
@@ -251,10 +259,30 @@ export default function HomePage() {
 
   return (
     <>
+    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+    <DesktopSidebar unreadNotifications={unreadCount} profile={profile} />
     <SwipeablePage>
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      {/* Centered mobile-first column — desktop simply centers this same layout */}
-      <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
+    <div
+      className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden bg-gray-50"
+      style={{ backgroundImage: 'radial-gradient(circle, rgba(99,102,241,0.06) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
+    >
+      {/* Mobile: narrow centered column, natural page scroll,
+          unchanged. Desktop: a wider reading column bordered on both
+          sides, sitting between the real sidebar and right rail — no
+          longer "desktop simply centers this same layout." This
+          element is now the actual scroll container on desktop
+          (lg:h-screen lg:overflow-y-auto) — the browser page itself
+          never scrolls at lg:, only this column does, matching the
+          real application-shell architecture rather than one long
+          page. Width comes from this column's own explicit
+          max-w-[600px] below, not from a flex-grow on an ancestor —
+          SwipeablePage's root (a bare motion.div with no className
+          passthrough) can't receive a flex-sizing class, so this is a
+          fixed-width column sitting alongside the sidebar/rail, not a
+          fluidly-expanding one. Confirmed correct for the stated
+          column widths; noted as a real constraint, not claimed as
+          more flexible than it actually is. */}
+      <div className="mx-auto max-w-[480px] lg:max-w-[600px] xl:max-w-[760px] min-h-screen lg:min-h-0 bg-white lg:shadow-sm lg:border-x lg:border-gray-100">
         {/* -------------------------------------------------------- */}
         {/* Top header — logo + notifications, stays pinned          */}
         {/* -------------------------------------------------------- */}
@@ -324,7 +352,7 @@ export default function HomePage() {
                 type="button"
                 aria-label="Notifications"
                 onClick={() => navigate('/notifications')}
-                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200 lg:hidden"
               >
                 <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
@@ -361,7 +389,7 @@ export default function HomePage() {
           <button
             type="button"
             onClick={() => navigate('/search')}
-            className="group relative mt-4 w-full text-left"
+            className="group relative mt-4 w-full text-left lg:hidden"
             aria-label="Search Campinity"
           >
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-colors duration-200 group-hover:text-gray-500" />
@@ -435,6 +463,17 @@ export default function HomePage() {
             communitiesLoading ? (
               <div className="py-16 flex justify-center">
                 <Loader size="md" tone="dark" />
+              </div>
+            ) : communitiesError ? (
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">Couldn't load communities</p>
+                <button
+                  type="button"
+                  onClick={() => setCommunitiesLoaded(false)}
+                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
+                >
+                  Try Again
+                </button>
               </div>
             ) : communities.length === 0 ? (
               <div className="px-6 py-16 text-center">
@@ -534,6 +573,8 @@ export default function HomePage() {
       </div>
     </div>
     </SwipeablePage>
+    <DesktopRightRail communities={communities} postCount={posts.length} />
+    </div>
 
       {/* -------------------------------------------------------- */}
       {/* Bottom mobile navigation — sticky, centered to match column.
@@ -542,9 +583,15 @@ export default function HomePage() {
           the containing block for any position:fixed descendant — left
           inside, BottomNav would drag along with the page instead of
           staying pinned to the viewport. Same reasoning for the
-          verification modal below it. */}
+          verification modal below it. The lg:hidden wrapper is a
+          plain, non-transformed div — display:none at the lg
+          breakpoint correctly removes BottomNav (and its fixed-
+          positioned root) from the render tree entirely, replaced by
+          DesktopSidebar's own navigation above. */}
       {/* -------------------------------------------------------- */}
-      <BottomNav />
+      <div className="lg:hidden">
+        <BottomNav />
+      </div>
 
       <CampusVerificationModal open={showModal} onRemindLater={closeModal} />
     </>

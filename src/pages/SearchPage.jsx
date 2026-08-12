@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Clock, X } from 'lucide-react'
+import { ArrowLeft, Clock, Search as SearchIcon, X } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
+import DesktopSidebar from '../components/DesktopSidebar.jsx'
 import StudentCard from '../components/StudentCard.jsx'
 import CollegeResultCard from '../components/CollegeResultCard.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
 import PostCard from '../components/PostCard.jsx'
 import SearchSkeleton from '../components/SearchSkeleton.jsx'
 import SearchEmptyState from '../components/SearchEmptyState.jsx'
+import Avatar from '../components/Avatar.jsx'
+import { getAvatarColor, getInitials } from '../firebase/postService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { searchAll } from '../firebase/searchService.js'
-import { searchCommunitiesByName } from '../firebase/communityService.js'
+import { searchCommunitiesByName, getTrendingCommunities } from '../firebase/communityService.js'
 import { searchPostsByText } from '../firebase/postService.js'
+import { getUserProfile } from '../firebase/profileService.js'
 import { auth } from '../firebase/firebase.js'
 import { addRecentSearch, clearRecentSearches, getRecentSearches, removeRecentSearch } from '../utils/recentSearches.js'
 
@@ -48,6 +53,15 @@ export default function SearchPage() {
   const [communities, setCommunities] = useState([])
   const [posts, setPosts] = useState([])
   const [status, setStatus] = useState('idle') // 'idle' | 'loading' | 'success' | 'error'
+
+  const [profile, setProfile] = useState(null)
+  const [popularCommunities, setPopularCommunities] = useState([])
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    if (uid) getUserProfile(uid).then(setProfile).catch(() => {})
+    getTrendingCommunities({ pageSize: 4 }).then(setPopularCommunities).catch(() => {})
+  }, [])
 
   useEffect(() => {
     setRecent(getRecentSearches())
@@ -138,12 +152,16 @@ export default function SearchPage() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
+    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+    <DesktopSidebar profile={profile} />
+    <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden bg-gray-50">
+      <div className="mx-auto max-w-[480px] lg:max-w-[640px] min-h-screen lg:min-h-0 bg-white lg:shadow-sm lg:border-x lg:border-gray-100">
         {/* -------------------------------------------------------- */}
-        {/* Header — back button + search input                      */}
+        {/* Header — back button + search input (mobile). Desktop    */}
+        {/* gets a proper hero instead of the back-arrow bar, since  */}
+        {/* Explore already lives in the sidebar nav.                */}
         {/* -------------------------------------------------------- */}
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 lg:hidden">
           <div className="h-14 flex items-center gap-2 px-3">
             <button
               type="button"
@@ -197,6 +215,54 @@ export default function SearchPage() {
             ))}
           </div>
         </header>
+
+        {/* Desktop hero — search lives in the page body here rather */}
+        {/* than a small top bar, since there's no separate global    */}
+        {/* header shell in this app to house it instead. */}
+        <div className="hidden lg:block px-6 pt-8 pb-2">
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Search</h1>
+          <p className="mt-1 text-sm text-gray-400">Discover people, communities and everything happening on campus.</p>
+
+          <div className="relative mt-5">
+            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onBlur={commitSearch}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') commitSearch()
+              }}
+              placeholder="Search Campinity..."
+              className="w-full rounded-2xl border border-gray-200 bg-gray-50 pl-11 pr-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 shadow-sm transition-all duration-300"
+            />
+            {query && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setQuery('')}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-gray-300 transition-all duration-300"
+              >
+                <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 mt-4">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`rounded-full text-xs font-semibold px-4 py-2 transition-all duration-300 ${
+                  activeTab === tab.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* -------------------------------------------------------- */}
         {/* Body                                                      */}
@@ -269,7 +335,13 @@ export default function SearchPage() {
             </div>
           )}
 
-          {isSearching && status === 'success' && !hasResults && <SearchEmptyState query={query.trim()} />}
+          {isSearching && status === 'success' && !hasResults && (
+            <SearchEmptyState
+              query={query.trim()}
+              suggestions={popularCommunities.map((c) => c.name).filter(Boolean)}
+              onSuggestionClick={runSearch}
+            />
+          )}
 
           {isSearching && status === 'success' && hasResults && (
             <div className="pt-1">
@@ -330,8 +402,42 @@ export default function SearchPage() {
           )}
         </main>
       </div>
+    </div>
 
-      <BottomNav />
+    <aside className="hidden lg:flex lg:flex-col w-72 flex-shrink-0 h-screen sticky top-0 overflow-y-auto px-4 py-5 gap-4">
+      {popularCommunities.length > 0 && (
+        <div className="rounded-2xl border border-gray-100 p-4">
+          <p className="text-sm font-bold text-gray-900 mb-3">Popular Communities</p>
+          <div className="space-y-3">
+            {popularCommunities.map((community) => (
+              <button
+                key={community.id}
+                type="button"
+                onClick={() => navigate(`/community/${community.id}`)}
+                className="w-full flex items-center gap-2.5 text-left group"
+              >
+                <Avatar
+                  initials={getInitials(community.name)}
+                  colorClass={getAvatarColor(community.id)}
+                  size="sm"
+                  src={community.icon || undefined}
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">
+                    {community.name}
+                  </p>
+                  <p className="text-xs text-gray-400">{community.membersCount} members</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </aside>
+
+      <div className="lg:hidden">
+        <BottomNav />
+      </div>
     </div>
   )
 }

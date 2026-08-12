@@ -146,6 +146,16 @@ export default function CommunityCard({ community, membershipState = null, onSta
           {community.membersCount}
         </span>
       </div>
+
+      {community.tags?.length > 0 && (
+        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+          {community.tags.slice(0, 2).map((tag) => (
+            <span key={tag} className="rounded-full bg-gray-100 text-gray-500 text-[10px] font-medium px-2 py-0.5">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

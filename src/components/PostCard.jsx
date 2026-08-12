@@ -152,7 +152,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
 
   return (
     <>
-    <article className="border-b border-gray-100 hover:bg-gray-50/40 transition-all duration-300">
+    <article className="border-b border-gray-100 hover:bg-gray-50/40 lg:border-b-0 lg:border lg:border-gray-100 lg:rounded-2xl lg:mb-3 lg:hover:bg-white lg:hover:shadow-sm lg:hover:-translate-y-[1px] transition-all duration-300">
       {/* "Posted in X" — only when this post has a communityId (community
           posts now live in the same posts/ collection as everything
           else, distinguished only by this field). Deliberately placed
@@ -292,6 +292,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
             {currentText}
             {isEdited && <span className="ml-1.5 text-xs text-gray-400 font-normal">· Edited</span>}
           </p>
+          {post.imageUrl && <PostImage src={post.imageUrl} />}
         </button>
       )}
 
@@ -478,5 +479,44 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         targetOwnerUid={post.userId}
       />
     </>
+  )
+}
+
+/**
+ * Real fix for a confirmed, previously-missing feature: PostCard.jsx
+ * never rendered an <img> tag at all, even though posts have carried
+ * a real image field since post creation existed. Small, local, and
+ * single-use — not extracted to its own file since it's only ever
+ * used here. Loading skeleton and error fallback match the same
+ * pattern already established in MessageBubble.jsx/StoryViewer.jsx.
+ * max-h keeps a very tall or wide image from breaking the desktop
+ * application-shell's scroll container (see HomePage.jsx's lg:h-screen
+ * lg:overflow-y-auto center column) — an unbounded image here would
+ * otherwise force that column taller than intended.
+ */
+function PostImage({ src }) {
+  const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
+
+  if (status === 'error') {
+    return (
+      <div className="mx-4 mt-3 rounded-2xl bg-gray-100 h-40 flex items-center justify-center">
+        <span className="text-xs text-gray-400">Couldn't load image</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mx-4 mt-3 rounded-2xl overflow-hidden bg-gray-100 relative">
+      {status === 'loading' && <div className="absolute inset-0 animate-pulse bg-gray-100" />}
+      <img
+        src={src}
+        alt=""
+        onLoad={() => setStatus('ready')}
+        onError={() => setStatus('error')}
+        className={`w-full max-h-[420px] lg:max-h-[520px] object-cover transition-opacity duration-300 ${
+          status === 'ready' ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
+    </div>
   )
 }
