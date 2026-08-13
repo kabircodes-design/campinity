@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 import {
   Bookmark,
   CalendarDays,
@@ -64,6 +67,8 @@ function formatExpiryBadge(expiresAtMs) {
 
 export default function PostCard({ post, onDeleted = () => {}, canModerate = false }) {
   const expiryBadgeText = formatExpiryBadge(post.expiresAtMs)
+  const verified = useMyVerification()
+  const [verificationGateOpen, setVerificationGateOpen] = useState(false)
   const navigate = useNavigate()
   const config = postTypeConfig[post.type]
   const TypeIcon = typeIcons[post.type]
@@ -320,6 +325,10 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         <button
           type="button"
           onClick={() => {
+            if (verified === false) {
+              setVerificationGateOpen(true)
+              return
+            }
             if (post.file.url) {
               window.open(post.file.url, '_blank', 'noopener,noreferrer')
             } else {
@@ -334,10 +343,17 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-900 truncate">{post.file.name}</p>
             <p className="text-xs text-gray-400">PDF{post.file.size ? ` · ${post.file.size}` : ''}</p>
+            {verified === false && <p className="text-[11px] text-blue-600 font-medium mt-0.5">🔒 Verified members · Verify to open →</p>}
           </div>
           <Download className="w-4 h-4 text-gray-400 flex-shrink-0" />
         </button>
       )}
+
+      <VerificationGate
+        open={verificationGateOpen}
+        onClose={() => setVerificationGateOpen(false)}
+        feature={FEATURES.VIEW_CAMPUS_PDF}
+      />
 
       {expiryBadgeText && (
         <p className="mx-4 mt-2 text-[11px] text-gray-400">⏳ {expiryBadgeText}</p>

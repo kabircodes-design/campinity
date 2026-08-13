@@ -1,41 +1,132 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Search, Upload } from 'lucide-react'
+import { ArrowLeft, Bookmark, Download, Search, Upload } from 'lucide-react'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getNotesPosts } from '../firebase/postService.js'
+import { subscribeToIsItemSaved } from '../saved/savedService.js'
+import SaveBottomSheet from '../saved/SaveBottomSheet.jsx'
 
 const SUBJECTS = [
   { key: 'physics', label: 'Physics', emoji: '⚡', keywords: ['physics', 'electrostatics', 'mechanics', 'thermodynamics', 'optics', 'kinematics'] },
-  { key: 'chemistry', label: 'Chemistry', emoji: '🧪', keywords: ['chemistry', 'chem', 'organic', 'inorganic', 'periodic', 'mcq'] }
+  { key: 'chemistry', label: 'Chemistry', emoji: '🧪', keywords: ['chemistry', 'chem', 'organic', 'inorganic', 'periodic'] }
+]
+
+const COLLECTIONS = [
+  { key: 'chapter1', label: 'Chapter 1', emoji: '📘' },
+  { key: 'chapter2', label: 'Chapter 2', emoji: '📘' },
+  { key: 'important', label: 'Important', emoji: '⭐' },
+  { key: 'pyqs', label: 'PYQs', emoji: '📝' },
+  { key: 'practicals', label: 'Practicals', emoji: '🧪' },
+  { key: 'general', label: 'General', emoji: '📄' }
 ]
 
 /**
- * Real, honest subject classification — no subject field exists on
- * posts (confirmed by reading the schema), so this matches the post's
- * actual text/filename against a small keyword list per Section 17's
- * explicit instruction: "do not classify every PDF automatically as
- * Physics/Chemistry unless the application has enough information."
- * Anything that doesn't match either list falls through to 'other'
- * rather than being guessed.
+ * Real subject first (a genuine field on the post, written by the
+ * composer's new Notes fields), falling back to honest keyword
+ * matching only for old notes that predate this metadata — per
+ * Section 17's explicit 'if there is no reliable note classification,
+ * implement a clean minimal solution.' Never guesses when real data
+ * exists.
  */
-function detectSubject(post) {
+function resolveSubject(post) {
+  if (post.subject && post.subject !== 'unassigned') return post.subject
   const haystack = `${post.text || ''} ${post.file?.name || ''}`.toLowerCase()
   for (const subject of SUBJECTS) {
     if (subject.keywords.some((kw) => haystack.includes(kw))) return subject.key
   }
-  return 'other'
+  return 'unassigned'
+}
+
+function resolveCollection(post) {
+  return post.collection || 'general'
+}
+
+/** Section 16 — filename becomes the display title fallback only; the real uploaded file/text field is never touched. */
+function displayTitle(post) {
+  if (post.text?.trim()) return post.text
+  if (post.file?.name) return post.file.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ')
+  return 'Untitled note'
+}
+
+function NoteCard({ note }) {
+  const [isSaved, setIsSaved] = useState(false)
+  const [saveSheetOpen, setSaveSheetOpen] = useState(false)
+  const subjectMeta = SUBJECTS.find((s) => s.key === resolveSubject(note))
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    if (!uid) return undefined
+    return subscribeToIsItemSaved(uid, 'post', note.id, setIsSaved)
+  }, [note.id])
+
+  return (
+    <>
+      <a
+        href={note.file?.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group block rounded-2xl border border-gray-100 p-4 hover:border-indigo-200 hover:shadow-sm hover:-translate-y-[1px] transition-all duration-200"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-[11px] font-semibold text-indigo-600 uppercase tracking-wide">
+            {subjectMeta ? `${subjectMeta.emoji} ${subjectMeta.label}` : 'Notes'}
+          </span>
+        </div>
+        <p className="mt-1.5 text-sm font-semibold text-gray-900 truncate">{displayTitle(note)}</p>
+        {note.chapter && <p className="text-xs text-gray-400">{note.chapter}</p>}
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-400">
+          <span>📄 PDF</span>
+          {note.file?.size && <span>· {note.file.size}</span>}
+          <span>· Posted {note.time}</span>
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <button
+            type="button"
+            aria-label={isSaved ? 'Saved' : 'Save'}
+            aria-pressed={isSaved}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setSaveSheetOpen(true)
+            }}
+            className={`flex items-center gap-1 text-xs font-semibold rounded-full px-3 py-1.5 transition-all duration-200 ${
+              isSaved ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <Bookmark className="w-3.5 h-3.5" fill={isSaved ? 'currentColor' : 'none'} />
+            {isSaved ? 'Saved' : 'Save'}
+          </button>
+          <span className="flex items-center gap-1 text-xs font-semibold text-indigo-600 group-hover:text-indigo-700">
+            <Download className="w-3.5 h-3.5" /> Download
+          </span>
+        </div>
+      </a>
+
+      <SaveBottomSheet
+        open={saveSheetOpen}
+        onClose={() => setSaveSheetOpen(false)}
+        entityType="post"
+        entityId={note.id}
+        preview={{
+          title: displayTitle(note),
+          subtitle: note.name,
+          username: note.username,
+          image: note.imagePreviewUrl || null
+        }}
+      />
+    </>
+  )
 }
 
 export default function NotesView() {
-  const navigate = useNavigate()
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeSubject, setActiveSubject] = useState('all')
+  const [activeCollection, setActiveCollection] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
 
-  useEffect(() => {
+  const load = () => {
     let cancelled = false
     setLoading(true)
     setError('')
@@ -53,27 +144,108 @@ export default function NotesView() {
     return () => {
       cancelled = true
     }
+  }
+
+  useEffect(() => {
+    return load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const withSubject = useMemo(() => notes.map((n) => ({ ...n, subject: detectSubject(n) })), [notes])
+  const withMeta = useMemo(
+    () => notes.map((n) => ({ ...n, resolvedSubject: resolveSubject(n), resolvedCollection: resolveCollection(n) })),
+    [notes]
+  )
 
-  const filtered = useMemo(() => {
-    let list = withSubject
-    if (activeSubject !== 'all') list = list.filter((n) => n.subject === activeSubject)
-    const term = searchTerm.trim().toLowerCase()
-    if (term) {
-      list = list.filter((n) => {
-        const haystack = `${n.text || ''} ${n.file?.name || ''} ${n.subject || ''}`.toLowerCase()
+  // Real counts only — every number below is derived from withMeta,
+  // never hardcoded, per Section 30's explicit 'no fake demo data.'
+  const subjectCounts = useMemo(() => {
+    const counts = {}
+    SUBJECTS.forEach((s) => {
+      counts[s.key] = withMeta.filter((n) => n.resolvedSubject === s.key).length
+    })
+    return counts
+  }, [withMeta])
+
+  const term = searchTerm.trim().toLowerCase()
+  const searchScope = activeSubject === 'all' ? withMeta : withMeta.filter((n) => n.resolvedSubject === activeSubject)
+  const searchResults = term
+    ? searchScope.filter((n) => {
+        const haystack = `${n.text || ''} ${n.file?.name || ''} ${n.resolvedSubject} ${n.resolvedCollection} ${n.chapter || ''} ${n.name || ''}`.toLowerCase()
         return haystack.includes(term)
       })
-    }
-    return list
-  }, [withSubject, activeSubject, searchTerm])
+    : []
+
+  const recentNotes = useMemo(() => [...withMeta].sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0)).slice(0, 3), [withMeta])
+
+  const collectionNotes = activeCollection
+    ? withMeta.filter((n) => n.resolvedSubject === activeSubject && n.resolvedCollection === activeCollection)
+    : []
+
+  const collectionCountsForSubject = useMemo(() => {
+    const scoped = withMeta.filter((n) => n.resolvedSubject === activeSubject)
+    const counts = {}
+    COLLECTIONS.forEach((c) => {
+      counts[c.key] = scoped.filter((n) => n.resolvedCollection === c.key).length
+    })
+    return counts
+  }, [withMeta, activeSubject])
+
+  if (loading) {
+    return (
+      <div className="px-4 lg:px-6 py-16 flex justify-center">
+        <Loader size="md" tone="dark" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="px-4 lg:px-6 py-16 text-center">
+        <p className="text-sm font-semibold text-gray-900">{error}</p>
+        <button
+          type="button"
+          onClick={load}
+          className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
+        >
+          Try Again
+        </button>
+      </div>
+    )
+  }
+
+  // Collection drill-down — a focused, document-list view (Section 19)
+  if (activeCollection) {
+    const collMeta = COLLECTIONS.find((c) => c.key === activeCollection)
+    const subjMeta = SUBJECTS.find((s) => s.key === activeSubject)
+    return (
+      <div className="px-4 lg:px-6 py-4">
+        <button
+          type="button"
+          onClick={() => setActiveCollection(null)}
+          className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-700"
+        >
+          <ArrowLeft className="w-4 h-4" /> {subjMeta?.label}
+        </button>
+        <h2 className="mt-2 text-xl font-bold text-gray-900 tracking-tight">
+          {collMeta?.emoji} {collMeta?.label}
+        </h2>
+        <p className="text-sm text-gray-400">{collectionNotes.length} notes</p>
+
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {collectionNotes.length === 0 ? (
+            <p className="col-span-2 py-10 text-center text-sm text-gray-400">No notes here yet.</p>
+          ) : (
+            collectionNotes.map((note) => <NoteCard key={note.id} note={note} />)
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="px-4 lg:px-6 py-4">
       <h2 className="text-xl font-bold text-gray-900 tracking-tight">Notes</h2>
-      <p className="mt-1 text-sm text-gray-400">Study smarter. Find the notes you actually need.</p>
+      <p className="mt-1 text-sm text-gray-400">Your campus knowledge library.</p>
 
       <div className="relative mt-4">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -81,31 +253,10 @@ export default function NotesView() {
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search notes, subjects, topics..."
+          placeholder="Search notes, PDFs, chapters..."
           className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all duration-300"
         />
       </div>
-
-      {!searchTerm && (
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          {SUBJECTS.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => setActiveSubject(activeSubject === s.key ? 'all' : s.key)}
-              className={`rounded-2xl border p-4 text-left transition-all duration-200 ${
-                activeSubject === s.key
-                  ? 'border-indigo-300 bg-indigo-50 shadow-sm'
-                  : 'border-gray-100 hover:border-gray-200'
-              }`}
-            >
-              <span className="text-2xl">{s.emoji}</span>
-              <p className="mt-2 text-sm font-semibold text-gray-900">{s.label}</p>
-              <p className="text-xs text-gray-400">Notes & revision</p>
-            </button>
-          ))}
-        </div>
-      )}
 
       <div className="flex items-center gap-2 mt-4 overflow-x-auto scroll-hidden">
         {['all', ...SUBJECTS.map((s) => s.key)].map((key) => (
@@ -122,63 +273,92 @@ export default function NotesView() {
         ))}
       </div>
 
-      <div className="mt-5">
-        {loading ? (
-          <div className="py-16 flex justify-center">
-            <Loader size="md" tone="dark" />
-          </div>
-        ) : error ? (
-          <p className="py-16 text-center text-sm text-gray-400">{error}</p>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-sm font-semibold text-gray-900">
-              {searchTerm ? 'No notes found' : activeSubject === 'all' ? 'No notes yet' : `No ${SUBJECTS.find((s) => s.key === activeSubject)?.label} notes yet`}
-            </p>
-            <p className="mt-1 text-sm text-gray-400">
-              {searchTerm ? 'Try another subject or search term.' : 'Be the first to share useful revision material with your campus.'}
-            </p>
-            {!searchTerm && (
-              <button
-                type="button"
-                onClick={() => navigate('/create')}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-indigo-600 text-white text-xs font-semibold px-4 py-2 hover:bg-indigo-700 transition-all duration-200"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Upload a note
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {filtered.map((note) => {
-              const subjectMeta = SUBJECTS.find((s) => s.key === note.subject)
-              return (
-                <a
-                  key={note.id}
-                  href={note.file?.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group rounded-2xl border border-gray-100 p-4 hover:border-indigo-200 hover:shadow-sm hover:-translate-y-[1px] transition-all duration-200"
+      {term ? (
+        <div className="mt-5">
+          <p className="text-sm font-bold text-gray-900 mb-3">
+            {searchResults.length} result{searchResults.length === 1 ? '' : 's'}
+          </p>
+          {searchResults.length === 0 ? (
+            <div className="py-16 text-center">
+              <p className="text-sm font-semibold text-gray-900">No notes found</p>
+              <p className="mt-1 text-sm text-gray-400">Try another subject or search term.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {searchResults.map((note) => (
+                <NoteCard key={note.id} note={note} />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : activeSubject === 'all' ? (
+        <>
+          {recentNotes.length > 0 && (
+            <div className="mt-5">
+              <p className="text-sm font-bold text-gray-900 mb-3">Recently added</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {recentNotes.map((note) => (
+                  <NoteCard key={note.id} note={note} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6">
+            <p className="text-sm font-bold text-gray-900 mb-3">Browse by subject</p>
+            <div className="grid grid-cols-2 gap-3">
+              {SUBJECTS.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setActiveSubject(s.key)}
+                  className="rounded-2xl border border-gray-100 p-4 text-left hover:border-indigo-200 hover:shadow-sm transition-all duration-200"
                 >
-                  <span className="text-[11px] font-semibold text-indigo-600 uppercase tracking-wide">
-                    {subjectMeta ? `${subjectMeta.emoji} ${subjectMeta.label}` : 'Other'}
-                  </span>
-                  <p className="mt-2 text-sm font-semibold text-gray-900 truncate">{note.file?.name}</p>
-                  {note.text && <p className="mt-0.5 text-xs text-gray-400 line-clamp-2">{note.text}</p>}
-                  <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-400">
-                    <span>📄 PDF</span>
-                    {note.file?.size && <span>· {note.file.size}</span>}
-                  </div>
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="text-[11px] text-gray-400">Uploaded {note.time}</span>
-                    <span className="text-xs font-semibold text-indigo-600 group-hover:text-indigo-700">Open →</span>
-                  </div>
-                </a>
-              )
-            })}
+                  <span className="text-2xl">{s.emoji}</span>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">{s.label}</p>
+                  <p className="text-xs text-gray-400">{subjectCounts[s.key]} notes</p>
+                </button>
+              ))}
+            </div>
           </div>
-        )}
-      </div>
+
+          {notes.length === 0 && (
+            <div className="py-16 text-center">
+              <p className="text-sm font-semibold text-gray-900">No notes yet</p>
+              <p className="mt-1 text-sm text-gray-400">Be the first to share useful study material with your campus.</p>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="mt-5">
+          <p className="text-sm font-bold text-gray-900 mb-3">
+            {SUBJECTS.find((s) => s.key === activeSubject)?.label} collections
+          </p>
+          {subjectCounts[activeSubject] === 0 ? (
+            <div className="py-16 text-center">
+              <p className="text-sm font-semibold text-gray-900">
+                📚 No {SUBJECTS.find((s) => s.key === activeSubject)?.label} notes yet
+              </p>
+              <p className="mt-1 text-sm text-gray-400">Be the first to share useful study material with your campus.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {COLLECTIONS.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => setActiveCollection(c.key)}
+                  className="rounded-2xl border border-gray-100 p-4 text-left hover:border-indigo-200 hover:shadow-sm transition-all duration-200"
+                >
+                  <span className="text-xl">{c.emoji}</span>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">{c.label}</p>
+                  <p className="text-xs text-gray-400">{collectionCountsForSubject[c.key] || 0} notes</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

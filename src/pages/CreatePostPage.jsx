@@ -63,6 +63,21 @@ export default function CreatePostPage() {
   const [postText, setPostText] = useState('')
   const [category, setCategory] = useState('general')
   const [expirationType, setExpirationType] = useState('7d')
+  const [noteSubject, setNoteSubject] = useState('')
+  const [noteCollection, setNoteCollection] = useState('')
+  const [noteChapter, setNoteChapter] = useState('')
+
+  const NOTE_SUBJECTS = [
+    { key: 'physics', label: 'Physics', emoji: '⚡' },
+    { key: 'chemistry', label: 'Chemistry', emoji: '🧪' }
+  ]
+  const NOTE_COLLECTIONS = [
+    { key: 'chapter1', label: 'Chapter 1' },
+    { key: 'chapter2', label: 'Chapter 2' },
+    { key: 'important', label: 'Important Questions' },
+    { key: 'pyqs', label: 'PYQs' },
+    { key: 'practicals', label: 'Practicals' }
+  ]
 
   const CATEGORY_SUGGESTIONS = {
     event: '7d',
@@ -232,6 +247,11 @@ export default function CreatePostPage() {
           isAnonymous,
           expirationType,
           expiresAt: computeExpiresAt(expirationType),
+          ...(category === 'notes' && {
+            subject: noteSubject || 'unassigned',
+            collection: noteCollection || 'general',
+            ...(noteChapter.trim() && { chapter: noteChapter.trim() })
+          }),
           ...(fileData && { file: fileData }),
           ...(selectedCommunity && {
             communityId: selectedCommunity.id,
@@ -406,6 +426,60 @@ export default function CreatePostPage() {
               ))}
             </div>
           </div>
+
+          {category === 'notes' && (
+            <div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3.5">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Subject</p>
+                <div className="flex flex-wrap gap-2">
+                  {NOTE_SUBJECTS.map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setNoteSubject(noteSubject === s.key ? '' : s.key)}
+                      className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
+                        noteSubject === s.key ? 'bg-indigo-600 text-white' : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      {s.emoji} {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Collection</p>
+                <div className="flex flex-wrap gap-2">
+                  {NOTE_COLLECTIONS.map((c) => (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={() => setNoteCollection(noteCollection === c.key ? '' : c.key)}
+                      className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
+                        noteCollection === c.key ? 'bg-indigo-600 text-white' : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+                {!noteCollection && (
+                  <p className="mt-1.5 text-[11px] text-gray-400">Skip this and it'll be filed under General.</p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Chapter / Topic (optional)</p>
+                <input
+                  type="text"
+                  value={noteChapter}
+                  onChange={(e) => setNoteChapter(e.target.value)}
+                  placeholder="e.g. Electrostatics"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all duration-300"
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">

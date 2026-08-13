@@ -76,6 +76,9 @@ export function mapPostForCard(raw, currentUid, liveProfile) {
     communityId: raw.communityId || null,
     communityName: raw.communityName || null,
     file: raw.file,
+    subject: raw.subject || null,
+    collection: raw.collection || null,
+    chapter: raw.chapter || null,
     event: raw.event,
     marketplace: raw.marketplace,
     lostFound: raw.lostFound

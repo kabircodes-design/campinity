@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, ImageOff } from 'lucide-react'
+import { FileText, Heart, ImageOff } from 'lucide-react'
 import { getPostById } from '../firebase/postService.js'
 import { getCanonicalUrl } from '../sharing/shareTypes.js'
 
@@ -41,7 +41,15 @@ const ENTITY_REGISTRY = {
         onClick={() => navigate(getCanonicalUrl('post', post.id))}
         className="aspect-square rounded-xl overflow-hidden border border-gray-100 relative group"
       >
-        {post.imagePreviewUrl ? (
+        {post.file ? (
+          <div className="w-full h-full bg-indigo-50 flex flex-col items-center justify-center gap-1.5 p-2 text-center">
+            <FileText className="w-6 h-6 text-indigo-500 flex-shrink-0" />
+            <p className="text-[10px] font-medium text-gray-700 line-clamp-2">{post.file.name}</p>
+            {(post.subject || post.chapter) && (
+              <p className="text-[9px] text-gray-400 line-clamp-1">{[post.subject, post.chapter].filter(Boolean).join(' · ')}</p>
+            )}
+          </div>
+        ) : post.imagePreviewUrl ? (
           <img src={post.imagePreviewUrl} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full bg-gray-50 flex items-center justify-center p-2">

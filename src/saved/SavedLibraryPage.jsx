@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Search } from 'lucide-react'
+import { ArrowLeft, Plus, Search, Sparkles } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
-import { subscribeToCollections, getRecentlySavedItems, getAllSavedItems, createCollection } from './savedService.js'
+import { subscribeToCollections, getRecentlySavedItems, getAllSavedItems, createCollection, toggleItemInCollection } from './savedService.js'
+import { suggestCollections } from './suggestCollections.js'
 import SavedItemCard from './SavedItemCard.jsx'
 
 /**
@@ -32,6 +33,8 @@ export default function SavedLibraryPage() {
   const [newName, setNewName] = useState('')
   const [newEmoji, setNewEmoji] = useState('')
   const [creating, setCreating] = useState(false)
+  const [dismissedSuggestions, setDismissedSuggestions] = useState([])
+  const [acceptingSuggestion, setAcceptingSuggestion] = useState(null)
 
   useEffect(() => {
     if (!currentUid) return
@@ -70,6 +73,24 @@ export default function SavedLibraryPage() {
   const filteredCollections = searchTerm.trim()
     ? collections.filter((c) => c.name.toLowerCase().includes(searchTerm.trim().toLowerCase()))
     : collections
+
+  const suggestions = suggestCollections(allItems, collections).filter((s) => !dismissedSuggestions.includes(s.key))
+
+  const handleAcceptSuggestion = async (suggestion) => {
+    if (acceptingSuggestion) return
+    setAcceptingSuggestion(suggestion.key)
+    try {
+      const collectionId = await createCollection(currentUid, { name: suggestion.label, emoji: suggestion.emoji })
+      await Promise.all(
+        suggestion.items.map((item) => toggleItemInCollection(currentUid, item.entityType, item.entityId, item.preview, collectionId))
+      )
+      setDismissedSuggestions((prev) => [...prev, suggestion.key])
+    } catch (err) {
+      console.error('Could not create suggested collection:', err)
+    } finally {
+      setAcceptingSuggestion(null)
+    }
+  }
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
@@ -133,6 +154,43 @@ export default function SavedLibraryPage() {
                 {creating ? 'Creating...' : 'Create'}
               </button>
             </div>
+          </div>
+        )}
+
+        {tab === 'all' && suggestions.length > 0 && (
+          <div className="px-4 pt-4 space-y-2.5">
+            <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900">
+              <Sparkles className="w-4 h-4 text-indigo-500" /> Suggested for you
+            </p>
+            {suggestions.map((s) => (
+              <div key={s.key} className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {s.emoji} {s.label}
+                    </p>
+                    <p className="text-xs text-gray-400">{s.count} items found</p>
+                  </div>
+                </div>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAcceptSuggestion(s)}
+                    disabled={acceptingSuggestion === s.key}
+                    className="rounded-full bg-indigo-600 text-white text-xs font-semibold px-3.5 py-1.5 hover:bg-indigo-700 disabled:opacity-60 transition-all duration-200"
+                  >
+                    {acceptingSuggestion === s.key ? 'Creating...' : 'Create collection'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDismissedSuggestions((prev) => [...prev, s.key])}
+                    className="text-xs font-semibold text-gray-500 hover:text-gray-700"
+                  >
+                    Not now
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
