@@ -261,30 +261,29 @@ export default function HomePage() {
 
   return (
     <>
-    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+    <div className="lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]">
     <DesktopSidebar unreadNotifications={unreadCount} profile={profile} />
     <SwipeablePage>
     <div
-      className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden bg-gray-50"
+      className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50"
       style={{ backgroundImage: 'radial-gradient(circle, rgba(99,102,241,0.06) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
     >
       {/* Mobile: narrow centered column, natural page scroll,
-          unchanged. Desktop: a wider reading column bordered on both
-          sides, sitting between the real sidebar and right rail — no
-          longer "desktop simply centers this same layout." This
-          element is now the actual scroll container on desktop
-          (lg:h-screen lg:overflow-y-auto) — the browser page itself
-          never scrolls at lg:, only this column does, matching the
-          real application-shell architecture rather than one long
-          page. Width comes from this column's own explicit
-          max-w-[600px] below, not from a flex-grow on an ancestor —
-          SwipeablePage's root (a bare motion.div with no className
-          passthrough) can't receive a flex-sizing class, so this is a
-          fixed-width column sitting alongside the sidebar/rail, not a
-          fluidly-expanding one. Confirmed correct for the stated
-          column widths; noted as a real constraint, not claimed as
-          more flexible than it actually is. */}
-      <div className="mx-auto max-w-[480px] lg:max-w-[600px] xl:max-w-[760px] min-h-screen lg:min-h-0 bg-white lg:shadow-sm lg:border-x lg:border-gray-100">
+          unchanged. Desktop: this column now sits in a real CSS Grid
+          middle track (minmax(0,1fr)) rather than a fixed-width flex
+          sibling — it genuinely grows with available viewport space
+          instead of jumping between two hardcoded breakpoints. Grid's
+          default stretch behavior also solves a previously-documented
+          constraint: SwipeablePage's root (a bare motion.div with no
+          className passthrough) now automatically fills this track's
+          width, since Grid items stretch by default unlike Flexbox's
+          content-sizing default — no workaround needed. This element
+          remains the actual scroll container (lg:h-screen
+          lg:overflow-y-auto) — the browser page itself never scrolls
+          at lg:. The inner max-w-[760px] below caps individual post
+          readability on very wide tracks without capping the track
+          itself. */}
+      <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-screen lg:min-h-0 bg-white lg:shadow-sm lg:border-x lg:border-gray-100">
         {/* -------------------------------------------------------- */}
         {/* Top header — logo + notifications, stays pinned          */}
         {/* -------------------------------------------------------- */}

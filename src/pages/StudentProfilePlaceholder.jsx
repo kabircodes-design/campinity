@@ -215,8 +215,9 @@ export default function StudentProfilePlaceholder() {
 
   const displayProfile = {
     ...profile,
+    displayName: profile.displayName || 'Student',
     college: college?.name || '',
-    initials: getInitials(profile.displayName),
+    initials: getInitials(profile.displayName || 'Student'),
     colorClass: getAvatarColor(profile.uid),
     postsCount: posts.length,
     followers: profile.followersCount || 0,

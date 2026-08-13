@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Grid3x3, List, Settings } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
+import DesktopSidebar from '../components/DesktopSidebar.jsx'
 import ProfileHeader from '../components/ProfileHeader.jsx'
 import ProgressCard from '../gamification/ProgressCard.jsx'
 import PostCard from '../components/PostCard.jsx'
@@ -256,8 +257,9 @@ export default function ProfilePage() {
 
   const displayProfile = {
     ...profile,
+    displayName: profile.displayName || auth.currentUser?.displayName || 'Student',
     college: college?.name || '',
-    initials: getInitials(profile.displayName),
+    initials: getInitials(profile.displayName || auth.currentUser?.displayName || 'Student'),
     colorClass: getAvatarColor(currentUid || profile.username),
     postsCount: myPosts.length,
     followers: profile.followersCount || 0,
@@ -274,8 +276,10 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
+    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+    <DesktopSidebar profile={displayProfile} />
+    <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden bg-gray-50">
+      <div className="mx-auto max-w-[480px] lg:max-w-[600px] min-h-screen lg:min-h-0 bg-white lg:shadow-sm lg:border-x lg:border-gray-100">
         <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
           <div className="h-14 flex items-center justify-between px-4">
             <span className="text-base font-bold tracking-tight text-gray-900">Profile</span>
@@ -461,8 +465,11 @@ export default function ProfilePage() {
           )}
         </main>
       </div>
+    </div>
 
-      <BottomNav />
+      <div className="lg:hidden">
+        <BottomNav />
+      </div>
     </div>
   )
 }

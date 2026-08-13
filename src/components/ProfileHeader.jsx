@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { BadgeCheck, Calendar, Link as LinkIcon, MessageCircle, MoreVertical, Share2 } from 'lucide-react'
+import { BadgeCheck, Calendar, Camera, Link as LinkIcon, MessageCircle, MoreVertical, Share2 } from 'lucide-react'
+import ProfilePhotoEditor from '../avatar/ProfilePhotoEditor.jsx'
 import Avatar from './Avatar.jsx'
 import VerifiedBadge from './VerifiedBadge.jsx'
 import ReportModal from './ReportModal.jsx'
@@ -43,6 +44,7 @@ export default function ProfileHeader({
   const [reportOpen, setReportOpen] = useState(false)
   const [blocked, setBlocked] = useState(false)
   const [blockBusy, setBlockBusy] = useState(false)
+  const [photoEditorOpen, setPhotoEditorOpen] = useState(false)
 
   useEffect(() => {
     if (isOwnProfile || !profile?.uid) return
@@ -91,15 +93,33 @@ export default function ProfileHeader({
   }
 
   return (
-    <div className="px-4 pt-5 pb-4">
+    <div className="pb-4">
+      <div className="relative h-24 lg:h-28 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 overflow-hidden">
+        <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+        <div className="absolute -bottom-8 left-1/3 w-40 h-40 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+      </div>
+      <div className="px-4 -mt-8">
       <div className="flex items-start gap-4">
-        <div className="flex-shrink-0">
+        <div
+          className={`flex-shrink-0 rounded-full ring-4 ring-white relative group ${isOwnProfile ? 'cursor-pointer' : ''}`}
+          onClick={() => isOwnProfile && setPhotoEditorOpen(true)}
+        >
           <Avatar
             initials={profile.initials}
             colorClass={profile.colorClass}
             size="xl"
             src={getProfileIdentityImage(profile) || undefined}
           />
+          {isOwnProfile && (
+            <>
+              <div className="hidden lg:flex absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/40 items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200">
+                <Camera className="w-5 h-5 text-white" />
+              </div>
+              <div className="lg:hidden absolute bottom-0 right-0 w-6 h-6 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center">
+                <Camera className="w-3 h-3 text-white" />
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex-1 min-w-0 pt-1">
@@ -251,6 +271,16 @@ export default function ProfileHeader({
           </div>
         )}
       </div>
+
+      </div>
+
+      {isOwnProfile && (
+        <ProfilePhotoEditor
+          open={photoEditorOpen}
+          onClose={() => setPhotoEditorOpen(false)}
+          currentPhotoUrl={getProfileIdentityImage(profile)}
+        />
+      )}
 
       <ReportModal
         open={reportOpen}
