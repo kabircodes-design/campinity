@@ -8,7 +8,6 @@ import PasswordInput from '../components/PasswordInput.jsx'
 import Divider from '../components/Divider.jsx'
 import GoogleGlyph from '../components/GoogleGlyph.jsx'
 import Icon from '../../components/Icon.jsx'
-import AnimatedBackground from '../../components/AnimatedBackground.jsx'
 import { useAuthForm } from '../hooks/useAuthForm.js'
 import { validateLoginForm } from '../validation/authValidation.js'
 import { sanitizeEmail, sanitizePassword } from '../utils/sanitize.js'
@@ -72,10 +71,35 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen">
-      <AnimatedBackground variant="login" />
+    <div
+      className="relative min-h-screen lg:flex"
+      style={{
+        backgroundImage:
+          'radial-gradient(ellipse 900px 600px at 15% -10%, rgba(99,102,241,0.10), transparent), radial-gradient(ellipse 700px 500px at 100% 100%, rgba(59,130,246,0.08), transparent)'
+      }}
+    >
+      {/* Desktop-only brand/storytelling column — a pure sibling of
+          AuthLayout below, added without touching or needing to know
+          AuthLayout's own internals. Mobile renders exactly as before
+          this change (hidden below lg:). No animation, no motion —
+          matches Phase 1's stability-first requirement. */}
+      <div className="hidden lg:flex lg:w-[45%] lg:flex-col lg:justify-center lg:px-16 bg-gradient-to-br from-indigo-600 via-blue-600 to-indigo-700 text-white relative overflow-hidden">
+        <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-white/5" />
+        <div className="absolute -bottom-24 -left-10 w-80 h-80 rounded-full bg-white/5" />
+        <div className="relative">
+          <p className="text-2xl font-bold tracking-tight">Campinity</p>
+          <p className="mt-6 text-4xl font-bold leading-tight">
+            Your campus.
+            <br />
+            One place.
+          </p>
+          <p className="mt-4 text-indigo-100 text-base max-w-sm">
+            Everything happening around your campus — feeds, notes, communities and people, all in one login.
+          </p>
+        </div>
+      </div>
 
-      <div className="relative z-10">
+      <div className="relative z-10 flex-1 lg:flex lg:items-center lg:justify-center">
         <AuthLayout
           eyebrow="Welcome back"
           title="Log in to Campinity"

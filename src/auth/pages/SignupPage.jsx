@@ -9,7 +9,6 @@ import PasswordStrengthMeter from '../components/PasswordStrengthMeter.jsx'
 import Divider from '../components/Divider.jsx'
 import GoogleGlyph from '../components/GoogleGlyph.jsx'
 import Icon from '../../components/Icon.jsx'
-import AnimatedBackground from '../../components/AnimatedBackground.jsx'
 import SignupCelebration from '../../components/SignupCelebration.jsx'
 import { useAuthForm } from '../hooks/useAuthForm.js'
 import { validateSignupForm } from '../validation/authValidation.js'
@@ -86,8 +85,13 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="relative min-h-screen">
-      <AnimatedBackground variant="signup" />
+    <div
+      className="relative min-h-screen"
+      style={{
+        backgroundImage:
+          'radial-gradient(ellipse 900px 600px at 15% -10%, rgba(99,102,241,0.10), transparent), radial-gradient(ellipse 700px 500px at 100% 100%, rgba(59,130,246,0.08), transparent)'
+      }}
+    >
       <SignupCelebration active={submitSuccess} />
 
       <div className="relative z-10">
