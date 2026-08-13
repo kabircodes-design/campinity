@@ -8,6 +8,7 @@ import SaveBottomSheet from '../saved/SaveBottomSheet.jsx'
 import { useMyVerification } from '../access/useMyVerification.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
+import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
 
 const SUBJECTS = [
   { key: 'physics', label: 'Physics', emoji: '⚡', keywords: ['physics', 'electrostatics', 'mechanics', 'thermodynamics', 'optics', 'kinematics'] },
@@ -160,6 +161,31 @@ export default function NotesView() {
   const [activeSubject, setActiveSubject] = useState('all')
   const [activeCollection, setActiveCollection] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [lastSeenBySubject, setLastSeenBySubject] = useState(undefined) // undefined = not loaded yet
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+    getUserProfile(uid)
+      .then((profile) => setLastSeenBySubject(profile?.lastSeenNotesBySubject || {}))
+      .catch(() => setLastSeenBySubject({}))
+  }, [])
+
+  /**
+   * Marks ONE subject as seen up to right now — called ONLY when the
+   * user actually opens that specific subject, never on mount and
+   * never for unrelated subjects, matching both 'do not mark
+   * everything read merely because the page mounted' and the
+   * per-subject independence the spec's own example shows ('Physics ●
+   * Chemistry' — opening Physics must not clear Chemistry's dot).
+   */
+  const markSubjectSeen = (subjectKey) => {
+    const uid = auth.currentUser?.uid
+    if (!uid || !subjectKey) return
+    const now = Date.now()
+    setLastSeenBySubject((prev) => ({ ...(prev || {}), [subjectKey]: now }))
+    updateUserProfile(uid, { lastSeenNotesBySubject: { ...(lastSeenBySubject || {}), [subjectKey]: new Date(now) } }).catch(() => {})
+  }
 
   const load = () => {
     let cancelled = false
@@ -201,6 +227,22 @@ export default function NotesView() {
     return counts
   }, [withMeta])
 
+  // Real unseen-per-subject — derived purely from lastSeenBySubject vs
+  // each note's actual createdAtMs, no invented signal. Stays empty
+  // while lastSeenBySubject is still loading (undefined), avoiding a
+  // flash of incorrect dots before the real value arrives.
+  const subjectHasUnseen = useMemo(() => {
+    if (lastSeenBySubject === undefined) return {}
+    const result = {}
+    SUBJECTS.forEach((s) => {
+      const seenAt = lastSeenBySubject[s.key]
+      result[s.key] = withMeta.some(
+        (n) => n.resolvedSubject === s.key && n.createdAtMs && (!seenAt || n.createdAtMs > seenAt)
+      )
+    })
+    return result
+  }, [withMeta, lastSeenBySubject])
+
   const term = searchTerm.trim().toLowerCase()
   const searchScope = activeSubject === 'all' ? withMeta : withMeta.filter((n) => n.resolvedSubject === activeSubject)
   const searchResults = term
@@ -211,6 +253,20 @@ export default function NotesView() {
     : []
 
   const recentNotes = useMemo(() => [...withMeta].sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0)).slice(0, 3), [withMeta])
+
+  // "Last Minute" — real signals only, per the explicit rule set:
+  // user-marked important (collection==='important', a real existing
+  // composer field, not invented) OR uploaded within the last 48
+  // hours. No fabricated exam-date awareness, no AI recommendation —
+  // just the two honest signals actually available.
+  const lastMinuteNotes = useMemo(() => {
+    const now = Date.now()
+    const twoDaysMs = 48 * 60 * 60 * 1000
+    return withMeta
+      .filter((n) => n.resolvedCollection === 'important' || (n.createdAtMs && now - n.createdAtMs < twoDaysMs))
+      .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0))
+      .slice(0, 6)
+  }, [withMeta])
 
   const collectionNotes = activeCollection
     ? withMeta.filter((n) => n.resolvedSubject === activeSubject && n.resolvedCollection === activeCollection)
@@ -313,7 +369,10 @@ export default function NotesView() {
           <button
             key={key}
             type="button"
-            onClick={() => setActiveSubject(key)}
+            onClick={() => {
+              setActiveSubject(key)
+              if (key !== 'all') markSubjectSeen(key)
+            }}
             className={`flex-shrink-0 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
               activeSubject === key ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             }`}
@@ -343,8 +402,25 @@ export default function NotesView() {
         </div>
       ) : activeSubject === 'all' ? (
         <>
+          <div className="mt-5">
+            <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-1">⚡ Last Minute</p>
+            <p className="text-xs text-gray-400 mb-3">Things your campus says you shouldn't miss before tomorrow.</p>
+            {lastMinuteNotes.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {lastMinuteNotes.map((note) => (
+                  <NoteCard key={note.id} note={note} verified={verified} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-100 px-4 py-5 text-center">
+                <p className="text-sm font-semibold text-gray-900">⚡ Nothing urgent right now.</p>
+                <p className="mt-1 text-xs text-gray-400">Looks like your campus is calm. Check back later.</p>
+              </div>
+            )}
+          </div>
+
           {recentNotes.length > 0 && (
-            <div className="mt-5">
+            <div className="mt-6">
               <p className="text-sm font-bold text-gray-900 mb-3">Recently added</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {recentNotes.map((note) => (
@@ -361,9 +437,15 @@ export default function NotesView() {
                 <button
                   key={s.key}
                   type="button"
-                  onClick={() => setActiveSubject(s.key)}
-                  className="rounded-2xl border border-gray-100 p-4 text-left hover:border-indigo-200 hover:shadow-sm transition-all duration-200"
+                  onClick={() => {
+                    setActiveSubject(s.key)
+                    markSubjectSeen(s.key)
+                  }}
+                  className="relative rounded-2xl border border-gray-100 p-4 text-left hover:border-indigo-200 hover:shadow-sm transition-all duration-200"
                 >
+                  {subjectHasUnseen[s.key] && (
+                    <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-red-500" aria-label="New notes" />
+                  )}
                   <span className="text-2xl">{s.emoji}</span>
                   <p className="mt-2 text-sm font-semibold text-gray-900">{s.label}</p>
                   <p className="text-xs text-gray-400">{subjectCounts[s.key]} notes</p>

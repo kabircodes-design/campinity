@@ -34,13 +34,14 @@ export default function VerificationGate({ open, onClose, feature }) {
         <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
           <ShieldCheck className="w-5 h-5 text-blue-600" />
         </div>
-        <p className="mt-3 text-base font-bold text-gray-900">Unlock Your Campus</p>
-        <p className="mt-1.5 text-sm text-gray-500 leading-relaxed">
+        <p className="mt-3 text-base font-bold text-gray-900">🔐 Unlock your campus</p>
+        <p className="mt-1 text-xs text-gray-400">You're missing the full Campinity experience.</p>
+        <p className="mt-2 text-sm text-gray-500 leading-relaxed">
           {MESSAGES[feature] || 'Verify your campus to unlock this feature.'}
         </p>
 
         <div className="mt-4 space-y-1.5 text-left">
-          {['Campus-only resources', 'Private communities', 'Notes & PDF downloads', 'Smart Saves'].map((line) => (
+          {['Join private communities', 'Access campus notes', 'Save campus resources', 'Create your own community'].map((line) => (
             <div key={line} className="flex items-center gap-2">
               <Check className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
               <span className="text-xs text-gray-600">{line}</span>

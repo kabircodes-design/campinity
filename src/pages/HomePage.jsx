@@ -12,7 +12,10 @@ import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { getFeedPosts, getAvatarColor, getInitials } from '../firebase/postService.js'
+import { getFeedPosts, getAvatarColor, getInitials, getNotesPosts } from '../firebase/postService.js'
+import CampusPulse from '../components/CampusPulse.jsx'
+import LastMinutePreview from '../components/LastMinutePreview.jsx'
+import WhatYouMissed from '../components/WhatYouMissed.jsx'
 import { getFeedStories, getViewedStoryIds } from '../firebase/storyService.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
 import { getTrendingCommunities } from '../firebase/communityService.js'
@@ -190,6 +193,8 @@ export default function HomePage() {
   }, [forYouHasMore, forYouLoadingMore, loadMoreForYou])
 
   const [communities, setCommunities] = useState([])
+  const [notesCount, setNotesCount] = useState(null)
+  const [notesForPreview, setNotesForPreview] = useState([])
   const [communitiesLoading, setCommunitiesLoading] = useState(false)
   const [communitiesLoaded, setCommunitiesLoaded] = useState(false)
   const [communitiesError, setCommunitiesError] = useState(false)
@@ -220,6 +225,24 @@ export default function HomePage() {
       cancelled = true
     }
   }, [communitiesLoaded])
+
+  useEffect(() => {
+    let cancelled = false
+    getNotesPosts(auth.currentUser?.uid)
+      .then((data) => {
+        if (!cancelled) {
+          setNotesCount(data.length)
+          setNotesForPreview(data.filter((n) => n.file))
+        }
+      })
+      .catch(() => {
+        // Supplementary metric only — CampusPulse simply omits it if
+        // this stays null, no error shown to the user.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const displayName = profile?.displayName || ''
   const firstName = displayName.split(' ')[0] || 'there'
@@ -379,11 +402,17 @@ export default function HomePage() {
             />
             <div>
               <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
-                Good morning, {firstName}
+                {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {firstName}
               </h1>
               <p className="mt-0.5 text-[13px] text-gray-400">Catch up on what's happening across campus.</p>
             </div>
           </div>
+
+          <CampusPulse posts={posts} communities={communities} notesCount={notesCount} />
+
+          <LastMinutePreview notes={notesForPreview} onViewAll={() => setActiveTab('notes')} />
+
+          <WhatYouMissed posts={posts} notes={notesForPreview} />
 
           <ProgressWidget uid={auth.currentUser?.uid} />
 
@@ -459,7 +488,7 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         {/* Feed — Firestore posts                                    */}
         {/* -------------------------------------------------------- */}
-        <main className="pb-24">
+        <main className="pb-24" style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}>
           {activeTab === 'notes' ? (
             <NotesView />
           ) : activeTab === 'following' ? (

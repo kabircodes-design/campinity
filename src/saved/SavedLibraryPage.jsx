@@ -20,6 +20,7 @@ export default function SavedLibraryPage() {
   const currentUid = auth.currentUser?.uid
 
   const [tab, setTab] = useState('all') // 'all' | 'recent' | 'collections'
+  const [typeFilter, setTypeFilter] = useState('all') // 'all' | 'posts' | 'notes'
   const [searchTerm, setSearchTerm] = useState('')
 
   const [allItems, setAllItems] = useState([])
@@ -195,6 +196,27 @@ export default function SavedLibraryPage() {
         )}
 
         <main className="px-4 pt-4">
+          {tab === 'all' && (
+            <div className="flex items-center gap-2 mb-3">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'notes', label: 'Notes & PDFs' },
+                { key: 'posts', label: 'Posts' }
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setTypeFilter(f.key)}
+                  className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
+                    typeFilter === f.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {tab === 'all' &&
             (allLoading ? (
               <div className="grid grid-cols-3 gap-1.5">
@@ -203,9 +225,26 @@ export default function SavedLibraryPage() {
             ) : allItems.length === 0 ? (
               <EmptyState />
             ) : (
-              <div className="grid grid-cols-3 gap-1.5">
-                {allItems.map((item) => <SavedItemCard key={item.id} item={item} currentUid={currentUid} />)}
-              </div>
+              (() => {
+                const filtered =
+                  typeFilter === 'all'
+                    ? allItems
+                    : allItems.filter((item) => {
+                        const title = (item.preview?.title || '').toLowerCase()
+                        const looksLikeNote = title.endsWith('.pdf') || /chapter|pyq|notes|important questions/.test(title)
+                        return typeFilter === 'notes' ? looksLikeNote : !looksLikeNote
+                      })
+                return filtered.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <p className="text-sm font-semibold text-gray-900">Nothing here yet</p>
+                    <p className="mt-1 text-sm text-gray-400">Try a different filter.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {filtered.map((item) => <SavedItemCard key={item.id} item={item} currentUid={currentUid} />)}
+                  </div>
+                )
+              })()
             ))}
 
           {tab === 'recent' &&
