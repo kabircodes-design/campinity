@@ -1,7 +1,11 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MessageSquare, Sparkles, Users } from 'lucide-react'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import Avatar from './Avatar.jsx'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 /**
  * Desktop-only contextual rail (hidden below lg). Deliberately does
@@ -18,6 +22,8 @@ import Avatar from './Avatar.jsx'
  */
 export default function DesktopRightRail({ communities = [], postCount = 0 }) {
   const navigate = useNavigate()
+  const verified = useMyVerification()
+  const [gateOpen, setGateOpen] = useState(false)
   const topCommunities = communities.slice(0, 4)
 
   return (
@@ -96,12 +102,13 @@ export default function DesktopRightRail({ communities = [], postCount = 0 }) {
         </p>
         <button
           type="button"
-          onClick={() => navigate('/community/create')}
+          onClick={() => (verified === false ? setGateOpen(true) : navigate('/community/create'))}
           className="relative mt-3 w-full rounded-full bg-white text-blue-700 text-xs font-semibold py-2.5 hover:bg-blue-50 active:scale-[0.98] transition-all duration-200"
         >
           Create Community
         </button>
       </div>
+      <VerificationGate open={gateOpen} onClose={() => setGateOpen(false)} feature={FEATURES.CREATE_COMMUNITY} />
     </aside>
   )
 }

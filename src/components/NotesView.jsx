@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Bookmark, Download, Search, Upload } from 'lucide-react'
+import { ArrowLeft, Bookmark, Download, Lock, Search, ShieldCheck, Upload } from 'lucide-react'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getNotesPosts } from '../firebase/postService.js'
 import { subscribeToIsItemSaved } from '../saved/savedService.js'
 import SaveBottomSheet from '../saved/SaveBottomSheet.jsx'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 const SUBJECTS = [
   { key: 'physics', label: 'Physics', emoji: '⚡', keywords: ['physics', 'electrostatics', 'mechanics', 'thermodynamics', 'optics', 'kinematics'] },
@@ -48,9 +51,10 @@ function displayTitle(post) {
   return 'Untitled note'
 }
 
-function NoteCard({ note }) {
+function NoteCard({ note, verified }) {
   const [isSaved, setIsSaved] = useState(false)
   const [saveSheetOpen, setSaveSheetOpen] = useState(false)
+  const [gateFeature, setGateFeature] = useState(null)
   const subjectMeta = SUBJECTS.find((s) => s.key === resolveSubject(note))
 
   useEffect(() => {
@@ -59,13 +63,30 @@ function NoteCard({ note }) {
     return subscribeToIsItemSaved(uid, 'post', note.id, setIsSaved)
   }, [note.id])
 
+  const handleOpen = () => {
+    if (verified === false) {
+      setGateFeature(FEATURES.VIEW_CAMPUS_PDF)
+      return
+    }
+    if (note.file?.url) window.open(note.file.url, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleSave = () => {
+    if (verified === false) {
+      setGateFeature(FEATURES.SAVE_CAMPUS_RESOURCE)
+      return
+    }
+    setSaveSheetOpen(true)
+  }
+
   return (
     <>
-      <a
-        href={note.file?.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="group block rounded-2xl border border-gray-100 p-4 hover:border-indigo-200 hover:shadow-sm hover:-translate-y-[1px] transition-all duration-200"
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleOpen}
+        onKeyDown={(e) => e.key === 'Enter' && handleOpen()}
+        className="group block rounded-2xl border border-gray-100 p-4 hover:border-indigo-200 hover:shadow-sm hover:-translate-y-[1px] transition-all duration-200 cursor-pointer"
       >
         <div className="flex items-start justify-between gap-2">
           <span className="text-[11px] font-semibold text-indigo-600 uppercase tracking-wide">
@@ -79,15 +100,17 @@ function NoteCard({ note }) {
           {note.file?.size && <span>· {note.file.size}</span>}
           <span>· Posted {note.time}</span>
         </div>
+        {verified === false ? (
+          <p className="mt-2 text-[11px] text-blue-600 font-medium">🔒 Verified members</p>
+        ) : null}
         <div className="mt-3 flex items-center justify-between">
           <button
             type="button"
             aria-label={isSaved ? 'Saved' : 'Save'}
             aria-pressed={isSaved}
             onClick={(e) => {
-              e.preventDefault()
               e.stopPropagation()
-              setSaveSheetOpen(true)
+              handleSave()
             }}
             className={`flex items-center gap-1 text-xs font-semibold rounded-full px-3 py-1.5 transition-all duration-200 ${
               isSaved ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -97,10 +120,20 @@ function NoteCard({ note }) {
             {isSaved ? 'Saved' : 'Save'}
           </button>
           <span className="flex items-center gap-1 text-xs font-semibold text-indigo-600 group-hover:text-indigo-700">
-            <Download className="w-3.5 h-3.5" /> Download
+            {verified === false ? (
+              <>
+                <Lock className="w-3.5 h-3.5" /> Verify to open
+              </>
+            ) : (
+              <>
+                <Download className="w-3.5 h-3.5" /> Download
+              </>
+            )}
           </span>
         </div>
-      </a>
+      </div>
+
+      <VerificationGate open={Boolean(gateFeature)} onClose={() => setGateFeature(null)} feature={gateFeature} />
 
       <SaveBottomSheet
         open={saveSheetOpen}
@@ -119,6 +152,8 @@ function NoteCard({ note }) {
 }
 
 export default function NotesView() {
+  const verified = useMyVerification()
+  const [notesGateOpen, setNotesGateOpen] = useState(false)
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -235,7 +270,7 @@ export default function NotesView() {
           {collectionNotes.length === 0 ? (
             <p className="col-span-2 py-10 text-center text-sm text-gray-400">No notes here yet.</p>
           ) : (
-            collectionNotes.map((note) => <NoteCard key={note.id} note={note} />)
+            collectionNotes.map((note) => <NoteCard key={note.id} note={note} verified={verified} />)
           )}
         </div>
       </div>
@@ -246,6 +281,21 @@ export default function NotesView() {
     <div className="px-4 lg:px-6 py-4">
       <h2 className="text-xl font-bold text-gray-900 tracking-tight">Notes</h2>
       <p className="mt-1 text-sm text-gray-400">Your campus knowledge library.</p>
+
+      {verified === false && (
+        <button
+          type="button"
+          onClick={() => setNotesGateOpen(true)}
+          className="mt-4 w-full flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50/50 p-3.5 text-left hover:border-blue-200 transition-all duration-200"
+        >
+          <ShieldCheck className="w-8 h-8 text-blue-600 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900">Verify your campus</p>
+            <p className="text-xs text-gray-500">Your campus study library is waiting.</p>
+          </div>
+          <span className="text-xs font-semibold text-blue-600 flex-shrink-0">Verify Campus →</span>
+        </button>
+      )}
 
       <div className="relative mt-4">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -286,7 +336,7 @@ export default function NotesView() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {searchResults.map((note) => (
-                <NoteCard key={note.id} note={note} />
+                <NoteCard key={note.id} note={note} verified={verified} />
               ))}
             </div>
           )}
@@ -298,7 +348,7 @@ export default function NotesView() {
               <p className="text-sm font-bold text-gray-900 mb-3">Recently added</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {recentNotes.map((note) => (
-                  <NoteCard key={note.id} note={note} />
+                  <NoteCard key={note.id} note={note} verified={verified} />
                 ))}
               </div>
             </div>
@@ -359,6 +409,12 @@ export default function NotesView() {
           )}
         </div>
       )}
+
+      <VerificationGate
+        open={notesGateOpen}
+        onClose={() => setNotesGateOpen(false)}
+        feature={FEATURES.VIEW_CAMPUS_PDF}
+      />
     </div>
   )
 }

@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { Check, Clock, Crown, Lock, Users } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
 import { joinCommunity, requestToJoin } from '../firebase/communityService.js'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 const typeLabels = {
   official_club: 'Official Club',
@@ -37,6 +40,8 @@ export default function CommunityCard({ community, membershipState = null, onSta
   const [busy, setBusy] = useState(false)
   const [localState, setLocalState] = useState(null)
   const [hasOverride, setHasOverride] = useState(false)
+  const verified = useMyVerification()
+  const [gateOpen, setGateOpen] = useState(false)
 
   const state = hasOverride ? localState : membershipState
   const goToCommunity = () => navigate(`/community/${community.id}`)
@@ -45,6 +50,10 @@ export default function CommunityCard({ community, membershipState = null, onSta
     event.stopPropagation()
     const uid = auth.currentUser?.uid
     if (!uid || busy || state) return
+    if (verified === false) {
+      setGateOpen(true)
+      return
+    }
     setBusy(true)
     try {
       if (community.privacy === 'private') {
@@ -156,6 +165,7 @@ export default function CommunityCard({ community, membershipState = null, onSta
           ))}
         </div>
       )}
+      <VerificationGate open={gateOpen} onClose={() => setGateOpen(false)} feature={FEATURES.JOIN_PRIVATE_COMMUNITY} />
     </div>
   )
 }
