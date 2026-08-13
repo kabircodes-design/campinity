@@ -12,6 +12,12 @@ const CreateProfilePage = lazy(() => import('./auth/pages/CreateProfilePage.jsx'
 const HomePage = lazy(() => import('./pages/HomePage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const ComingSoon = lazy(() => import('./pages/ComingSoon.jsx'))
+const MarketplacePage = lazy(() => import('./marketplace/MarketplacePage.jsx'))
+const CreateProductPage = lazy(() => import('./marketplace/CreateProductPage.jsx'))
+const ProductDetailPage = lazy(() => import('./marketplace/ProductDetailPage.jsx'))
+const AdsDiscoveryPage = lazy(() => import('./ads/AdsDiscoveryPage.jsx'))
+const AdsDashboardPage = lazy(() => import('./ads/AdsDashboardPage.jsx'))
+const CreateCampaignPage = lazy(() => import('./ads/CreateCampaignPage.jsx'))
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage.jsx'))
 const DeleteAccountPage = lazy(() => import('./pages/DeleteAccountPage.jsx'))
 const StudentProfilePlaceholder = lazy(() => import('./pages/StudentProfilePlaceholder.jsx'))
@@ -279,7 +285,50 @@ export default function App() {
           path="/marketplace"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="Marketplace" />
+              <MarketplacePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/marketplace/create"
+          element={
+            <ProtectedRoute stage="home">
+              <CreateProductPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/marketplace/:productId"
+          element={
+            <ProtectedRoute stage="home">
+              <ProductDetailPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Campinity Ads — PROTOTYPE ONLY, isolated dummy-data area,
+            entirely separate from the real /marketplace above. */}
+        <Route
+          path="/ads"
+          element={
+            <ProtectedRoute stage="home">
+              <AdsDiscoveryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ads/dashboard"
+          element={
+            <ProtectedRoute stage="home">
+              <AdsDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ads/create-campaign"
+          element={
+            <ProtectedRoute stage="home">
+              <CreateCampaignPage />
             </ProtectedRoute>
           }
         />
