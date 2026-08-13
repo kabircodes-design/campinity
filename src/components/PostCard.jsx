@@ -43,7 +43,27 @@ const typeIcons = {
   lostfound: PackageSearch
 }
 
+/**
+ * No setInterval — computed once per render from a plain millisecond
+ * timestamp, matching the explicit 'avoid expensive interval timers
+ * per post' instruction. A page with 100 posts costs 100 cheap Date
+ * subtractions, not 100 running timers.
+ */
+function formatExpiryBadge(expiresAtMs) {
+  if (!expiresAtMs) return null
+  const diffMs = expiresAtMs - Date.now()
+  if (diffMs <= 0) return null // expired posts are filtered out of feeds already; this is a defensive fallback
+  const minutes = Math.round(diffMs / 60000)
+  const hours = Math.round(diffMs / 3600000)
+  const days = Math.round(diffMs / 86400000)
+  if (minutes < 60) return `Expires in ${minutes}m`
+  if (hours < 24) return `Expires in ${hours}h`
+  if (days === 1) return 'Expires tomorrow'
+  return `Expires in ${days}d`
+}
+
 export default function PostCard({ post, onDeleted = () => {}, canModerate = false }) {
+  const expiryBadgeText = formatExpiryBadge(post.expiresAtMs)
   const navigate = useNavigate()
   const config = postTypeConfig[post.type]
   const TypeIcon = typeIcons[post.type]
@@ -317,6 +337,10 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
           </div>
           <Download className="w-4 h-4 text-gray-400 flex-shrink-0" />
         </button>
+      )}
+
+      {expiryBadgeText && (
+        <p className="mx-4 mt-2 text-[11px] text-gray-400">⏳ {expiryBadgeText}</p>
       )}
 
       {post.type === 'event' && post.event && (

@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Image as ImageIcon, X } from 'lucide-react'
+import { Clock, FileText, Image as ImageIcon, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import Switch from '../components/Switch.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { createPost, getAvatarColor, getInitials, uploadPostDocument, uploadPostImage } from '../firebase/postService.js'
+import { computeExpiresAt, createPost, getAvatarColor, getInitials, uploadPostDocument, uploadPostImage } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
 import { awardXP, getUserProgress } from '../gamification/xpService.js'
 import { checkAndAwardBadges } from '../gamification/badgeService.js'
@@ -22,6 +22,14 @@ const categoryLabels = {
   club: 'Club',
   marketplace: 'Marketplace'
 }
+
+const EXPIRATION_OPTIONS = [
+  { key: '24h', label: '24 hours' },
+  { key: '3d', label: '3 days' },
+  { key: '7d', label: '7 days' },
+  { key: '30d', label: '30 days' },
+  { key: 'never', label: 'Never' }
+]
 
 const MAX_LENGTH = 500
 
@@ -54,6 +62,32 @@ export default function CreatePostPage() {
 
   const [postText, setPostText] = useState('')
   const [category, setCategory] = useState('general')
+  const [expirationType, setExpirationType] = useState('7d')
+
+  const CATEGORY_SUGGESTIONS = {
+    event: '7d',
+    notes: '30d',
+    study: '7d',
+    general: '7d',
+    marketplace: '30d'
+  }
+  const suggestedExpiration = CATEGORY_SUGGESTIONS[category]
+
+  const expiryPreviewText = useMemo(() => {
+    if (expirationType === 'never') return 'Stays on Campinity until you remove it'
+    const ts = computeExpiresAt(expirationType)
+    if (!ts) return ''
+    const date = ts.toDate()
+    const now = new Date()
+    const tomorrow = new Date(now)
+    tomorrow.setDate(now.getDate() + 1)
+    const isTomorrow =
+      date.getDate() === tomorrow.getDate() && date.getMonth() === tomorrow.getMonth() && date.getFullYear() === tomorrow.getFullYear()
+    const timeStr = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    if (isTomorrow) return `Expires tomorrow at ${timeStr}`
+    const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    return `Expires ${dateStr} at ${timeStr}`
+  }, [expirationType])
   const [isAnonymous, setIsAnonymous] = useState(false)
   const [imageFile, setImageFile] = useState(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState('')
@@ -196,6 +230,8 @@ export default function CreatePostPage() {
         extra: {
           category,
           isAnonymous,
+          expirationType,
+          expiresAt: computeExpiresAt(expirationType),
           ...(fileData && { file: fileData }),
           ...(selectedCommunity && {
             communityId: selectedCommunity.id,
@@ -369,6 +405,39 @@ export default function CreatePostPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+              <Clock className="w-3.5 h-3.5" />
+              Post lifetime
+            </p>
+            <p className="text-xs text-gray-400 mb-2">Choose how long this stays active on Campinity.</p>
+            <div className="flex flex-wrap gap-2">
+              {EXPIRATION_OPTIONS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={expirationType === key}
+                  onClick={() => setExpirationType(key)}
+                  className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
+                    expirationType === key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-gray-400 transition-opacity duration-200">{expiryPreviewText}</p>
+            {suggestedExpiration && suggestedExpiration !== expirationType && (
+              <button
+                type="button"
+                onClick={() => setExpirationType(suggestedExpiration)}
+                className="mt-1 text-[11px] text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Recommended for {categoryLabels[category]} · {EXPIRATION_OPTIONS.find((o) => o.key === suggestedExpiration)?.label}
+              </button>
+            )}
           </div>
 
           {!communitiesLoading && myCommunities.length > 0 && (

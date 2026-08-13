@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, where } from 'firebase/firestore'
+import { addDoc, collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, Timestamp, where } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { db, storage } from './firebase.js'
 
@@ -69,6 +69,7 @@ function mapPostDoc(docSnap, currentUid) {
     college: '',
     time: formatTimeAgo(data.createdAt),
     createdAtMs: data.createdAt?.toMillis ? data.createdAt.toMillis() : 0,
+    expiresAtMs: data.expiresAt?.toMillis ? data.expiresAt.toMillis() : null,
     text: data.text || '',
     imagePreviewUrl: data.image || undefined,
     file: data.file || null,
@@ -158,7 +159,10 @@ export async function getNotesPosts(currentUid, maxResults = 100) {
   )
   const snap = await getDocs(postsQuery)
   const posts = snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
-  return posts.sort((a, b) => {
+  const now = Date.now()
+  return posts
+    .filter((p) => !p.expiresAtMs || p.expiresAtMs > now)
+    .sort((a, b) => {
     const aMs = a.createdAtMs || 0
     const bMs = b.createdAtMs || 0
     return bMs - aMs
@@ -221,6 +225,26 @@ export async function uploadPostDocument(uid, file) {
  *
  * Returns the new document's id.
  */
+/**
+ * Post lifetime feature — additive only, no existing field renamed.
+ * Duration math lives here once, reused by both the composer's real
+ * publish-time computation and its live preview text, so they can
+ * never drift apart.
+ */
+export const EXPIRATION_DURATIONS_MS = {
+  '24h': 24 * 60 * 60 * 1000,
+  '3d': 3 * 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+  never: null
+}
+
+export function computeExpiresAt(expirationType) {
+  const durationMs = EXPIRATION_DURATIONS_MS[expirationType]
+  if (!durationMs) return null
+  return Timestamp.fromDate(new Date(Date.now() + durationMs))
+}
+
 export async function createPost({ uid, text, imageUrl, author, extra = {} }) {
   const payload = {
     userId: uid,

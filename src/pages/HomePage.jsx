@@ -87,7 +87,9 @@ export default function HomePage() {
           getViewedStoryIds(uid)
         ])
         if (!cancelled) {
-          setPosts(postsData)
+          const now = Date.now()
+          const activePosts = postsData.filter((p) => !p.expiresAtMs || p.expiresAtMs > now)
+          setPosts(activePosts)
           setStories(storiesData)
           setViewedStoryIds(viewedIds)
         }

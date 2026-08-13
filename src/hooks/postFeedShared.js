@@ -57,6 +57,7 @@ export function mapPostForCard(raw, currentUid, liveProfile) {
     text: raw.text || '',
     imageUrl: raw.image || null,
     imagePreviewUrl: raw.image || null,
+    expiresAtMs: raw.expiresAt?.toMillis ? raw.expiresAt.toMillis() : null,
     name: displayName,
     username,
     verified: useAnonymous ? false : Boolean(liveProfile?.verifiedCampus),
