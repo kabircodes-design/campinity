@@ -20,9 +20,12 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
   const navigate = useNavigate()
 
   return (
-    <nav className="hidden lg:flex lg:flex-col w-60 flex-shrink-0 h-screen sticky top-0 bg-white/40 backdrop-blur-2xl border-r border-white/40 shadow-[4px_0_32px_rgba(91,77,255,0.06)] px-3 py-5">
-      <div className="flex items-center gap-2 px-3 mb-6">
-        <span className="text-lg font-bold text-blue-600 tracking-tight">Campinity</span>
+    <div className="hidden lg:block w-60 flex-shrink-0 h-screen sticky top-0 p-4">
+      <nav
+        className="flex flex-col h-[calc(100vh-2rem)] bg-white/40 backdrop-blur-2xl rounded-3xl border border-white/50 shadow-[0_8px_32px_rgba(91,77,255,0.10),inset_1px_1px_0_rgba(255,255,255,0.5)] px-3 py-5"
+      >
+        <div className="flex items-center gap-2 px-3 mb-6">
+          <span className="text-lg font-bold text-blue-600 tracking-tight">Campinity</span>
       </div>
       <div className="flex flex-col gap-1 flex-1">
         {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
@@ -69,6 +72,7 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
           </div>
         </button>
       )}
-    </nav>
+      </nav>
+    </div>
   )
 }

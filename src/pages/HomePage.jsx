@@ -293,7 +293,7 @@ export default function HomePage() {
   return (
     <>
     <div
-      className="lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]"
+      className="lg:grid lg:h-screen lg:overflow-hidden lg:gap-3 lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]"
       style={{
         backgroundColor: '#f3f0fb',
         backgroundImage:
@@ -323,12 +323,12 @@ export default function HomePage() {
         {/* Top header — logo + notifications, stays pinned          */}
         {/* -------------------------------------------------------- */}
         <header className="sticky top-0 z-40 bg-white/60 backdrop-blur-xl border-b border-white/40 shadow-[0_4px_20px_rgba(91,77,255,0.05)]">
-          <div className="h-14 flex items-center justify-between px-4">
+          <div className="h-14 flex items-center justify-between lg:justify-end px-4">
             <button
               type="button"
               onClick={() => navigate('/home')}
               aria-label="Campinity — go to Home"
-              className="flex items-center gap-1.5"
+              className="lg:hidden flex items-center gap-1.5"
             >
               {/* Minimal abstract mark — three connected nodes, not a
                   letter. Deliberately echoes the "network/community"
@@ -366,23 +366,25 @@ export default function HomePage() {
             </button>
 
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                aria-label="Create post"
-                onClick={() => navigate('/create')}
-                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1 lg:gap-0.5 lg:p-1 lg:rounded-full lg:bg-white/40 lg:backdrop-blur-2xl lg:border lg:border-white/50 lg:shadow-[0_4px_16px_rgba(91,77,255,0.08),inset_1px_1px_0_rgba(255,255,255,0.5)]">
+                <button
+                  type="button"
+                  aria-label="Create post"
+                  onClick={() => navigate('/create')}
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 lg:hover:bg-white/70 active:scale-95 transition-all duration-200"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
 
-              <button
-                type="button"
-                aria-label="Radar"
-                onClick={() => navigate('/radar')}
-                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
-              >
-                <Radar className="w-5 h-5" />
-              </button>
+                <button
+                  type="button"
+                  aria-label="Radar"
+                  onClick={() => navigate('/radar')}
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 lg:hover:bg-white/70 active:scale-95 transition-all duration-200"
+                >
+                  <Radar className="w-5 h-5" />
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -455,7 +457,7 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         {/* Feed tabs                                                 */}
         {/* -------------------------------------------------------- */}
-        <nav className="sticky top-14 z-30 flex items-center bg-white/55 backdrop-blur-xl border-b border-white/40">
+        <nav className="sticky top-14 z-30 mx-4 mt-3 mb-3 flex items-center gap-1 rounded-2xl bg-white/40 backdrop-blur-2xl border border-white/50 shadow-[0_4px_20px_rgba(91,77,255,0.08),inset_1px_1px_0_rgba(255,255,255,0.5)] p-1.5">
           {feedTabs.map((tab) => {
             const isActive = activeTab === tab.key
             return (
@@ -463,13 +465,15 @@ export default function HomePage() {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`relative flex-1 py-3 text-[13px] font-semibold text-center transition-colors duration-200 ${
-                  isActive ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
+                className={`relative flex-1 rounded-xl py-2 text-[13px] font-semibold text-center transition-all duration-200 ${
+                  isActive
+                    ? 'bg-gradient-to-b from-blue-50/90 to-indigo-50/70 text-blue-700 shadow-[inset_0_0_0_1px_rgba(91,77,255,0.14)]'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-white/40'
                 }`}
               >
                 {tab.label}
                 <span
-                  className={`absolute left-3 right-3 -bottom-px h-[2px] rounded-full bg-blue-600 transition-all duration-300 ease-out ${
+                  className={`absolute left-4 right-4 -bottom-0.5 h-[2px] rounded-full bg-blue-600 transition-all duration-300 ease-out ${
                     isActive ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-50'
                   }`}
                   aria-hidden="true"

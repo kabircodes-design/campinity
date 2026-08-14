@@ -177,7 +177,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
 
   return (
     <>
-    <article className="border-b border-gray-100 hover:bg-gray-50/40 lg:border-b-0 lg:border lg:border-white/50 lg:rounded-2xl lg:mb-3 lg:bg-white/32 lg:backdrop-blur-xl lg:shadow-[inset_1px_1px_0_rgba(255,255,255,0.55),0_4px_24px_rgba(91,77,255,0.08)] lg:hover:bg-white/45 lg:hover:shadow-[inset_1px_1px_0_rgba(255,255,255,0.65),0_10px_32px_rgba(91,77,255,0.13)] lg:hover:-translate-y-[1px] transition-all duration-300">
+    <article className="border-b border-gray-100 hover:bg-gray-50/40 lg:border-b-0 lg:border lg:border-white/50 lg:rounded-2xl lg:mb-4 lg:bg-white/32 lg:backdrop-blur-xl lg:shadow-[inset_1px_1px_0_rgba(255,255,255,0.55),0_4px_24px_rgba(91,77,255,0.08)] lg:hover:bg-white/45 lg:hover:shadow-[inset_1px_1px_0_rgba(255,255,255,0.65),0_10px_32px_rgba(91,77,255,0.13)] lg:hover:-translate-y-[1px] transition-all duration-300">
       {/* "Posted in X" — only when this post has a communityId (community
           posts now live in the same posts/ collection as everything
           else, distinguished only by this field). Deliberately placed
