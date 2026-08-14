@@ -39,7 +39,7 @@ export default function DesktopRightRail({ communities = [], posts = [], notesCo
       <LastMinutePreview notes={notesForPreview} onViewAll={onViewNotes} />
 
       {topCommunities.length > 0 ? (
-        <div className="rounded-2xl border border-white/50 bg-white/60 backdrop-blur-md shadow-[0_4px_16px_rgba(91,77,255,0.05)] p-4">
+        <div className="rounded-2xl border border-white/50 bg-white/50 backdrop-blur-lg shadow-[0_4px_16px_rgba(91,77,255,0.06),inset_1px_1px_0_rgba(255,255,255,0.5)] p-4">
           <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-3">
             <Users className="w-4 h-4 text-blue-500" /> Popular Communities
           </p>

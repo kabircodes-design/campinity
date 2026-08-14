@@ -368,3 +368,47 @@ textarea.bg-gray-50::placeholder { color: var(--theme-textSecondary); }
     transition: none !important;
   }
 }
+
+/* ==========================================================================
+   Living ambient background — slow, GPU-friendly drift for large soft
+   glow layers sitting behind glass surfaces. Pure CSS transform
+   (translate + scale), never affects layout (pointer-events: none,
+   absolute positioning, no dimension changes). Three different
+   durations/directions so the motion doesn't read as one obvious loop.
+   Reusable primitive — consumed by HomePage.jsx's three glow div
+   layers, not duplicated CSS per page.
+   ========================================================================== */
+
+.ambient-glow-layer {
+  position: fixed;
+  inset: -10%;
+  pointer-events: none;
+  will-change: transform;
+  filter: blur(60px);
+  z-index: 0;
+}
+
+@keyframes ambientDrift1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(3%, 4%) scale(1.06); }
+}
+@keyframes ambientDrift2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-4%, 2%) scale(1.05); }
+}
+@keyframes ambientDrift3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(2%, -3%) scale(1.04); }
+}
+
+.ambient-glow-1 { animation: ambientDrift1 26s ease-in-out infinite; }
+.ambient-glow-2 { animation: ambientDrift2 32s ease-in-out infinite; }
+.ambient-glow-3 { animation: ambientDrift3 21s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-glow-1,
+  .ambient-glow-2,
+  .ambient-glow-3 {
+    animation: none !important;
+  }
+}

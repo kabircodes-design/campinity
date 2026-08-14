@@ -293,13 +293,24 @@ export default function HomePage() {
   return (
     <>
     <div
-      className="lg:grid lg:h-screen lg:overflow-hidden lg:gap-3 lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]"
-      style={{
-        backgroundColor: '#f3f0fb',
-        backgroundImage:
-          'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%), radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
-      }}
+      className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:gap-3 lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]"
+      style={{ backgroundColor: '#f3f0fb' }}
     >
+      <div
+        className="ambient-glow-layer ambient-glow-1"
+        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-2"
+        style={{
+          background:
+            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
+        }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-3"
+        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
+      />
     <DesktopSidebar unreadNotifications={unreadCount} profile={profile} />
     <SwipeablePage>
     <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
@@ -406,7 +417,7 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         {/* Greeting + search — real Firebase profile                */}
         {/* -------------------------------------------------------- */}
-        <section className="px-4 pt-5 pb-4">
+        <section className="mx-4 mt-3 mb-3 rounded-2xl bg-white/35 backdrop-blur-md border border-white/50 shadow-[inset_1px_1px_0_rgba(255,255,255,0.5),0_4px_16px_rgba(91,77,255,0.06)] px-4 py-4">
           <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
             {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {firstName}
           </h1>
@@ -428,7 +439,7 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         {/* Stories row — real Firestore stories                     */}
         {/* -------------------------------------------------------- */}
-        <section className="pb-3.5 border-b border-gray-100">
+        <section className="mx-4 mb-3 rounded-2xl bg-white/35 backdrop-blur-md border border-white/50 shadow-[inset_1px_1px_0_rgba(255,255,255,0.5),0_4px_16px_rgba(91,77,255,0.06)] py-3.5">
           <div className="flex items-start gap-3.5 px-4 overflow-x-auto scroll-hidden">
             {storyBubbles.map((story) => {
               const seen =

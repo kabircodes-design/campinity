@@ -177,7 +177,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
 
   return (
     <>
-    <article className="border-b border-gray-100 hover:bg-gray-50/40 lg:border-b-0 lg:border lg:border-white/50 lg:rounded-2xl lg:mb-4 lg:bg-white/32 lg:backdrop-blur-xl lg:shadow-[inset_1px_1px_0_rgba(255,255,255,0.55),0_4px_24px_rgba(91,77,255,0.08)] lg:hover:bg-white/45 lg:hover:shadow-[inset_1px_1px_0_rgba(255,255,255,0.65),0_10px_32px_rgba(91,77,255,0.13)] lg:hover:-translate-y-[1px] transition-all duration-300">
+    <article className="mx-3 mb-3 rounded-2xl border border-white/50 bg-white/55 backdrop-blur-md shadow-[inset_1px_1px_0_rgba(255,255,255,0.5),0_4px_16px_rgba(91,77,255,0.07)] active:bg-white/65 lg:border-b-0 lg:border-white/50 lg:rounded-2xl lg:mb-4 lg:bg-white/32 lg:backdrop-blur-xl lg:shadow-[inset_1px_1px_0_rgba(255,255,255,0.55),0_4px_24px_rgba(91,77,255,0.08)] lg:hover:bg-white/45 lg:hover:shadow-[inset_1px_1px_0_rgba(255,255,255,0.65),0_10px_32px_rgba(91,77,255,0.13)] lg:hover:-translate-y-[1px] transition-all duration-300">
       {/* "Posted in X" — only when this post has a communityId (community
           posts now live in the same posts/ collection as everything
           else, distinguished only by this field). Deliberately placed
@@ -335,7 +335,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
               goToPost()
             }
           }}
-          className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 lg:border-white/50 lg:bg-white/35 lg:backdrop-blur-md p-3 w-[calc(100%-2rem)] text-left hover:border-blue-100 lg:hover:bg-white/50 transition-all duration-300"
+          className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-white/50 bg-white/40 backdrop-blur-sm lg:bg-white/35 lg:backdrop-blur-md p-3 w-[calc(100%-2rem)] text-left hover:border-blue-100 lg:hover:bg-white/50 transition-all duration-300"
         >
           <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
             <FileText className="w-5 h-5 text-white" />
