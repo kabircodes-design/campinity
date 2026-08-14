@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Plus, Radar, Search, Sparkles, UserPlus } from 'lucide-react'
-import Avatar from '../components/Avatar.jsx'
 import StoryBubble from '../components/StoryBubble.jsx'
 import PostCard from '../components/PostCard.jsx'
 import BottomNav from '../components/BottomNav.jsx'
@@ -13,13 +12,10 @@ import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getFeedPosts, getAvatarColor, getInitials, getNotesPosts } from '../firebase/postService.js'
-import CampusPulse from '../components/CampusPulse.jsx'
-import LastMinutePreview from '../components/LastMinutePreview.jsx'
-import WhatYouMissed from '../components/WhatYouMissed.jsx'
 import { getFeedStories, getViewedStoryIds } from '../firebase/storyService.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
 import { getTrendingCommunities } from '../firebase/communityService.js'
-import ProgressWidget from '../gamification/ProgressWidget.jsx'
+
 import SwipeablePage from '../components/SwipeablePage.jsx'
 import { useFollowingFeed } from '../hooks/useFollowingFeed.js'
 import { useForYouFeed } from '../hooks/useForYouFeed.js'
@@ -259,7 +255,7 @@ export default function HomePage() {
       label: 'Your Story',
       initials,
       colorClass: myColorClass,
-      avatar: myGroup?.avatar || '',
+      avatar: myGroup?.avatar || getProfileIdentityImage(profile) || '',
       isAdd: true,
       // Carries the real story data when present — StoryBubble.jsx
       // uses this to open the viewer on tap (real avatar, real ring)
@@ -270,7 +266,7 @@ export default function HomePage() {
     }
     const moreStory = { id: 'more', label: 'More', isMore: true }
     return [addStory, ...otherGroups, moreStory]
-  }, [stories, initials, myColorClass])
+  }, [stories, initials, myColorClass, profile])
 
   const { showModal, showBanner, closeModal, dismissBanner } = useCampusVerificationReminder(profile)
 
@@ -393,28 +389,10 @@ export default function HomePage() {
         {/* Greeting + search — real Firebase profile                */}
         {/* -------------------------------------------------------- */}
         <section className="px-4 pt-5 pb-4">
-          <div className="flex items-center gap-3">
-            <Avatar
-              initials={initials}
-              colorClass={myColorClass}
-              size="md"
-              src={getProfileIdentityImage(profile) || undefined}
-            />
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
-                {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {firstName}
-              </h1>
-              <p className="mt-0.5 text-[13px] text-gray-400">Catch up on what's happening across campus.</p>
-            </div>
-          </div>
-
-          <CampusPulse posts={posts} communities={communities} notesCount={notesCount} />
-
-          <LastMinutePreview notes={notesForPreview} onViewAll={() => setActiveTab('notes')} />
-
-          <WhatYouMissed posts={posts} notes={notesForPreview} />
-
-          <ProgressWidget uid={auth.currentUser?.uid} />
+          <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
+            {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {firstName}
+          </h1>
+          <p className="mt-0.5 text-[13px] text-gray-400">Catch up on what's happening across campus.</p>
 
           <button
             type="button"
@@ -577,7 +555,13 @@ export default function HomePage() {
       </div>
     </div>
     </SwipeablePage>
-    <DesktopRightRail communities={communities} postCount={posts.length} />
+    <DesktopRightRail
+      communities={communities}
+      posts={posts}
+      notesCount={notesCount}
+      notesForPreview={notesForPreview}
+      onViewNotes={() => setActiveTab('notes')}
+    />
     </div>
 
       {/* -------------------------------------------------------- */}

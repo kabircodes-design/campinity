@@ -51,7 +51,7 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
         <button
           type="button"
           onClick={() => navigate('/profile')}
-          className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 hover:bg-gray-50 transition-all duration-200 text-left"
+          className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 cursor-pointer hover:bg-gray-100 active:bg-gray-200 active:scale-[0.98] transition-all duration-150 text-left"
         >
           <Avatar
             initials={getInitials(profile.displayName)}

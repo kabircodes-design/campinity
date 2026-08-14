@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MessageSquare, Sparkles, Users } from 'lucide-react'
+import { Sparkles, Users } from 'lucide-react'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import Avatar from './Avatar.jsx'
+import CampusPulse from './CampusPulse.jsx'
+import LastMinutePreview from './LastMinutePreview.jsx'
 import { useMyVerification } from '../access/useMyVerification.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
@@ -13,14 +15,18 @@ import { FEATURES } from '../access/permissions.js'
  * hashtag/trend system to source that from, and fabricating one would
  * violate the explicit "do not create fake data" instruction.
  *
- * "Campus right now" uses only real, already-fetched numbers: post
- * count from HomePage.jsx's own feed state, community count from the
- * same communities list Popular Communities below already uses. No
- * "active students" stat is shown — this app has no real presence
- * system (confirmed in an earlier session-wide audit), so that metric
- * is omitted entirely rather than invented.
+ * Campus Pulse metrics and Last Minute — relocated here from the top
+ * of Home per the explicit instruction to remove the dashboard feel
+ * from the main feed's first viewport. Reuses the exact same
+ * CampusPulse.jsx and LastMinutePreview.jsx components as-is (not
+ * duplicated logic) — same real data, same zero-new-query guarantee,
+ * just rendered here instead of above Stories. Both are mobile-only
+ * on Home now removed entirely from mobile's top flow — this rail is
+ * desktop-only, so mobile users lose this particular presentation
+ * this pass rather than force it into a first-viewport space the
+ * brief explicitly wants kept clean.
  */
-export default function DesktopRightRail({ communities = [], postCount = 0 }) {
+export default function DesktopRightRail({ communities = [], posts = [], notesCount = null, notesForPreview = [], onViewNotes }) {
   const navigate = useNavigate()
   const verified = useMyVerification()
   const [gateOpen, setGateOpen] = useState(false)
@@ -28,25 +34,9 @@ export default function DesktopRightRail({ communities = [], postCount = 0 }) {
 
   return (
     <aside className="hidden lg:flex lg:flex-col w-72 flex-shrink-0 h-screen sticky top-0 overflow-y-auto px-4 py-5 gap-4">
-      {(postCount > 0 || communities.length > 0) && (
-        <div className="rounded-2xl border border-gray-100 p-4">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">Campus right now</p>
-          <div className="space-y-2.5">
-            {postCount > 0 && (
-              <div className="flex items-center gap-2.5 text-sm text-gray-700">
-                <MessageSquare className="w-4 h-4 text-blue-500" />
-                <span className="font-semibold">{postCount}</span> posts in your feed
-              </div>
-            )}
-            {communities.length > 0 && (
-              <div className="flex items-center gap-2.5 text-sm text-gray-700">
-                <Users className="w-4 h-4 text-indigo-500" />
-                <span className="font-semibold">{communities.length}</span> communities active
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <CampusPulse posts={posts} communities={communities} notesCount={notesCount} />
+
+      <LastMinutePreview notes={notesForPreview} onViewAll={onViewNotes} />
 
       {topCommunities.length > 0 ? (
         <div className="rounded-2xl border border-gray-100 p-4">
