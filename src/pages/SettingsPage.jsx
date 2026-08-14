@@ -5,6 +5,7 @@ import BottomNav from '../components/BottomNav.jsx'
 import DesktopSidebar from '../components/DesktopSidebar.jsx'
 import SettingsItem from '../components/SettingsItem.jsx'
 import AppearanceSettings from '../components/AppearanceSettings.jsx'
+import ContentPreferences from '../onboarding/ContentPreferences.jsx'
 import { logOut } from '../firebase/accountService.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
@@ -74,6 +75,10 @@ export default function SettingsPage() {
               )}
             </section>
           )}
+
+          <section className="mt-3 mx-4">
+            <ContentPreferences />
+          </section>
 
           <section className="mt-2">
             <AppearanceSettings />

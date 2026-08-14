@@ -251,13 +251,21 @@ export default function CommunityDetailPage() {
     }
   }
 
+  const [requestActionError, setRequestActionError] = useState('')
+
   const handleApprove = async (targetUid) => {
     setRequestActionId(targetUid)
+    setRequestActionError('')
     try {
       await acceptRequest(communityId, targetUid)
       setPendingRequests((prev) => prev.filter((req) => req.uid !== targetUid))
-    } catch {
-      // Row just stays put on failure — admin can retry.
+    } catch (err) {
+      console.error('Could not approve join request:', { communityId, targetUid, code: err?.code, message: err?.message, err })
+      if (err?.message === 'This request is no longer pending.') {
+        setPendingRequests((prev) => prev.filter((req) => req.uid !== targetUid))
+      } else {
+        setRequestActionError("Couldn't approve this request. Please try again.")
+      }
     } finally {
       setRequestActionId(null)
     }
@@ -265,11 +273,13 @@ export default function CommunityDetailPage() {
 
   const handleReject = async (targetUid) => {
     setRequestActionId(targetUid)
+    setRequestActionError('')
     try {
       await rejectRequest(communityId, targetUid)
       setPendingRequests((prev) => prev.filter((req) => req.uid !== targetUid))
-    } catch {
-      // Row just stays put on failure — admin can retry.
+    } catch (err) {
+      console.error('Could not reject join request:', { communityId, targetUid, code: err?.code, message: err?.message, err })
+      setRequestActionError("Couldn't reject this request. Please try again.")
     } finally {
       setRequestActionId(null)
     }
@@ -777,6 +787,11 @@ export default function CommunityDetailPage() {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                 Pending Requests {pendingRequests.length > 0 && `(${pendingRequests.length})`}
               </p>
+              {requestActionError && (
+                <p role="alert" className="mb-2 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+                  {requestActionError}
+                </p>
+              )}
               {pendingRequests.length === 0 ? (
                 <p className="text-sm text-gray-400 py-6 text-center">No pending requests.</p>
               ) : (

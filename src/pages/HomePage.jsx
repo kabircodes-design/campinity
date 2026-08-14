@@ -62,6 +62,18 @@ export default function HomePage() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [contentPreferences, setContentPreferences] = useState([])
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+    getUserProfile(uid)
+      .then((p) => {
+        const types = p?.preferences?.contentTypes
+        if (Array.isArray(types) && types.length > 0) setContentPreferences(types)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -137,7 +149,7 @@ export default function HomePage() {
     loadMore: loadMoreForYou,
     loadingMore: forYouLoadingMore,
     hasMore: forYouHasMore
-  } = useForYouFeed(auth.currentUser?.uid)
+  } = useForYouFeed(auth.currentUser?.uid, contentPreferences)
 
   // Callback ref, not useRef+useEffect — the prior version's effect
   // dependency array never included forYouLoading, so on the very

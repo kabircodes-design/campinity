@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Bell, Compass, Home, MessageCircle, Settings, User, Users } from 'lucide-react'
+import { Bell, Compass, Home, MessageCircle, Settings, ShoppingBag, User, Users } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import VerifiedBadge from './VerifiedBadge.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: '/home', label: 'Home', icon: Home },
   { to: '/search', label: 'Explore', icon: Compass },
   { to: '/communities', label: 'Communities', icon: Users },
+  { to: '/marketplace', label: 'Marketplace', icon: ShoppingBag },
   { to: '/messages', label: 'Messages', icon: MessageCircle },
   { to: '/notifications', label: 'Notifications', icon: Bell },
   { to: '/profile', label: 'Profile', icon: User },

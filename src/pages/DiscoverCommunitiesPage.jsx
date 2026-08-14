@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Plus, Search, Users } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
+import DesktopSidebar from '../components/DesktopSidebar.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
 import SwipeablePage from '../components/SwipeablePage.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
+import { getUserProfile } from '../firebase/profileService.js'
 import { getTrendingCommunities, getUserCommunityMemberships, getUserPendingRequests, searchCommunitiesByName } from '../firebase/communityService.js'
 
 // Real types, taken directly from CommunityCard.jsx's own typeLabels
@@ -30,6 +32,12 @@ export default function DiscoverCommunitiesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState(null)
   const [searching, setSearching] = useState(false)
+  const [profile, setProfile] = useState(null)
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    if (uid) getUserProfile(uid).then(setProfile).catch(() => {})
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -105,23 +113,25 @@ export default function DiscoverCommunitiesPage() {
   const isSearchingOrFiltering = searchTerm.trim() || typeFilter !== 'all'
 
   return (
-    <>
-      <SwipeablePage>
-        <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-          <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm pb-24">
-            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
-              <div className="h-14 flex items-center justify-between px-3">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    aria-label="Back"
-                    onClick={() => navigate(-1)}
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                  </button>
-                  <span className="text-base font-bold tracking-tight text-gray-900">Communities</span>
-                </div>
+    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+      <DesktopSidebar profile={profile} />
+      <div className="flex-1 lg:h-screen lg:overflow-y-auto">
+        <SwipeablePage>
+          <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
+            <div className="mx-auto max-w-[480px] lg:max-w-[760px] bg-white min-h-screen lg:min-h-0 lg:shadow-sm lg:border-x lg:border-gray-100 pb-24">
+              <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+                <div className="h-14 flex items-center justify-between px-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Back"
+                      onClick={() => navigate(-1)}
+                      className="lg:hidden w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <span className="text-base font-bold tracking-tight text-gray-900">Communities</span>
+                  </div>
                 <button
                   type="button"
                   aria-label="Create a community"
@@ -231,8 +241,11 @@ export default function DiscoverCommunitiesPage() {
           </div>
         </div>
       </SwipeablePage>
+      </div>
 
-      <BottomNav />
-    </>
+      <div className="lg:hidden">
+        <BottomNav />
+      </div>
+    </div>
   )
 }

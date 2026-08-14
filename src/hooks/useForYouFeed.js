@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { collection, limit, orderBy, query, startAfter, where } from 'firebase/firestore'
 import { db } from '../firebase/firebase.js'
 import { subscribeToEnrichedPostsQuery, fetchEnrichedPostsPage } from './postFeedShared.js'
@@ -33,7 +33,7 @@ const PAGE_SIZE = 50
  * createdAt DESC) — unchanged, no new index needed for pagination
  * itself since startAfter uses the same query shape.
  */
-export function useForYouFeed(uid) {
+export function useForYouFeed(uid, preferredCategories = []) {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -49,6 +49,25 @@ export function useForYouFeed(uid) {
     setPosts(merged)
     return merged
   }, [])
+
+  // Simple, deterministic preference boost — NOT a hidden filter, and
+  // deliberately decoupled from mergeAndSet/the subscription effect
+  // above, so a preference change can never trigger an unnecessary
+  // Firestore re-subscribe or reset accumulated pagination progress.
+  // A post matching one of the user's chosen content-preference
+  // categories (real values: general/study/notes/event/club/
+  // marketplace — the field is called .type on the enriched post
+  // object, confirmed against postFeedShared.js's own mapping, not
+  // .category) is treated as if it were 6 hours newer for sorting
+  // purposes only. This never removes a post from the feed and never
+  // reorders across a large time gap — an old preferred post still
+  // sinks below a much newer unpreferred one. No AI, no opaque score.
+  const PREFERENCE_BOOST_MS = 6 * 60 * 60 * 1000
+  const rankedPosts = useMemo(() => {
+    if (preferredCategories.length === 0) return posts
+    const score = (post) => (post._createdAtMs || 0) + (preferredCategories.includes(post.type) ? PREFERENCE_BOOST_MS : 0)
+    return [...posts].sort((a, b) => score(b) - score(a))
+  }, [posts, preferredCategories])
 
   useEffect(() => {
     setLoading(true)
@@ -119,5 +138,5 @@ export function useForYouFeed(uid) {
     }
   }, [loadingMore, hasMore, uid, mergeAndSet])
 
-  return { posts, loading, error, loadMore, loadingMore, hasMore }
+  return { posts: rankedPosts, loading, error, loadMore, loadingMore, hasMore }
 }

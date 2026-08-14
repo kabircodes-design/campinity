@@ -25,7 +25,6 @@ export default function CampusPulse({ posts, communities, notesCount }) {
     if (postsToday > 0) list.push({ emoji: '🔥', value: postsToday, label: postsToday === 1 ? 'new post' : 'new posts' })
     if (trendingPosts > 0) list.push({ emoji: '📈', value: trendingPosts, label: 'trending' })
     if (typeof notesCount === 'number' && notesCount > 0) list.push({ emoji: '📚', value: notesCount, label: 'notes' })
-    if (communities.length > 0) list.push({ emoji: '👥', value: communities.length, label: 'communities' })
     return list
   }, [posts, communities, notesCount])
 
