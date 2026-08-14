@@ -14,9 +14,9 @@ export default function EmptyNotifications() {
       <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto">
         <Bell className="w-6 h-6 text-blue-600" strokeWidth={1.7} />
       </div>
-      <p className="mt-4 text-sm font-semibold text-gray-900">You're all caught up</p>
+      <p className="mt-4 text-sm font-semibold text-gray-900">🌱 Your campus is quiet</p>
       <p className="mt-1 text-sm text-gray-400 max-w-[240px] mx-auto leading-relaxed">
-        When someone likes, comments, or follows you, it'll show up here.
+        Once something happens, you'll see it here.
       </p>
     </div>
   )

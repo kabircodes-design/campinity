@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Calendar, Lock, MoreHorizontal, Share2, Tag, Users } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
+import CommunityCoverEditor from '../components/CommunityCoverEditor.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
@@ -103,6 +104,7 @@ export default function CommunityDetailPage() {
   const uid = auth.currentUser?.uid
   const isOwner = community?.ownerId === uid
   const isAdmin = isOwner || (community?.admins || []).includes(uid)
+  const [assetEditor, setAssetEditor] = useState(null) // 'cover' | 'icon' | null
 
   useEffect(() => {
     setLoading(true)
@@ -446,15 +448,34 @@ export default function CommunityDetailPage() {
           {community.coverImage && (
             <img src={community.coverImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
           )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setAssetEditor('cover')}
+              className="absolute bottom-2 right-2 rounded-full bg-black/40 backdrop-blur-sm text-white text-[11px] font-semibold px-3 py-1.5 hover:bg-black/55 transition-all duration-200"
+            >
+              Change cover
+            </button>
+          )}
         </div>
 
         <div className="px-4">
           <div className="-mt-8 flex items-end gap-3">
-            <div className="w-16 h-16 rounded-2xl bg-white border-4 border-white shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
+            <div className="relative w-16 h-16 rounded-2xl bg-white border-4 border-white shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
               {community.icon ? (
                 <img src={community.icon} alt="" className="w-full h-full object-cover" />
               ) : (
                 <Users className="w-7 h-7 text-blue-600" strokeWidth={1.7} />
+              )}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setAssetEditor('icon')}
+                  aria-label="Change community icon"
+                  className="absolute inset-0 bg-black/0 hover:bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-all duration-200"
+                >
+                  <span className="text-white text-[10px] font-semibold">Edit</span>
+                </button>
               )}
             </div>
             <button
@@ -839,6 +860,18 @@ export default function CommunityDetailPage() {
           )}
         </main>
       </div>
+
+      {isAdmin && assetEditor && (
+        <CommunityCoverEditor
+          open={!!assetEditor}
+          onClose={() => setAssetEditor(null)}
+          communityId={communityId}
+          kind={assetEditor}
+          onSaved={(url) => {
+            setCommunity((prev) => (prev ? { ...prev, [assetEditor === 'cover' ? 'coverImage' : 'icon']: url } : prev))
+          }}
+        />
+      )}
 
       <BottomNav />
     </div>
