@@ -39,17 +39,17 @@ export default function DesktopRightRail({ communities = [], posts = [], notesCo
       <LastMinutePreview notes={notesForPreview} onViewAll={onViewNotes} />
 
       {topCommunities.length > 0 ? (
-        <div className="rounded-2xl border border-gray-100 p-4">
+        <div className="rounded-2xl border border-white/50 bg-white/60 backdrop-blur-md shadow-[0_4px_16px_rgba(91,77,255,0.05)] p-4">
           <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-3">
             <Users className="w-4 h-4 text-blue-500" /> Popular Communities
           </p>
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             {topCommunities.map((community, i) => (
               <button
                 key={community.id}
                 type="button"
                 onClick={() => navigate(`/community/${community.id}`)}
-                className="w-full flex items-center gap-2.5 text-left group"
+                className="w-full flex items-center gap-2.5 text-left group rounded-xl px-2 py-1.5 -mx-2 bg-white/0 hover:bg-white/50 transition-all duration-200"
               >
                 <span className="text-[11px] font-bold text-gray-300 w-3 flex-shrink-0">{i + 1}</span>
                 <Avatar

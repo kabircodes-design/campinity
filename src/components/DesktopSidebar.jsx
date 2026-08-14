@@ -20,7 +20,7 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
   const navigate = useNavigate()
 
   return (
-    <nav className="hidden lg:flex lg:flex-col w-60 flex-shrink-0 h-screen sticky top-0 border-r border-gray-100 px-3 py-5">
+    <nav className="hidden lg:flex lg:flex-col w-60 flex-shrink-0 h-screen sticky top-0 bg-white/40 backdrop-blur-2xl border-r border-white/40 shadow-[4px_0_32px_rgba(91,77,255,0.06)] px-3 py-5">
       <div className="flex items-center gap-2 px-3 mb-6">
         <span className="text-lg font-bold text-blue-600 tracking-tight">Campinity</span>
       </div>
@@ -32,8 +32,8 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
             className={({ isActive }) =>
               `relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200 ${
                 isActive
-                  ? 'bg-blue-50 text-blue-700 before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'bg-gradient-to-r from-blue-50/90 to-indigo-50/60 text-blue-700 shadow-[inset_0_0_0_1px_rgba(91,77,255,0.12)] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-blue-600'
+                  : 'text-gray-600 hover:bg-white/60'
               }`
             }
           >
@@ -52,7 +52,7 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
         <button
           type="button"
           onClick={() => navigate('/profile')}
-          className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 cursor-pointer hover:bg-gray-100 active:bg-gray-200 active:scale-[0.98] transition-all duration-150 text-left"
+          className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 cursor-pointer bg-white/40 hover:bg-white/70 active:bg-white/90 active:scale-[0.98] transition-all duration-150 text-left"
         >
           <Avatar
             initials={getInitials(profile.displayName)}

@@ -41,7 +41,7 @@ export default function CampusPulse({ posts, communities, notesCount }) {
     <div className="mt-3">
       {pulseMessage && <p className="text-xs font-medium text-blue-600 mb-1.5">{pulseMessage}</p>}
       {metrics.length > 0 ? (
-        <div className="relative flex items-center gap-4 rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-gray-50/50 px-4 py-3.5 overflow-hidden">
+        <div className="relative flex items-center gap-4 rounded-2xl border border-white/50 bg-white/60 backdrop-blur-md px-4 py-3.5 overflow-hidden shadow-[0_4px_16px_rgba(91,77,255,0.05)]">
           <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-blue-500/5 blur-2xl pointer-events-none" />
           {metrics.map((m) => (
             <div key={m.label} className="relative flex items-center gap-1.5">

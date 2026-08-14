@@ -292,13 +292,17 @@ export default function HomePage() {
 
   return (
     <>
-    <div className="lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]">
+    <div
+      className="lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]"
+      style={{
+        backgroundColor: '#f3f0fb',
+        backgroundImage:
+          'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%), radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
+      }}
+    >
     <DesktopSidebar unreadNotifications={unreadCount} profile={profile} />
     <SwipeablePage>
-    <div
-      className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50"
-      style={{ backgroundImage: 'radial-gradient(circle, rgba(99,102,241,0.06) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
-    >
+    <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
       {/* Mobile: narrow centered column, natural page scroll,
           unchanged. Desktop: this column now sits in a real CSS Grid
           middle track (minmax(0,1fr)) rather than a fixed-width flex
@@ -314,11 +318,11 @@ export default function HomePage() {
           at lg:. The inner max-w-[760px] below caps individual post
           readability on very wide tracks without capping the track
           itself. */}
-      <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-screen lg:min-h-0 bg-white lg:shadow-sm lg:border-x lg:border-gray-100">
+      <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-screen lg:min-h-0 bg-white/85 backdrop-blur-md lg:bg-transparent lg:backdrop-blur-none border-x border-white/40">
         {/* -------------------------------------------------------- */}
         {/* Top header — logo + notifications, stays pinned          */}
         {/* -------------------------------------------------------- */}
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-[0_1px_0_rgba(15,23,42,0.02)]">
+        <header className="sticky top-0 z-40 bg-white/60 backdrop-blur-xl border-b border-white/40 shadow-[0_4px_20px_rgba(91,77,255,0.05)]">
           <div className="h-14 flex items-center justify-between px-4">
             <button
               type="button"
@@ -451,7 +455,7 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         {/* Feed tabs                                                 */}
         {/* -------------------------------------------------------- */}
-        <nav className="sticky top-14 z-30 flex items-center bg-white/95 backdrop-blur-md border-b border-gray-100">
+        <nav className="sticky top-14 z-30 flex items-center bg-white/55 backdrop-blur-xl border-b border-white/40">
           {feedTabs.map((tab) => {
             const isActive = activeTab === tab.key
             return (
