@@ -152,10 +152,28 @@ export default function SearchPage() {
   }
 
   return (
-    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+    <div
+      className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
+      style={{ backgroundColor: '#f3f0fb' }}
+    >
+      <div
+        className="ambient-glow-layer ambient-glow-1"
+        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-2"
+        style={{
+          background:
+            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
+        }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-3"
+        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
+      />
     <DesktopSidebar profile={profile} />
-    <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[640px] min-h-screen lg:min-h-0 bg-white lg:shadow-sm lg:border-x lg:border-gray-100">
+    <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden">
+      <div className="mx-auto max-w-[480px] lg:max-w-[640px] min-h-screen lg:min-h-0 bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:border lg:border-white/50 lg:rounded-3xl lg:my-4">
         {/* -------------------------------------------------------- */}
         {/* Header — back button + search input (mobile). Desktop    */}
         {/* gets a proper hero instead of the back-arrow bar, since  */}
@@ -307,7 +325,18 @@ export default function SearchPage() {
                 </section>
               )}
 
-              {recent.length === 0 && (
+              {popularCommunities.length > 0 && (
+                <section className="px-4 pt-2 pb-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">🔥 Trending on campus</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {popularCommunities.map((community) => (
+                      <CommunityCard key={community.id} community={community} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {recent.length === 0 && popularCommunities.length === 0 && (
                 <div className="px-6 py-16 text-center">
                   <p className="text-sm text-gray-400">Search for students, colleges or communities to get started.</p>
                 </div>
