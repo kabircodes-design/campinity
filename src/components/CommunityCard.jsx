@@ -75,12 +75,12 @@ export default function CommunityCard({ community, membershipState = null, onSta
   }
 
   const buttonConfig = {
-    owner: { label: 'Manage', className: 'bg-gray-100 text-gray-700', icon: <Crown className="w-3 h-3" />, action: goToCommunity },
-    member: { label: 'Open', className: 'bg-gray-100 text-gray-700', icon: <Check className="w-3 h-3" strokeWidth={2.5} />, action: goToCommunity },
-    pending: { label: 'Request Sent', className: 'bg-gray-100 text-gray-400', icon: <Clock className="w-3 h-3" />, action: null }
+    owner: { label: 'Manage', className: 'bg-white/60 backdrop-blur-sm text-gray-700 border border-white/50 hover:bg-white/80', icon: <Crown className="w-3 h-3" />, action: goToCommunity },
+    member: { label: 'Open', className: 'bg-white/60 backdrop-blur-sm text-gray-700 border border-white/50 hover:bg-white/80', icon: <Check className="w-3 h-3" strokeWidth={2.5} />, action: goToCommunity },
+    pending: { label: 'Request Sent', className: 'bg-white/35 backdrop-blur-sm text-gray-400 border border-white/40', icon: <Clock className="w-3 h-3" />, action: null }
   }[state] || {
     label: community.privacy === 'private' ? 'Request to Join' : 'Join',
-    className: 'bg-blue-600 text-white hover:bg-blue-700',
+    className: 'bg-blue-600/90 backdrop-blur-sm text-white hover:bg-blue-700/90 shadow-[0_2px_8px_rgba(91,77,255,0.25)]',
     icon: null,
     action: handleAction
   }
@@ -96,7 +96,7 @@ export default function CommunityCard({ community, membershipState = null, onSta
           goToCommunity()
         }
       }}
-      className="w-full flex flex-col text-left rounded-2xl border border-gray-100 bg-white p-3.5 hover:border-gray-200 hover:shadow-sm active:scale-[0.99] transition-all duration-200 cursor-pointer"
+      className="w-full flex flex-col text-left rounded-2xl border border-white/50 bg-white/55 backdrop-blur-md lg:bg-white/45 lg:backdrop-blur-xl shadow-[inset_1px_1px_0_rgba(255,255,255,0.5),0_4px_20px_rgba(91,77,255,0.07)] hover:border-white/70 hover:bg-white/65 hover:shadow-[inset_1px_1px_0_rgba(255,255,255,0.6),0_8px_28px_rgba(91,77,255,0.11)] active:scale-[0.99] transition-all duration-200 cursor-pointer p-3.5"
     >
       <div className="flex items-start gap-3">
         <div className="relative w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
@@ -147,7 +147,7 @@ export default function CommunityCard({ community, membershipState = null, onSta
       )}
 
       <div className="mt-2.5 flex items-center gap-2.5 text-[11px] text-gray-400">
-        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-600 font-semibold px-2 py-0.5">
+        <span className="inline-flex items-center gap-1 rounded-full bg-white/50 backdrop-blur-sm border border-white/40 text-blue-600 font-semibold px-2 py-0.5">
           {typeLabels[community.type] || 'Community'}
         </span>
         <span className="flex items-center gap-1">

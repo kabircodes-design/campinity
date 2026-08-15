@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { onAuthStateChanged } from 'firebase/auth'
-import { Camera, Upload, X } from 'lucide-react'
+import { Camera, Sparkles, Upload, X } from 'lucide-react'
 import ImageCropper from './ImageCropper.jsx'
+import CampinityAvatarPicker from './CampinityAvatarPicker.jsx'
 import { uploadCampusAvatar } from './avatarStorage.js'
-import { updateUserProfile } from '../firebase/profileService.js'
+import { updateUserProfile, getUserProfile } from '../firebase/profileService.js'
 import { auth } from '../firebase/firebase.js'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // matches the existing campusAvatars Storage rule's own 10MB limit — no client/server mismatch
@@ -60,6 +61,8 @@ export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, onS
   // client state when deciding authorization."
   const [authStatus, setAuthStatus] = useState('loading') // 'loading' | 'ready' | 'signed-out'
   const [authUid, setAuthUid] = useState(null)
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
+  const [pickerProfile, setPickerProfile] = useState(null)
 
   useEffect(() => {
     if (!open) return undefined
@@ -84,11 +87,20 @@ export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, onS
 
   if (!open) return null
 
+  const handleOpenAvatarPicker = async () => {
+    if (!authUid) return
+    const profile = await getUserProfile(authUid).catch(() => null)
+    setPickerProfile(profile)
+    setAvatarPickerOpen(true)
+  }
+
   const resetAndClose = () => {
     setStage('sheet')
     setRawImageUrl('')
     setErrorMessage('')
     setDebugError(null)
+    setAvatarPickerOpen(false)
+    setPickerProfile(null)
     onClose()
   }
 
@@ -204,7 +216,9 @@ export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, onS
     }
   }
 
-  return createPortal(
+  return (
+    <>
+    {createPortal(
     <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center">
       <button type="button" aria-label="Close" onClick={resetAndClose} className="absolute inset-0 bg-black/40" />
       <div className="relative w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl bg-white p-5 pb-8 sm:pb-5 shadow-xl">
@@ -249,6 +263,21 @@ export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, onS
                 <Camera className="w-5 h-5 text-blue-600" />
                 <span className="text-sm font-semibold text-gray-900">Take a photo</span>
               </button>
+              <button
+                type="button"
+                onClick={handleOpenAvatarPicker}
+                className="w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-gray-50 transition-all duration-200"
+              >
+                <span className="w-5 h-5 flex items-center justify-center text-base">🎭</span>
+                <span className="text-sm font-semibold text-gray-900">Choose Campinity Avatar</span>
+              </button>
+              <div className="w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left opacity-40 cursor-not-allowed" aria-disabled="true">
+                <Sparkles className="w-5 h-5 text-gray-400" />
+                <div>
+                  <span className="text-sm font-semibold text-gray-500">AI Avatar</span>
+                  <span className="block text-[11px] text-gray-400">Coming soon</span>
+                </div>
+              </div>
               {currentPhotoUrl && (
                 <button
                   type="button"
@@ -294,5 +323,17 @@ export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, onS
       </div>
     </div>,
     document.body
+  )}
+
+    <CampinityAvatarPicker
+      open={avatarPickerOpen}
+      onClose={() => setAvatarPickerOpen(false)}
+      profile={pickerProfile}
+      onSaved={(url) => {
+        onSaved?.(url)
+        resetAndClose()
+      }}
+    />
+    </>
   )
 }
