@@ -113,13 +113,31 @@ export default function DiscoverCommunitiesPage() {
   const isSearchingOrFiltering = searchTerm.trim() || typeFilter !== 'all'
 
   return (
-    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+    <div
+      className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
+      style={{ backgroundColor: '#f3f0fb' }}
+    >
+      <div
+        className="ambient-glow-layer ambient-glow-1"
+        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-2"
+        style={{
+          background:
+            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
+        }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-3"
+        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
+      />
       <DesktopSidebar profile={profile} />
       <div className="flex-1 lg:h-screen lg:overflow-y-auto">
         <SwipeablePage>
-          <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-            <div className="mx-auto max-w-[480px] lg:max-w-[760px] bg-white min-h-screen lg:min-h-0 lg:shadow-sm lg:border-x lg:border-gray-100 pb-24">
-              <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+          <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden">
+            <div className="mx-auto max-w-[480px] lg:max-w-[760px] bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl min-h-screen lg:min-h-0 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:border lg:border-white/50 lg:rounded-3xl lg:my-4 pb-24">
+              <header className="sticky top-0 z-40 bg-white/60 backdrop-blur-xl border-b border-white/40 shadow-[0_4px_20px_rgba(91,77,255,0.05)]">
                 <div className="h-14 flex items-center justify-between px-3">
                   <div className="flex items-center gap-2">
                     <button
@@ -153,7 +171,7 @@ export default function DiscoverCommunitiesPage() {
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Search communities"
                   aria-label="Search communities"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+                  className="w-full rounded-xl border border-white/50 bg-white/40 backdrop-blur-md pl-9 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white/70 focus:border-blue-400/60 focus:ring-4 focus:ring-blue-50/50 transition-all duration-300"
                 />
               </div>
 
@@ -164,7 +182,9 @@ export default function DiscoverCommunitiesPage() {
                     type="button"
                     onClick={() => setTypeFilter(f.id)}
                     className={`flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${
-                      typeFilter === f.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
+                      typeFilter === f.id
+                        ? 'bg-gradient-to-r from-blue-50/90 to-indigo-50/70 text-blue-700 shadow-[inset_0_0_0_1px_rgba(91,77,255,0.14)]'
+                        : 'bg-white/40 backdrop-blur-sm text-gray-500 hover:bg-white/60'
                     }`}
                   >
                     {f.label}

@@ -429,9 +429,27 @@ export default function CommunityDetailPage() {
     : null
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm pb-24">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+    <div
+      className="relative overflow-x-hidden min-h-screen w-full max-w-[100vw]"
+      style={{ backgroundColor: '#f3f0fb' }}
+    >
+      <div
+        className="ambient-glow-layer ambient-glow-1"
+        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-2"
+        style={{
+          background:
+            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
+        }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-3"
+        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
+      />
+      <div className="relative mx-auto max-w-[480px] lg:max-w-[560px] bg-white/45 backdrop-blur-2xl lg:my-4 lg:rounded-3xl lg:border lg:border-white/50 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] min-h-screen lg:min-h-0 pb-24">
+        <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40 shadow-[0_4px_16px_rgba(91,77,255,0.05)]">
           <div className="h-14 flex items-center justify-between px-3">
             <button
               type="button"
@@ -536,9 +554,9 @@ export default function CommunityDetailPage() {
 
           <div className="mt-4">
             {membershipLoading ? (
-              <div className="h-11 rounded-full bg-gray-100 animate-pulse" />
+              <div className="h-11 rounded-full bg-white/40 backdrop-blur-sm animate-pulse" />
             ) : isOwner ? (
-              <div className="rounded-full border border-gray-200 text-center text-sm font-semibold text-gray-500 py-3">
+              <div className="rounded-full border border-white/50 bg-white/40 backdrop-blur-sm text-center text-sm font-semibold text-gray-600 py-3">
                 You own this community
               </div>
             ) : membership ? (
@@ -546,7 +564,7 @@ export default function CommunityDetailPage() {
                 type="button"
                 onClick={handleLeave}
                 disabled={isJoining}
-                className="w-full rounded-full border border-gray-200 text-gray-700 text-sm font-semibold py-3 hover:border-red-300 hover:text-red-500 disabled:opacity-50 transition-all duration-300"
+                className="w-full rounded-full border border-white/50 bg-white/40 backdrop-blur-sm text-gray-700 text-sm font-semibold py-3 hover:border-red-300/60 hover:text-red-500 hover:bg-red-50/40 disabled:opacity-50 transition-all duration-300"
               >
                 {isJoining ? 'Leaving…' : 'Leave Community'}
               </button>
@@ -555,7 +573,7 @@ export default function CommunityDetailPage() {
                 type="button"
                 onClick={handleCancelRequest}
                 disabled={isJoining}
-                className="w-full rounded-full bg-gray-100 text-gray-600 text-sm font-semibold py-3 hover:bg-gray-200 disabled:opacity-50 transition-all duration-300"
+                className="w-full rounded-full bg-white/35 backdrop-blur-sm border border-white/40 text-gray-500 text-sm font-semibold py-3 hover:bg-white/50 disabled:opacity-50 transition-all duration-300"
               >
                 {isJoining ? 'Cancelling…' : 'Cancel Request'}
               </button>
@@ -564,7 +582,7 @@ export default function CommunityDetailPage() {
                 type="button"
                 onClick={handleJoin}
                 disabled={isJoining}
-                className="w-full rounded-full bg-blue-600 text-white text-sm font-semibold py-3 hover:bg-blue-700 disabled:opacity-50 transition-all duration-300"
+                className="w-full rounded-full bg-blue-600/90 backdrop-blur-sm text-white text-sm font-semibold py-3 hover:bg-blue-700/90 disabled:opacity-50 shadow-[0_2px_12px_rgba(91,77,255,0.25)] transition-all duration-300"
               >
                 {isJoining ? 'Please wait…' : community.privacy === 'private' ? 'Request to Join' : 'Join Community'}
               </button>
@@ -573,7 +591,7 @@ export default function CommunityDetailPage() {
           </div>
         </div>
 
-        <nav className="mt-5 sticky top-14 z-30 flex items-center bg-white border-b border-gray-100 overflow-x-auto scroll-hidden">
+        <nav className="mt-5 sticky top-14 z-30 flex items-center bg-white/50 backdrop-blur-xl border-b border-white/40 overflow-x-auto scroll-hidden">
           {tabs
             .filter((tab) => tab !== 'Settings' || isAdmin)
             .map((tab) => (
@@ -582,7 +600,9 @@ export default function CommunityDetailPage() {
                 type="button"
                 onClick={() => setActiveTab(tab)}
                 className={`flex-shrink-0 px-4 py-3 text-[13px] font-semibold text-center border-b-2 transition-all duration-300 ${
-                  activeTab === tab ? 'text-blue-600 border-blue-600' : 'text-gray-400 border-transparent hover:text-gray-600'
+                  activeTab === tab
+                    ? 'text-blue-700 border-blue-600 bg-gradient-to-b from-blue-50/60 to-transparent'
+                    : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-white/30'
                 }`}
               >
                 {tab}
@@ -804,7 +824,7 @@ export default function CommunityDetailPage() {
                         type="button"
                         onClick={() => handleApprove(req.uid)}
                         disabled={requestActionId === req.uid}
-                        className="rounded-full bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50 transition-all duration-300"
+                        className="rounded-full bg-blue-600/90 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 hover:bg-blue-700/90 disabled:opacity-50 shadow-[0_2px_8px_rgba(91,77,255,0.2)] transition-all duration-300"
                       >
                         Approve
                       </button>
@@ -812,7 +832,7 @@ export default function CommunityDetailPage() {
                         type="button"
                         onClick={() => handleReject(req.uid)}
                         disabled={requestActionId === req.uid}
-                        className="rounded-full border border-gray-200 text-gray-600 text-xs font-semibold px-3 py-1.5 hover:border-gray-300 disabled:opacity-50 transition-all duration-300"
+                        className="rounded-full border border-white/50 bg-white/40 backdrop-blur-sm text-gray-600 text-xs font-semibold px-3 py-1.5 hover:bg-red-50/40 hover:border-red-200/60 disabled:opacity-50 transition-all duration-300"
                       >
                         Reject
                       </button>
@@ -883,7 +903,7 @@ export default function CommunityDetailPage() {
           communityId={communityId}
           kind={assetEditor}
           onSaved={(url) => {
-            setCommunity((prev) => (prev ? { ...prev, [assetEditor === 'cover' ? 'coverImage' : 'icon']: url } : prev))
+            setCommunity((prev) => (prev ? { ...prev, [assetEditor === 'cover' ? 'coverImage' : 'icon'] : url } : prev))
           }}
         />
       )}

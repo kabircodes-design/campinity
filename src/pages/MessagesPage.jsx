@@ -156,12 +156,30 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+    <div
+      className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
+      style={{ backgroundColor: '#f3f0fb' }}
+    >
+      <div
+        className="ambient-glow-layer ambient-glow-1"
+        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-2"
+        style={{
+          background:
+            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
+        }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-3"
+        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
+      />
       <DesktopSidebar profile={profile} />
 
-      <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:w-[380px] lg:flex-shrink-0 lg:border-r lg:border-gray-100 overflow-x-hidden bg-gray-50">
-        <div className="mx-auto max-w-[480px] lg:max-w-none min-h-screen lg:min-h-0 bg-white lg:shadow-none">
-          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+      <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:w-[380px] lg:flex-shrink-0 lg:my-4 lg:rounded-3xl lg:border lg:border-white/50 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] overflow-x-hidden">
+        <div className="mx-auto max-w-[480px] lg:max-w-none min-h-screen lg:min-h-0 bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl lg:rounded-3xl">
+          <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40">
             <div className="h-14 flex items-center gap-2 px-3">
               <button
                 type="button"
@@ -217,11 +235,11 @@ export default function MessagesPage() {
       {/* Desktop third column — no conversation is active at this
           route, so this is a real, honest placeholder rather than
           leaving a blank white area. Only shown at lg:+. */}
-      <div className="hidden lg:flex lg:flex-1 lg:items-center lg:justify-center lg:h-screen bg-gray-50">
+      <div className="hidden lg:flex lg:flex-1 lg:items-center lg:justify-center lg:h-screen">
         <div className="text-center">
           <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
             <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-200 to-indigo-200 blur-xl opacity-60" />
-            <div className="relative w-14 h-14 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center">
+            <div className="relative w-14 h-14 rounded-full bg-white/50 backdrop-blur-md border border-white/50 shadow-[0_4px_16px_rgba(91,77,255,0.08)] flex items-center justify-center">
               <MessageCircle className="w-6 h-6 text-indigo-400" />
             </div>
           </div>

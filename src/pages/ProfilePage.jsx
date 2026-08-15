@@ -276,11 +276,29 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+    <div
+      className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
+      style={{ backgroundColor: '#f3f0fb' }}
+    >
+      <div
+        className="ambient-glow-layer ambient-glow-1"
+        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-2"
+        style={{
+          background:
+            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
+        }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-3"
+        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
+      />
     <DesktopSidebar profile={displayProfile} />
-    <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[600px] min-h-screen lg:min-h-0 bg-white lg:shadow-sm lg:border-x lg:border-gray-100">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+    <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden">
+      <div className="mx-auto max-w-[480px] lg:max-w-[600px] min-h-screen lg:min-h-0 bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:border lg:border-white/50 lg:rounded-3xl lg:my-4">
+        <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40">
           <div className="h-14 flex items-center justify-between px-4">
             <span className="text-base font-bold tracking-tight text-gray-900">Profile</span>
             <button
@@ -305,7 +323,7 @@ export default function ProfilePage() {
 
         <ProgressCard uid={currentUid} />
 
-        <nav className="sticky top-14 z-30 flex items-center bg-white border-b border-gray-100 overflow-x-auto scroll-hidden">
+        <nav className="sticky top-14 z-30 flex items-center bg-white/50 backdrop-blur-xl border-b border-white/40 overflow-x-auto scroll-hidden">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -313,8 +331,8 @@ export default function ProfilePage() {
               onClick={() => setActiveTab(tab.key)}
               className={`flex-shrink-0 px-4 py-3 text-[13px] font-semibold text-center border-b-2 transition-all duration-300 ${
                 activeTab === tab.key
-                  ? 'text-blue-600 border-blue-600'
-                  : 'text-gray-400 border-transparent hover:text-gray-600'
+                  ? 'text-blue-700 border-blue-600 bg-gradient-to-b from-blue-50/60 to-transparent'
+                  : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-white/30'
               }`}
             >
               {tab.label}

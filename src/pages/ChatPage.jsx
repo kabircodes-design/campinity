@@ -222,12 +222,34 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+    <div
+      className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
+      style={{ backgroundColor: '#f3f0fb' }}
+    >
+      <div
+        className="ambient-glow-layer ambient-glow-1"
+        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-2"
+        style={{
+          background:
+            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
+        }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-3"
+        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
+      />
       <DesktopSidebar profile={profile} />
 
-      {/* Desktop chat-list column — same panel MessagesPage.jsx uses */}
-      <div className="hidden lg:flex lg:flex-col w-[380px] flex-shrink-0 h-screen border-r border-gray-100 overflow-y-auto">
-        <div className="h-14 flex items-center px-4 flex-shrink-0 border-b border-gray-100">
+      {/* Desktop chat-list column — same panel MessagesPage.jsx uses.
+          Now a distinct floating glass panel (rounded, margined,
+          bordered) rather than a flush-bordered strip, so it visibly
+          separates from both the sidebar and the active chat next to
+          it, per Section 4's explicit requirement. */}
+      <div className="hidden lg:flex lg:flex-col w-[380px] flex-shrink-0 h-screen lg:my-4 lg:rounded-3xl lg:border lg:border-white/50 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] bg-white/40 backdrop-blur-2xl overflow-y-auto">
+        <div className="h-14 flex items-center px-4 flex-shrink-0 border-b border-white/40">
           <span className="text-base font-bold tracking-tight text-gray-900">Chats</span>
         </div>
         <ChatListPanel
@@ -245,16 +267,14 @@ export default function ChatPage() {
           viewport-fixed composer hack. h-screen/overflow-hidden on
           this column plus flex-1/overflow-y-auto on <main> below is
           what makes only the message history scroll, matching the
-          brief's own application-shell requirement. */}
-      <div
-        className="flex-1 min-h-screen lg:h-screen lg:overflow-hidden overflow-x-hidden bg-gray-50 flex flex-col"
-        style={{
-          backgroundImage:
-            'radial-gradient(ellipse 600px 400px at 20% 0%, rgba(129,140,248,0.05), transparent), radial-gradient(ellipse 500px 400px at 100% 100%, rgba(59,130,246,0.04), transparent)'
-        }}
-      >
-        <div className="mx-auto w-full max-w-[480px] lg:max-w-none lg:h-full bg-white lg:shadow-none flex flex-col flex-1 min-h-screen lg:min-h-0">
-          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 flex-shrink-0">
+          brief's own application-shell requirement. Now its own
+          floating glass panel (rounded, margined, bordered) distinct
+          from the chat-list panel beside it — the shared page-level
+          ambient glow layers show through here directly, so no
+          separate inline gradient is needed on this column anymore. */}
+      <div className="flex-1 min-h-screen lg:h-screen lg:overflow-hidden overflow-x-hidden flex flex-col lg:my-4 lg:mr-4 lg:rounded-3xl lg:border lg:border-white/50 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:bg-white/35 lg:backdrop-blur-2xl">
+        <div className="mx-auto w-full max-w-[480px] lg:max-w-none lg:h-full bg-white/85 backdrop-blur-md lg:bg-transparent flex flex-col flex-1 min-h-screen lg:min-h-0">
+          <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40 flex-shrink-0">
             <div className="h-14 flex items-center gap-2 px-3">
               <button
                 type="button"
@@ -321,7 +341,7 @@ export default function ChatPage() {
               groupedMessages.map((item) =>
                 item.type === 'separator' ? (
                   <div key={item.id} className="flex items-center justify-center py-2">
-                    <span className="text-[11px] font-medium text-gray-400 bg-gray-100 rounded-full px-3 py-1">
+                    <span className="text-[11px] font-medium text-gray-500 bg-white/50 backdrop-blur-sm border border-white/40 rounded-full px-3 py-1">
                       {item.label}
                     </span>
                   </div>
@@ -343,7 +363,7 @@ export default function ChatPage() {
             )}
           </main>
 
-          <div className="flex-shrink-0 bg-white/95 backdrop-blur-md border-t border-gray-100 pb-16 lg:pb-0">
+          <div className="flex-shrink-0 mx-3 mb-3 lg:mb-4 rounded-2xl bg-white/55 backdrop-blur-xl border border-white/50 shadow-[0_4px_20px_rgba(91,77,255,0.08),inset_1px_1px_0_rgba(255,255,255,0.5)] pb-16 lg:pb-0">
             {pendingLimitReached ? (
               <p className="px-4 py-3.5 text-center text-xs text-gray-400">
                 You've sent your message — you can reply again once they accept.

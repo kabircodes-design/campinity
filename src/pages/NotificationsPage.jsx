@@ -187,11 +187,29 @@ export default function NotificationsPage() {
 
   if (loading) {
     return (
-      <div className="lg:flex lg:h-screen lg:overflow-hidden bg-gray-50">
+      <div
+        className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
+        style={{ backgroundColor: '#f3f0fb' }}
+      >
+        <div
+          className="ambient-glow-layer ambient-glow-1"
+          style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
+        />
+        <div
+          className="ambient-glow-layer ambient-glow-2"
+          style={{
+            background:
+              'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
+          }}
+        />
+        <div
+          className="ambient-glow-layer ambient-glow-3"
+          style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
+        />
         <DesktopSidebar profile={profile} />
-        <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden bg-gray-50">
-          <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white min-h-screen lg:min-h-0 lg:shadow-sm lg:border-x lg:border-gray-100">
-            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+        <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden">
+          <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl min-h-screen lg:min-h-0 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:border lg:border-white/50 lg:rounded-3xl lg:my-4">
+            <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40">
               <div className="h-14 flex items-center gap-2 px-3">
                 <button
                   type="button"
@@ -212,11 +230,29 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="lg:flex lg:h-screen lg:overflow-hidden bg-gray-50">
+    <div
+      className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
+      style={{ backgroundColor: '#f3f0fb' }}
+    >
+      <div
+        className="ambient-glow-layer ambient-glow-1"
+        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-2"
+        style={{
+          background:
+            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
+        }}
+      />
+      <div
+        className="ambient-glow-layer ambient-glow-3"
+        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
+      />
       <DesktopSidebar profile={profile} />
-      <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden bg-gray-50">
-        <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white min-h-screen lg:min-h-0 lg:shadow-sm lg:border-x lg:border-gray-100">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+      <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden">
+        <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl min-h-screen lg:min-h-0 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:border lg:border-white/50 lg:rounded-3xl lg:my-4">
+        <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40">
           <div className="h-14 flex items-center gap-2 px-3">
             <button
               type="button"
@@ -234,7 +270,7 @@ export default function NotificationsPage() {
               <button
                 type="button"
                 onClick={markAllAsRead}
-                className="flex-shrink-0 text-xs font-semibold text-blue-600 hover:text-blue-700 transition-all duration-300"
+                className="flex-shrink-0 text-xs font-semibold text-blue-700 bg-white/40 backdrop-blur-sm border border-white/40 rounded-full px-3 py-1.5 hover:bg-white/60 transition-all duration-300"
               >
                 Mark all read
               </button>
@@ -252,9 +288,9 @@ export default function NotificationsPage() {
           ) : (
             <>
               {unreadCount === 0 && (
-                <div className="mx-4 mt-4 rounded-2xl bg-green-50 border border-green-100 px-4 py-3 flex items-center gap-2.5">
+                <div className="mx-4 mt-4 rounded-2xl bg-emerald-50/50 backdrop-blur-sm border border-emerald-100/60 px-4 py-3 flex items-center gap-2.5">
                   <span className="text-base">✨</span>
-                  <p className="text-xs font-medium text-green-700">You're all caught up. Nothing important slipped past you.</p>
+                  <p className="text-xs font-medium text-emerald-700">You're all caught up. Nothing important slipped past you.</p>
                 </div>
               )}
               {groupedNotifications.map(([label, items]) => (
