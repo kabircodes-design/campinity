@@ -105,6 +105,59 @@ html * {
   transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease, box-shadow 300ms ease;
 }
 
+html.dark .bg-white\/0 { background-color: transparent; }
+html.dark .bg-white\/10 { background-color: color-mix(in srgb, var(--theme-surface) 10%, transparent); }
+html.dark .bg-white\/30 { background-color: color-mix(in srgb, var(--theme-surface) 30%, transparent); }
+html.dark .bg-white\/32 { background-color: color-mix(in srgb, var(--theme-surface) 32%, transparent); }
+html.dark .bg-white\/35 { background-color: color-mix(in srgb, var(--theme-surface) 35%, transparent); }
+html.dark .bg-white\/40 { background-color: color-mix(in srgb, var(--theme-surface) 40%, transparent); }
+html.dark .bg-white\/45 { background-color: color-mix(in srgb, var(--theme-surface) 45%, transparent); }
+html.dark .bg-white\/50 { background-color: color-mix(in srgb, var(--theme-surface) 50%, transparent); }
+html.dark .bg-white\/55 { background-color: color-mix(in srgb, var(--theme-surface) 55%, transparent); }
+html.dark .bg-white\/60 { background-color: color-mix(in srgb, var(--theme-surface) 60%, transparent); }
+html.dark .bg-white\/65 { background-color: color-mix(in srgb, var(--theme-surface) 65%, transparent); }
+html.dark .bg-white\/70 { background-color: color-mix(in srgb, var(--theme-surface) 70%, transparent); }
+html.dark .bg-white\/80 { background-color: color-mix(in srgb, var(--theme-surface) 80%, transparent); }
+html.dark .bg-white\/85 { background-color: color-mix(in srgb, var(--theme-surface) 85%, transparent); }
+html.dark .bg-white\/90 { background-color: color-mix(in srgb, var(--theme-surface) 90%, transparent); }
+html.dark .bg-white\/95 { background-color: color-mix(in srgb, var(--theme-surface) 95%, transparent); }
+
+/* Same fix, extended to theme packs — ThemeProvider.jsx (confirmed by
+   reading it directly) sets data-theme-pack on <html> for every
+   active pack, applying that pack's --theme-* tokens as inline
+   styles. Without this, a fully-correct theme pack would still leave
+   every bg-white/N glass surface literally white, since that
+   Tailwind class only matches its own literal selector — never the
+   semantic token. Confirmed gap in the previous pass. */
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/0 { background-color: transparent; }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/10 { background-color: color-mix(in srgb, var(--theme-surface) 10%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/30 { background-color: color-mix(in srgb, var(--theme-surface) 30%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/32 { background-color: color-mix(in srgb, var(--theme-surface) 32%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/35 { background-color: color-mix(in srgb, var(--theme-surface) 35%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/40 { background-color: color-mix(in srgb, var(--theme-surface) 40%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/45 { background-color: color-mix(in srgb, var(--theme-surface) 45%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/50 { background-color: color-mix(in srgb, var(--theme-surface) 50%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/55 { background-color: color-mix(in srgb, var(--theme-surface) 55%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/60 { background-color: color-mix(in srgb, var(--theme-surface) 60%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/65 { background-color: color-mix(in srgb, var(--theme-surface) 65%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/70 { background-color: color-mix(in srgb, var(--theme-surface) 70%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/80 { background-color: color-mix(in srgb, var(--theme-surface) 80%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/85 { background-color: color-mix(in srgb, var(--theme-surface) 85%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/90 { background-color: color-mix(in srgb, var(--theme-surface) 90%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/95 { background-color: color-mix(in srgb, var(--theme-surface) 95%, transparent); }
+[data-theme-pack]:not([data-theme-pack="default"]) [class*="border-white/"] { border-color: color-mix(in srgb, var(--theme-border) 60%, transparent); }
+
+/* Same root cause, same fix, for the border-white/N and text-gray-900
+   etc. used alongside those glass surfaces — a near-invisible white
+   border on a dark surface, and (separately) any remaining literal
+   white/N text classes, both fail exactly the same way bg-white/N
+   did. border-white/N is overridden broadly since a translucent
+   light border is still the correct "soft luminous edge" the brief
+   asks for in dark mode (Section 8) — just needs to be visible
+   against a dark surface rather than invisible against a light one. */
+html.dark [class*="border-white/"] { border-color: rgba(255, 255, 255, 0.14); }
+html.dark [class*="hover\:bg-white/"]:hover { filter: brightness(1.15); }
+
 html.dark body,
 html:not(.dark) body {
   background-color: var(--theme-background);
@@ -365,6 +418,129 @@ textarea.bg-gray-50::placeholder { color: var(--theme-textSecondary); }
 @media (prefers-reduced-motion: reduce) {
   .chp-theme-toggle__thumb,
   .chp-theme-toggle__track {
+    transition: none !important;
+  }
+}
+
+/* ============================================================
+   CAMPINITY DESIGN SYSTEM — PHASE 1 (LOCKED)
+   ============================================================
+   The formal, namespaced token layer. Aliases the existing
+   --theme-* values as the single source of truth (same purple,
+   same text colors — not a second competing palette) and adds
+   the structure that didn't exist yet: a real 4-level glass
+   system, a locked radius scale, a documented spacing rhythm, a
+   shadow scale, and standardized transition timing. Additive
+   only — nothing renamed or removed, every existing .theme-*
+   class and every page already consuming --theme-* keeps
+   working unchanged.
+   ============================================================ */
+
+:root {
+  /* ---- Color — aliases of the existing brand tokens above,
+     given the formal Campinity naming the design system uses ---- */
+  --campinity-primary: var(--theme-accent);
+  --campinity-primary-soft: color-mix(in srgb, var(--theme-accent) 14%, var(--theme-surface));
+  --campinity-primary-strong: var(--theme-accentDeep);
+  --campinity-secondary: var(--theme-accentSecondary);
+  --campinity-accent-pink: #ec4899;
+  --campinity-accent-pink-soft: color-mix(in srgb, #ec4899 12%, var(--theme-surface));
+
+  --campinity-text: var(--theme-textPrimary);
+  --campinity-text-muted: var(--theme-textSecondary);
+  --campinity-text-subtle: var(--theme-muted);
+
+  --campinity-bg: var(--theme-background);
+  --campinity-bg-soft: var(--theme-backgroundSecondary);
+
+  /* ---- Radius scale — locked. Every rounded surface should map
+     to one of these five, not an arbitrary pixel value. ---- */
+  --campinity-radius-sm: 8px;   /* chips, micro controls */
+  --campinity-radius-md: 12px;  /* inputs, small cards */
+  --campinity-radius-lg: 16px;  /* post cards, community cards */
+  --campinity-radius-xl: 24px;  /* hero, major panels */
+  --campinity-radius-pill: 9999px; /* buttons, badges */
+
+  /* ---- Spacing rhythm — documented here as the canonical scale
+     (8/12/16/24/32/40/48), consumed via Tailwind's own spacing
+     utilities (p-2/p-3/p-4/p-6/p-8/p-10/p-12 map to this exact
+     rhythm already) rather than duplicated as separate CSS
+     variables — one spacing system, not two. ---- */
+
+  /* ---- Shadow scale ---- */
+  --campinity-shadow-soft: 0 4px 16px rgba(91, 77, 255, 0.06);
+  --campinity-shadow-medium: 0 8px 28px rgba(91, 77, 255, 0.10);
+  --campinity-shadow-floating: 0 12px 40px rgba(91, 77, 255, 0.14);
+
+  /* ---- Motion — standardized micro-interaction timing ---- */
+  --campinity-transition-fast: 120ms ease;
+  --campinity-transition-base: 180ms ease;
+  --campinity-transition-slow: 200ms ease;
+}
+
+html.dark {
+  --campinity-primary-soft: color-mix(in srgb, var(--theme-accent) 16%, var(--theme-surface));
+  --campinity-shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --campinity-shadow-medium: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --campinity-shadow-floating: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+/* ---- GLASS SYSTEM — the four official levels. Each defines its
+   own opacity/blur/border/shadow combination; components pick the
+   level by purpose, not by inventing new values per component. ---- */
+
+.glass-soft {
+  background-color: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(8px) saturate(130%);
+  -webkit-backdrop-filter: blur(8px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.glass-medium {
+  background-color: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: var(--campinity-shadow-soft), inset 1px 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.glass-strong {
+  background-color: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: var(--campinity-shadow-medium), inset 1px 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.glass-accent {
+  background-color: color-mix(in srgb, var(--campinity-primary) 88%, transparent);
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  box-shadow: var(--campinity-shadow-soft);
+  color: var(--theme-accentText);
+}
+
+/* ---- Radius utilities mapped to the locked scale, for use
+   alongside Tailwind's arbitrary-value classes where a component
+   needs the exact Campinity radius rather than Tailwind's own
+   rounded-2xl/rounded-3xl approximations. ---- */
+.radius-sm { border-radius: var(--campinity-radius-sm); }
+.radius-md { border-radius: var(--campinity-radius-md); }
+.radius-lg { border-radius: var(--campinity-radius-lg); }
+.radius-xl { border-radius: var(--campinity-radius-xl); }
+.radius-pill { border-radius: var(--campinity-radius-pill); }
+
+/* ---- Standardized transition utility — the ~120-200ms range,
+   not a dramatic spring/bounce, per the explicit micro-interaction
+   requirement. ---- */
+.transition-campinity {
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 180ms;
+  transition-timing-function: ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transition-campinity {
     transition: none !important;
   }
 }

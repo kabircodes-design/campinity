@@ -59,7 +59,7 @@ export default function Footer() {
                   className="flex items-center gap-2 theme-text-secondary hover:theme-accent transition-colors duration-200"
                 >
                   <Icon name="whatsapp" className="w-4 h-4" strokeWidth={1.4} />
-                  +91 73********
+                  +91 7387097365
                 </a>
               </li>
               <li>
