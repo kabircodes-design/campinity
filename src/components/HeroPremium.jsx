@@ -1,10 +1,10 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import Container from './Container.jsx'
 import Icon from './Icon.jsx'
 import AnimatedBackgroundPremium from './AnimatedBackgroundPremium.jsx'
-import FloatingAcademicObjects from './FloatingAcademicObjects.jsx'
+import CampusMascotPremium from './CampusMascotPremium.jsx'
 import GlassCard from './GlassCard.jsx'
 import '../styles/HeroPremium.css'
 
@@ -27,14 +27,17 @@ function PlayGlyph() {
 /**
  * Standalone premium Hero.
  *
- * Mascot removed entirely this pass — CampusMascotPremium.jsx is no
- * longer imported or referenced anywhere in this file. In its place:
- * FloatingAcademicObjects, ambient drifting books/caps/documents/ID
- * cards/folders/pencils, making the scene itself feel alive instead of
- * relying on a character. The old mascot component file
- * (src/components/CampusMascotPremium.jsx) is now unused — delete it
- * from your project; it isn't referenced from anywhere after this
- * change.
+ * Mascot correction: an earlier pass incorrectly concluded the
+ * original CampusMascotPremium.jsx 'genuinely could not be found' —
+ * that was wrong. The file itself still existed (just unimported from
+ * here after being swapped for a placeholder), and has now been
+ * correctly restored as the canonical mascot, wired with the
+ * sectionRef/reactCue props it actually expects (reactCue now driven
+ * by real onMouseEnter handlers on both CTAs below, not a static 0).
+ * The image assets it references (/mascot.webp, /mascot.png) and its
+ * own CSS (defining .chp-mascot* classes) are not files I have — they
+ * were never touched by this change and should remain exactly as they
+ * already exist in the project.
  *
  * Not wired into LandingPage.jsx — swap it in by replacing
  * `import Hero from './Hero.jsx'` with
@@ -42,6 +45,7 @@ function PlayGlyph() {
  */
 export default function HeroPremium() {
   const sectionRef = useRef(null)
+  const [reactCue, setReactCue] = useState(0)
 
   return (
     <section
@@ -98,6 +102,7 @@ export default function HeroPremium() {
               <Link
                 to="/login"
                 aria-label="Join your campus — go to sign up"
+                onMouseEnter={() => setReactCue((n) => n + 1)}
                 className="chp-cta-primary w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full text-[15px] font-semibold px-7 py-3.5 transition-transform duration-200 active:scale-[0.98]"
               >
                 Join your campus
@@ -106,6 +111,7 @@ export default function HeroPremium() {
               <a
                 href="#product"
                 aria-label="See how Campinity works"
+                onMouseEnter={() => setReactCue((n) => n + 1)}
                 className="chp-cta-secondary w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full text-[15px] font-semibold px-7 py-3.5 transition-all duration-200 active:scale-[0.98]"
               >
                 <span className="chp-cta-secondary__glyph">
@@ -140,10 +146,23 @@ export default function HeroPremium() {
             transition={{ duration: 0.75, delay: 0.25, ease }}
             className="flex justify-center"
           >
-            <FloatingAcademicObjects />
+            <CampusMascotPremium sectionRef={sectionRef} reactCue={reactCue} />
           </motion.div>
         </div>
       </Container>
+
+      <svg
+        className="absolute bottom-0 left-0 w-full pointer-events-none"
+        style={{ height: 'clamp(48px, 8vw, 110px)' }}
+        viewBox="0 0 1440 110"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M0,60 C240,110 480,10 720,40 C960,70 1200,20 1440,55 L1440,110 L0,110 Z"
+          fill="var(--theme-surface, #ffffff)"
+        />
+      </svg>
     </section>
   )
 }

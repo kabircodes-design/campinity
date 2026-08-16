@@ -1,0 +1,72 @@
+/*
+ * CampusMascot.css — styles for the new mascot component. Deliberately
+ * theme-reactive (uses --theme-accent/accentSecondary throughout) so
+ * every theme pack tints the mascot's glow/rings/eyes with its own
+ * accent rather than a hardcoded blue, matching the surrounding
+ * theme-system work done in earlier phases.
+ */
+
+.cm-mascot-ring {
+  animation: cm-ring-rotate 26s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes cm-ring-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.cm-mascot-glow {
+  background: radial-gradient(circle, color-mix(in srgb, var(--theme-accentSecondary, #7b61ff) 45%, transparent), transparent 70%);
+  filter: blur(24px);
+  animation: cm-glow-breathe 8s ease-in-out infinite;
+}
+
+@keyframes cm-glow-breathe {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+.cm-mascot-head {
+  background: linear-gradient(145deg, #ffffff, #e4e8f5);
+  box-shadow:
+    0 20px 60px color-mix(in srgb, var(--theme-accent, #5b4dff) 35%, transparent),
+    inset 2px 2px 6px rgba(255, 255, 255, 0.9),
+    inset -3px -3px 10px rgba(148, 163, 184, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.cm-mascot-screen-fill {
+  fill: #0b0e1a;
+}
+
+.cm-mascot-eye-fill {
+  fill: var(--theme-accentSecondary, #7dd3fc);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--theme-accentSecondary, #7dd3fc) 70%, transparent));
+}
+
+.cm-mascot-mouth-stroke {
+  stroke: var(--theme-accentSecondary, #7dd3fc);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--theme-accentSecondary, #7dd3fc) 60%, transparent));
+}
+
+.cm-mascot-highlight {
+  position: absolute;
+  top: 8%;
+  left: 14%;
+  width: 28%;
+  height: 16%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-mascot-ring {
+    animation: none !important;
+  }
+  .cm-mascot-glow {
+    animation: none !important;
+  }
+}

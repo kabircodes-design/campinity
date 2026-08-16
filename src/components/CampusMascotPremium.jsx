@@ -160,13 +160,13 @@ export default function CampusMascotPremium({ className = '', reactCue = 0, sect
           <span className="chp-mascot__ground-glow" />
 
           <picture>
-            <source srcSet="/mascot.webp" type="image/webp" />
+            <source srcSet="/assets/mascot/campinity-mascot.webp" type="image/webp" />
             <img
-              src="/mascot.png"
+              src="/assets/mascot/campinity-mascot.png"
               alt="Campinity's AI campus companion — a friendly glowing robot"
               className="chp-mascot__image"
-              width={560}
-              height={547}
+              width={1536}
+              height={1024}
               decoding="async"
             />
           </picture>
