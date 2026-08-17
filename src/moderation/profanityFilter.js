@@ -13,22 +13,6 @@
 import { PROFANITY_TERMS, SEVERITY } from './profanityLexicon.js'
 
 /**
- * Normalizes text for matching: lowercase, strips characters commonly
- * inserted to evade filters (spaces, hyphens, dots, underscores,
- * asterisks between letters), and collapses runs of 3+ repeated
- * characters down to 2 (so "shiiiit" and "shiit" both normalize
- * toward the same comparable form as "shit" without accidentally
- * merging genuinely different words that just happen to have a
- * double letter, like "committee").
- */
-function normalizeForMatching(text) {
-  return text
-    .toLowerCase()
-    .replace(/[\s\-_.*]+/g, '') // "m a d a r c h o d", "m-a-d-a-r-c-h-o-d" -> "madarchod"
-    .replace(/(.)\1+/g, '$1') // "stuuupid" -> "stupid", "shiiiit" -> "shit" — collapses ANY run of repeats to a single character
-}
-
-/**
  * Builds a word-boundary-aware regex for a single term against the
  * ORIGINAL (unmodified) text — this is what prevents the false-
  * positive case explicitly called out in the brief ("do not block a
@@ -41,6 +25,24 @@ function normalizeForMatching(text) {
 function wordBoundaryRegex(term) {
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(`\\b${escaped}\\b`, 'gi')
+}
+
+/**
+ * Builds a 'fuzzy' regex for a term that matches it in the ORIGINAL
+ * text even with evasion characters (spaces/hyphens/dots/underscores/
+ * asterisks) and repeated letters inserted between each character —
+ * e.g. matches "m-a-d-a-r-c-h-o-d" and "mmaadarrchod" as the term
+ * "madarchod". This is what makes masking possible for evasion
+ * attempts: unlike the normalized-substring detection in
+ * detectMatches (which loses the original span once text is
+ * stripped/collapsed), this regex operates directly on the real
+ * string, so replace() can locate and mask the actual matched
+ * substring in place.
+ */
+function fuzzyEvasionRegex(term) {
+  const chars = term.split('').map((ch) => ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const pattern = chars.map((ch) => `${ch}+[\\s\\-_.*]*`).join('')
+  return new RegExp(`\\b${pattern}\\b`, 'gi')
 }
 
 /**
@@ -61,7 +63,6 @@ function wordBoundaryRegex(term) {
  */
 export function detectMatches(text) {
   if (!text) return []
-  const normalized = normalizeForMatching(text)
   const matches = []
 
   for (const entry of PROFANITY_TERMS) {
@@ -70,7 +71,7 @@ export function detectMatches(text) {
       matches.push({ term: entry.term, severity: entry.severity, matched: boundaryMatches, method: 'word-boundary' })
       continue
     }
-    if (entry.term.length >= 4 && normalized.includes(entry.term)) {
+    if (entry.term.length >= 4 && fuzzyEvasionRegex(entry.term).test(text)) {
       matches.push({ term: entry.term, severity: entry.severity, matched: [entry.term], method: 'normalized-evasion' })
     }
   }
@@ -80,21 +81,18 @@ export function detectMatches(text) {
 
 /**
  * Masks every literal occurrence of each matched term in the
- * ORIGINAL text (word-boundary matches only — the normalized-evasion
- * detection above flags the attempt but doesn't attempt to locate
- * and mask the exact obfuscated span in the original string, since
- * that mapping isn't reliably invertible; those cases are instead
- * surfaced via `hadEvasionAttempt` for the caller to decide how to
- * handle, e.g. rejecting the submission outright rather than trying
- * to mask it).
+ * ORIGINAL text. Word-boundary matches use the exact boundary regex.
+ * Normalized-evasion matches (spacing/punctuation/repeated-character
+ * tricks) use the fuzzy regex above, which CAN locate the real span
+ * in the original string — this is the fix for the confirmed bug
+ * where evasion attempts were detected but silently left unmasked.
  */
 function maskText(text, matches) {
   let masked = text
-  matches
-    .filter((m) => m.method === 'word-boundary')
-    .forEach((m) => {
-      masked = masked.replace(wordBoundaryRegex(m.term), (match) => '*'.repeat(match.length))
-    })
+  matches.forEach((m) => {
+    const regex = m.method === 'word-boundary' ? wordBoundaryRegex(m.term) : fuzzyEvasionRegex(m.term)
+    masked = masked.replace(regex, (match) => '*'.repeat(match.length))
+  })
   return masked
 }
 

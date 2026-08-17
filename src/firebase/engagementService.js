@@ -20,6 +20,7 @@ import {
   writeBatch
 } from 'firebase/firestore'
 import { db } from './firebase.js'
+import { moderateText } from '../moderation/profanityFilter.js'
 import {
   createLikeNotification,
   createCommentNotification,
@@ -182,6 +183,7 @@ export async function addComment(postId, { uid, displayName, username, avatar, t
   if (!uid) throw new Error('You need to be signed in to comment.')
   if (!text?.trim()) throw new Error('Write something before posting.')
 
+  const moderated = moderateText(text.trim())
   const newCommentRef = doc(commentsCollection(postId))
   let postOwnerUid = null
 
@@ -203,7 +205,7 @@ export async function addComment(postId, { uid, displayName, username, avatar, t
       displayName: displayName || 'Student',
       username: username || '',
       avatar: avatar || '',
-      text: text.trim(),
+      text: moderated.text,
       mentions: mentionedUids,
       parentCommentId,
       replyCount: 0,
@@ -228,7 +230,7 @@ export async function addComment(postId, { uid, displayName, username, avatar, t
         actorAvatar: avatar,
         postId,
         commentId: newCommentRef.id,
-        replyText: text
+        replyText: moderated.text
       }).catch(() => {})
     }
   } else if (postOwnerUid && postOwnerUid !== uid) {
@@ -238,7 +240,7 @@ export async function addComment(postId, { uid, displayName, username, avatar, t
       actorName: displayName,
       actorAvatar: avatar,
       postId,
-      commentText: text
+      commentText: moderated.text
     }).catch(() => {})
   }
 
@@ -251,7 +253,7 @@ export async function addComment(postId, { uid, displayName, username, avatar, t
       actorAvatar: avatar,
       postId,
       commentId: newCommentRef.id,
-      commentText: text
+      commentText: moderated.text
     }).catch(() => {})
   }
 

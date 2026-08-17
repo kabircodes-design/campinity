@@ -39,7 +39,24 @@ export const PROFANITY_TERMS = [
   { term: 'bitch', severity: SEVERITY.MEDIUM },
   { term: 'bastard', severity: SEVERITY.MEDIUM },
   { term: 'idiot', severity: SEVERITY.LOW },
-  { term: 'stupid', severity: SEVERITY.LOW }
+  { term: 'stupid', severity: SEVERITY.LOW },
+  // Added following a confirmed live-test report: 'madarchod' was
+  // submitted through the real composer and posted unmasked. Root
+  // cause was twofold — this term was never in the lexicon at all
+  // (fixed here), AND the filter was never wired into any actual
+  // write path (a separate, deeper issue — see this fix's own
+  // report). Common Hindi/Urdu abusive terms below, same honest
+  // caveat as the note above: this is not a comprehensive
+  // multilingual lexicon, just the specifically reported gap plus
+  // immediately adjacent common terms.
+  { term: 'madarchod', severity: SEVERITY.HIGH },
+  { term: 'behenchod', severity: SEVERITY.HIGH },
+  { term: 'bhosdike', severity: SEVERITY.HIGH },
+  { term: 'chutiya', severity: SEVERITY.MEDIUM },
+  { term: 'randi', severity: SEVERITY.HIGH },
+  { term: 'gandu', severity: SEVERITY.MEDIUM },
+  { term: 'saala', severity: SEVERITY.LOW },
+  { term: 'kutta', severity: SEVERITY.LOW }
   // Add real terms here as needed — one { term, severity } entry per
   // line, term in lowercase with no spaces. HIGH severity terms are
   // never auto-masked-and-forgotten by moderateText() below; they're

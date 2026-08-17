@@ -8,6 +8,7 @@ import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { computeExpiresAt, createPost, getAvatarColor, getInitials, uploadPostDocument, uploadPostImage } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
+import { moderateText } from '../moderation/profanityFilter.js'
 import { awardXP, getUserProgress } from '../gamification/xpService.js'
 import { checkAndAwardBadges } from '../gamification/badgeService.js'
 import { POINTS_REWARDS } from '../gamification/config.js'
@@ -219,6 +220,16 @@ export default function CreatePostPage() {
     setIsPublishing(true)
 
     try {
+      const moderationResult = moderateText(postText.trim())
+      // eslint-disable-next-line no-console
+      console.log('[ModerationDebug]', {
+        raw: postText.trim(),
+        sanitized: moderationResult.text,
+        wasModerated: moderationResult.wasModerated,
+        highestSeverity: moderationResult.highestSeverity,
+        flaggedForReview: moderationResult.flaggedForReview
+      })
+
       let imageUrl = null
       if (imageFile) {
         imageUrl = await uploadPostImage(uid, imageFile)
@@ -239,7 +250,7 @@ export default function CreatePostPage() {
 
       const newPostId = await createPost({
         uid,
-        text: postText.trim(),
+        text: moderationResult.text,
         imageUrl,
         author,
         extra: {
