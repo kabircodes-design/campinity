@@ -55,6 +55,18 @@ export async function isBlockedByMe(viewerUid, targetUid) {
   return snap.exists()
 }
 
+/**
+ * Alias of isBlockedByMe under the name ProfileHeader.jsx actually
+ * imports (confirmed via the reported build error: "isBlocking" is
+ * not exported by this file). Not a second implementation — same
+ * function, same signature (viewerUid, targetUid), same real
+ * Firestore check against the current user's own blockedUsers
+ * subcollection. Exists purely to make the real call site resolve to
+ * real logic instead of either a compile error or a fake `return
+ * false` placeholder.
+ */
+export const isBlocking = isBlockedByMe
+
 /** The current user's own blocked-accounts list — Settings > Privacy & Safety > Blocked accounts. */
 export async function getBlockedUsers(uid) {
   if (!uid) return []
