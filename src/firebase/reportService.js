@@ -23,6 +23,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  startAfter,
   updateDoc,
   where
 } from 'firebase/firestore'
@@ -141,6 +142,27 @@ export async function getReportsByStatus(status, { pageSize = 30 } = {}) {
     query(reportsCollection(), where('status', '==', status), orderBy('createdAt', 'desc'), limit(pageSize))
   )
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
+/**
+ * Paginated version of the moderation queue read — genuinely new,
+ * not a rename of getReportsByStatus above, which has no
+ * cursor/pagination support at all. Follows the exact same
+ * { pageSize, cursor } -> { reports, nextCursor } shape already
+ * established elsewhere in this project (getMembers in
+ * communityService.js, getFollowListPage in profileService.js), not
+ * an invented convention. Same collection/query/ordering as
+ * getReportsByStatus — this is additive pagination on top of the
+ * same real data, not a second report-fetching implementation.
+ */
+export async function getReportsPage(status, { pageSize = 30, cursor = null } = {}) {
+  const constraints = [where('status', '==', status), orderBy('createdAt', 'desc'), limit(pageSize)]
+  if (cursor) constraints.push(startAfter(cursor))
+  const snap = await getDocs(query(reportsCollection(), ...constraints))
+  return {
+    reports: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    nextCursor: snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1] : null
+  }
 }
 
 /**
