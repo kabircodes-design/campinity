@@ -1,0 +1,11 @@
+{
+  "name": "campinity-functions",
+  "description": "New — this project had no functions/ directory anywhere before this change (confirmed via search). Cloud Functions is the natural, project-consistent choice here since this is already a Firebase project, but standing up Cloud Functions itself (this package.json, firebase.json wiring, initial deploy) is new infrastructure this phase introduces, not an extension of something that already existed.",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^5.0.0"
+  },
+  "private": true
+}

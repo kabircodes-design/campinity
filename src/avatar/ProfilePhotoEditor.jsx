@@ -4,7 +4,8 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { Camera, Sparkles, Upload, X } from 'lucide-react'
 import ImageCropper from './ImageCropper.jsx'
 import CampinityAvatarPicker from './CampinityAvatarPicker.jsx'
-import { uploadCampusAvatar } from './avatarStorage.js'
+import { uploadToQuarantine } from './quarantineUpload.js'
+import { moderateImage } from '../moderation/imageModeration.js'
 import { updateUserProfile, getUserProfile } from '../firebase/profileService.js'
 import { auth } from '../firebase/firebase.js'
 
@@ -38,10 +39,13 @@ function mapStorageError(err) {
  * already reads as a fallback — not campusAvatarUrl/avatarMode, which
  * belong to that other feature's own state.
  *
- * Reuses uploadCampusAvatar (same campusAvatars/{uid}/... Storage
- * path, already correctly secured by the existing storage.rules
- * entry) rather than inventing a new upload path — the rule is
- * content-agnostic, so this is safe reuse, not a rule change.
+ * Uploads to a quarantine path first, then moderates before ever
+ * reaching the real campusAvatars/{uid}/... Storage path (see
+ * quarantineUpload.js and imageModeration.js) — the SAFE decision
+ * path lands at the same final path/URL shape uploadCampusAvatar used
+ * to write to directly, so profile.avatar (the actual, existing field
+ * getProfileIdentityImage already reads) still receives the same kind
+ * of value as before.
  */
 export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, onSaved }) {
   const [stage, setStage] = useState('sheet') // 'sheet' | 'cropper' | 'error'
@@ -153,24 +157,54 @@ export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, onS
 
     console.log(debugTag, { uid: authUid, blobType: blob.type, blobSize: blob.size })
 
-    let url
+    let quarantinePath
     try {
-      console.log(debugTag, 'UPLOAD STARTED, storage path: campusAvatars/' + authUid + '/{timestamp}.jpg')
-      url = await uploadCampusAvatar(authUid, blob)
-      console.log(debugTag, 'UPLOAD SUCCESS, download URL:', url)
+      console.log(debugTag, 'QUARANTINE UPLOAD STARTED')
+      quarantinePath = await uploadToQuarantine(authUid, blob)
+      console.log(debugTag, 'QUARANTINE UPLOAD SUCCESS:', quarantinePath)
     } catch (err) {
-      console.error(debugTag, 'UPLOAD FAILED', {
-        code: err?.code,
-        message: err?.message,
-        serverResponse: err?.serverResponse,
-        name: err?.name
-      })
+      console.error(debugTag, 'QUARANTINE UPLOAD FAILED', { code: err?.code, message: err?.message })
       setErrorMessage(mapStorageError(err))
       setDebugError(err)
       setStage('error')
       setSaving(false)
       return
     }
+
+    let moderationResult
+    try {
+      console.log(debugTag, 'MODERATION STARTED')
+      moderationResult = await moderateImage({ quarantinePath })
+      console.log(debugTag, 'MODERATION RESULT:', moderationResult.decision)
+    } catch (err) {
+      // Provider/network failure — requirement 12: do NOT publish,
+      // keep quarantined, show the exact retry message specified.
+      // The quarantined file itself is untouched server-side.
+      console.error(debugTag, 'MODERATION UNAVAILABLE', { code: err?.code, message: err?.message })
+      setErrorMessage('Your image is being checked. Please try again shortly.')
+      setDebugError(err)
+      setStage('error')
+      setSaving(false)
+      return
+    }
+
+    if (moderationResult.decision === 'BLOCK') {
+      setErrorMessage("That photo doesn't meet Campinity's guidelines. Please try a different one.")
+      setStage('error')
+      setSaving(false)
+      return
+    }
+
+    if (moderationResult.decision === 'REVIEW') {
+      setErrorMessage("Your photo is under review — we'll update your profile once it's approved.")
+      setStage('error')
+      setSaving(false)
+      return
+    }
+
+    // SAFE — moderationResult.finalUrl is the real, final public URL
+    // the Cloud Function already copied the file to.
+    const url = moderationResult.finalUrl
 
     try {
       console.log(debugTag, 'Firestore update started')
