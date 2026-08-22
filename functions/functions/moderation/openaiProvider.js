@@ -41,7 +41,7 @@ const MODEL = 'omni-moderation-latest'
 const BLOCK_CATEGORIES = ['sexual/minors', 'violence/graphic', 'sexual']
 const REVIEW_CATEGORIES = ['violence', 'self-harm', 'self-harm/intent', 'self-harm/instructions', 'harassment']
 
-export async function moderateImage({ imageUrl }) {
+async function moderateImage({ imageUrl }) {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY is not configured on the server. Cannot moderate — refusing to publish unmoderated.')
@@ -87,3 +87,5 @@ export async function moderateImage({ imageUrl }) {
     providerVersion: MODEL
   }
 }
+
+module.exports = { moderateImage }

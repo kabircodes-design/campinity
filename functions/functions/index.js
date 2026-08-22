@@ -59,7 +59,28 @@ const db = () => admin.firestore()
 const QUARANTINE_PREFIX = 'quarantine/profilePhotos/'
 const FINAL_PREFIX = 'campusAvatars/'
 
-exports.moderateProfilePhoto = onCall({ region: 'us-central1' }, async (request) => {
+exports.moderateProfilePhoto = onCall({ region: 'us-central1', secrets: ['OPENAI_API_KEY'] }, async (request) => {
+  try {
+    return await handleModerateProfilePhoto(request)
+  } catch (err) {
+    // Re-throw HttpsErrors exactly as thrown — these already carry
+    // their own specific code (unauthenticated/invalid-argument/
+    // permission-denied/not-found/unavailable/internal) and were
+    // already logged at their own throw site where relevant. Only a
+    // genuinely UNEXPECTED exception (e.g. one of the
+    // profilePhotoReviews Firestore writes failing, which had no
+    // error handling at all before this fix) falls through to the
+    // generic branch below — and even that is now logged with its
+    // real message/code before becoming the safe generic error the
+    // client sees, closing the exact "do not swallow errors" gap
+    // this whole debugging pass is about.
+    if (err instanceof HttpsError) throw err
+    console.error('[moderateProfilePhoto] unexpected error', { uid: request.auth?.uid, message: err?.message, code: err?.code })
+    throw new HttpsError('internal', 'Something went wrong. Please try again.')
+  }
+})
+
+async function handleModerateProfilePhoto(request) {
   const uid = request.auth?.uid
   if (!uid) {
     throw new HttpsError('unauthenticated', 'You need to be signed in.')
@@ -89,7 +110,11 @@ exports.moderateProfilePhoto = onCall({ region: 'us-central1' }, async (request)
     })
   } catch (err) {
     // Can't even generate a URL to check the image — same "don't
-    // publish on failure" rule applies.
+    // publish on failure" rule applies. Real cause now actually
+    // logged — the previous version of this catch block logged
+    // nothing about err at all, so even a correct root-cause guess
+    // elsewhere would never have been confirmable from logs.
+    console.error('[moderateProfilePhoto] signed URL generation failed', { uid, message: err?.message, code: err?.code })
     throw new HttpsError('unavailable', 'Your image is being checked. Please try again shortly.')
   }
 
@@ -99,8 +124,11 @@ exports.moderateProfilePhoto = onCall({ region: 'us-central1' }, async (request)
   } catch (err) {
     // Provider failure — requirement 12: do NOT publish, keep
     // quarantined, tell the client to retry. The file is left exactly
-    // where it is; nothing is deleted, nothing is published.
-    console.error('[moderateProfilePhoto] provider failure', { uid }) // no raw image data, no moderation payload logged
+    // where it is; nothing is deleted, nothing is published. Real
+    // cause now actually logged (message/code, not the full raw
+    // error which could include request/response bodies) — the
+    // previous version only logged { uid }, never the error itself.
+    console.error('[moderateProfilePhoto] provider failure', { uid, message: err?.message, code: err?.code })
     throw new HttpsError('unavailable', 'Your image is being checked. Please try again shortly.')
   }
 
@@ -129,15 +157,34 @@ exports.moderateProfilePhoto = onCall({ region: 'us-central1' }, async (request)
 
   // SAFE — copy to the real, existing final path and clean up quarantine.
   const finalPath = `${FINAL_PREFIX}${uid}/${Date.now()}.jpg`
-  await file.copy(bucket().file(finalPath))
-  await file.delete().catch(() => {})
+  let finalUrl
+  try {
+    await file.copy(bucket().file(finalPath))
+    await file.delete().catch(() => {})
 
-  const [finalUrl] = await bucket().file(finalPath).getSignedUrl({
-    action: 'read',
-    expires: '03-01-2500' // effectively permanent, matching how the existing uploadCampusAvatar presumably generates its own public download URL — I don't have that file to confirm its exact expiry convention, flagged honestly
-  })
+    // Fixed alongside adding error handling here: '03-01-2500' is an
+    // ambiguous MM-DD-YYYY-shaped string I was not certain the
+    // underlying @google-cloud/storage SDK parses the way intended.
+    // Replaced with an unambiguous, valid ISO date far in the future
+    // — removes that uncertainty entirely rather than leaving it as
+    // an untested guess.
+    ;[finalUrl] = await bucket().file(finalPath).getSignedUrl({
+      action: 'read',
+      expires: '2500-01-01T00:00:00Z'
+    })
+  } catch (err) {
+    // This exact block (copy/delete/getSignedUrl) previously had ZERO
+    // error handling — any failure here threw uncaught, which Firebase
+    // Functions converts to a generic 'internal' error with no logged
+    // detail. This is the strongest single candidate for the reported
+    // functions/internal symptom, given the client saw exactly that
+    // generic code. Now logged with the real message/code before
+    // re-throwing a safe client-facing error.
+    console.error('[moderateProfilePhoto] SAFE-path finalize failed', { uid, message: err?.message, code: err?.code })
+    throw new HttpsError('internal', 'Something went wrong finishing your upload. Please try again.')
+  }
 
   await db().collection('profilePhotoReviews').doc(uid).set(moderationRecord, { merge: true })
 
   return { decision: 'SAFE', finalUrl }
-})
+}

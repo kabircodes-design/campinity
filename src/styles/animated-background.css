@@ -1,0 +1,319 @@
+/*
+ * Animated background system — Landing / Login / Signup.
+ *
+ * Only transform, opacity, and filter are ever animated (GPU-friendly,
+ * never triggers layout/paint of surrounding content). Durations sit in
+ * the 9-20s range throughout — deliberately slow, "alive but calm",
+ * never anything that reads as bouncing, spinning, or shaking.
+ */
+
+.campus-animated-background {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.campus-animated-background-inner {
+  position: absolute;
+  inset: -5%;
+  transform: translate3d(var(--parallax-x, 0px), var(--parallax-y, 0px), 0);
+  transition: transform 400ms ease-out;
+  will-change: transform;
+}
+
+/* ---- Floating icons ---- */
+
+.campus-floating-icon {
+  position: absolute;
+  color: var(--theme-accent, #2563eb);
+  will-change: transform, opacity;
+  animation: campus-float var(--float-duration, 14s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+@keyframes campus-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: var(--icon-opacity, 0.1);
+  }
+  25% {
+    transform: translate3d(calc(var(--float-drift, 16px) * 0.4), calc(var(--float-drift, 16px) * -0.6), 0)
+      rotate(calc(var(--float-rotate, 3deg) * 0.5));
+    opacity: calc(var(--icon-opacity, 0.1) * 1.15);
+  }
+  50% {
+    transform: translate3d(calc(var(--float-drift, 16px) * -0.3), calc(var(--float-drift, 16px) * -1), 0)
+      rotate(var(--float-rotate, 3deg));
+    opacity: var(--icon-opacity, 0.1);
+  }
+  75% {
+    transform: translate3d(calc(var(--float-drift, 16px) * -0.6), calc(var(--float-drift, 16px) * -0.3), 0)
+      rotate(calc(var(--float-rotate, 3deg) * 0.3));
+    opacity: calc(var(--icon-opacity, 0.1) * 0.85);
+  }
+}
+
+/* ---- Particles ---- */
+
+.campus-particles-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.campus-particle {
+  position: absolute;
+  border-radius: 9999px;
+  background-color: var(--theme-accent, #2563eb);
+  filter: blur(0.5px);
+  will-change: transform, opacity;
+  animation: campus-particle-float var(--float-duration, 12s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+@keyframes campus-particle-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.12;
+  }
+  50% {
+    transform: translate3d(calc(var(--float-drift, 16px) * 0.5), calc(var(--float-drift, 16px) * -1), 0);
+    opacity: 0.4;
+  }
+}
+
+/* Respect prefers-reduced-motion: keep the decorative elements visible
+   (removing them entirely would strip the page's visual identity for
+   these users) but stop all motion. */
+.campus-bg-reduced-motion .campus-floating-icon,
+.campus-bg-reduced-motion .campus-particle {
+  animation: none !important;
+  opacity: var(--icon-opacity, 0.1);
+}
+
+/* ---- Signup celebration ---- */
+
+.campus-signup-celebration {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.campus-signup-glow {
+  position: absolute;
+  width: 60%;
+  max-width: 420px;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.25), transparent 70%);
+  animation: campus-glow-pulse 1.8s ease-out forwards;
+}
+
+.campus-signup-pulse {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border-radius: 9999px;
+  border: 2px solid rgba(37, 99, 235, 0.5);
+  animation: campus-ring-pulse 1.2s ease-out forwards;
+}
+
+.campus-confetti-piece {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  top: 50%;
+  left: 50%;
+  animation: campus-confetti-burst 1.4s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes campus-glow-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes campus-ring-pulse {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+
+@keyframes campus-confetti-burst {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(0deg) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--confetti-angle, 0deg)) translateY(calc(-1 * var(--confetti-distance, 60px)))
+      scale(0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campus-signup-glow,
+  .campus-signup-pulse,
+  .campus-confetti-piece {
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ==========================================================================
+   Auth pages background (Login / Signup) — AuthBackground.jsx
+   Always dark, glassmorphism-oriented, independent of the app's theme
+   system (see AuthBackground.jsx's docstring for why).
+   ========================================================================== */
+
+.campus-auth-background {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.campus-auth-gradient-base {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 0%, rgba(37, 99, 235, 0.16), transparent 60%),
+    radial-gradient(ellipse 70% 55% at 100% 100%, rgba(99, 102, 241, 0.14), transparent 60%),
+    linear-gradient(180deg, #05050a 0%, #0a0a14 50%, #05050a 100%);
+}
+
+.campus-auth-background-inner {
+  position: absolute;
+  inset: 0;
+}
+
+/* Icons/particles need their own tint in this always-dark context —
+   overrides the theme-accent color the general AnimatedBackground uses,
+   since these two pages intentionally stay a fixed blue/indigo
+   regardless of the app's selected theme pack. */
+.campus-auth-background .campus-floating-icon {
+  color: rgba(147, 197, 253, 0.9);
+}
+.campus-auth-background .campus-particle {
+  background-color: rgba(147, 197, 253, 0.9);
+}
+
+/* ---- Blurred gradient light blobs ---- */
+
+.campus-auth-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  will-change: transform, opacity;
+  animation: campus-blob-drift var(--blob-duration, 22s) ease-in-out infinite;
+}
+.campus-auth-blob-1 {
+  width: 340px;
+  height: 340px;
+  top: -8%;
+  left: -6%;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.55), transparent 70%);
+  --blob-duration: 24s;
+}
+.campus-auth-blob-2 {
+  width: 300px;
+  height: 300px;
+  bottom: -10%;
+  right: -8%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.5), transparent 70%);
+  --blob-duration: 28s;
+  animation-delay: -6s;
+}
+.campus-auth-blob-3 {
+  width: 220px;
+  height: 220px;
+  top: 40%;
+  left: 60%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.35), transparent 70%);
+  --blob-duration: 20s;
+  animation-delay: -3s;
+}
+
+@keyframes campus-blob-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translate3d(3%, -4%, 0) scale(1.08);
+    opacity: 0.6;
+  }
+}
+
+/* ---- Abstract connection lines ---- */
+
+.campus-auth-connections {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.campus-connection-line {
+  stroke: rgba(96, 130, 255, 0.35);
+  stroke-width: 0.15;
+  vector-effect: non-scaling-stroke;
+  animation: campus-line-breathe 9s ease-in-out infinite;
+  animation-delay: var(--line-delay, 0s);
+}
+@keyframes campus-line-breathe {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ---- Glassmorphism card ----
+   Optional utility class — apply to an EXISTING form wrapper to get the
+   glass treatment without any markup restructuring beyond adding this
+   one class name. Does not assume or require any particular form
+   structure inside it. */
+.campus-glass-card {
+  position: relative;
+  background: rgba(15, 15, 25, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 0 60px rgba(37, 99, 235, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campus-auth-blob,
+  .campus-connection-line {
+    animation-duration: 0.01ms !important;
+  }
+}
