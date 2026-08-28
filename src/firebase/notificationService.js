@@ -83,6 +83,22 @@ export async function createLikeNotification({ postOwnerUid, actorUid, actorName
   })
 }
 
+/**
+ * Fires when someone responds to a Lost & Found listing — clicking
+ * 'This Might Be Mine' on a found item, or 'I Found This' on a lost
+ * item. Same shape as createLikeNotification, targeting the
+ * listing's owner (ownerUid) rather than a post's.
+ */
+export async function createLostFoundClaimNotification({ ownerUid, actorUid, actorName, actorAvatar, itemId }) {
+  return createNotification(ownerUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    type: 'lostFoundClaim',
+    itemId
+  })
+}
+
 export async function createCommentNotification({
   postOwnerUid,
   actorUid,

@@ -17,7 +17,12 @@
  */
 
 :root {
-  /* ---- Core tokens (existing) ---- */
+  /* ---- Core tokens — restored to the original white/blue Campinity
+     default, per explicit instruction to remove the dark-only theme
+     from last turn and make this the one, permanent, canonical
+     palette. These are the exact values that drove this app's
+     rendering throughout this entire session prior to the dark-theme
+     pass — not a new design. ---- */
   --theme-background: #f7f8fc;
   --theme-surface: #ffffff;
   --theme-card: #ffffff;
@@ -34,13 +39,12 @@
 
   /* ---- Royal Indigo palette — brand-specific tokens, not part of the
      generic design-system set above. accentDeep/accentSecondary are
-     new this pass (the brief's "Deep Accent" and "Secondary Violet")
-     — used for gradient stops and pressed/emphasis states, not meant
+     used for gradient stops and pressed/emphasis states, not meant
      to be picked as a primary color anywhere on their own. ---- */
   --theme-accentDeep: #4a38d6;
   --theme-accentSecondary: #7b61ff;
 
-  /* ---- Extended design-system tokens (new this pass) ---- */
+  /* ---- Extended design-system tokens ---- */
   --theme-backgroundSecondary: #eef0fb;
   --theme-surfaceElevated: #ffffff;
   --theme-glass: rgba(91, 77, 255, 0.06);

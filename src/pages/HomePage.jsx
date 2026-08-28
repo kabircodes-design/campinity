@@ -65,17 +65,6 @@ export default function HomePage() {
   const [contentPreferences, setContentPreferences] = useState([])
 
   useEffect(() => {
-    const uid = auth.currentUser?.uid
-    if (!uid) return
-    getUserProfile(uid)
-      .then((p) => {
-        const types = p?.preferences?.contentTypes
-        if (Array.isArray(types) && types.length > 0) setContentPreferences(types)
-      })
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
     let cancelled = false
     const uid = auth.currentUser?.uid
 
@@ -83,7 +72,15 @@ export default function HomePage() {
       if (!uid) return
       try {
         const data = await getUserProfile(uid)
-        if (!cancelled) setProfile(data)
+        if (!cancelled) {
+          setProfile(data)
+          // Merged from a previously separate effect that called
+          // getUserProfile a second time just for this field — same
+          // fetch result now serves both, removing one duplicate
+          // Firestore read per Home mount.
+          const types = data?.preferences?.contentTypes
+          if (Array.isArray(types) && types.length > 0) setContentPreferences(types)
+        }
       } catch {
         // Greeting falls back to initials-only if this fails; the feed
         // below still loads on its own regardless.
@@ -377,7 +374,7 @@ export default function HomePage() {
             </button>
 
             <div className="flex items-center gap-1">
-              <div className="flex items-center gap-1 lg:gap-0.5 lg:p-1 lg:rounded-full lg:bg-white/40 lg:backdrop-blur-2xl lg:border lg:border-white/50 lg:shadow-[0_4px_16px_rgba(91,77,255,0.08),inset_1px_1px_0_rgba(255,255,255,0.5)]">
+              <div className="flex items-center gap-1 lg:gap-0.5 lg:p-1 lg:rounded-full lg:bg-white/40 lg:border lg:border-white/50 lg:shadow-[0_4px_16px_rgba(91,77,255,0.08),inset_1px_1px_0_rgba(255,255,255,0.5)]">
                 <button
                   type="button"
                   aria-label="Create post"
@@ -468,7 +465,7 @@ export default function HomePage() {
         {/* -------------------------------------------------------- */}
         {/* Feed tabs                                                 */}
         {/* -------------------------------------------------------- */}
-        <nav className="sticky top-14 z-30 mx-4 mt-3 mb-3 flex items-center gap-1 rounded-2xl bg-white/40 backdrop-blur-2xl border border-white/50 shadow-[0_4px_20px_rgba(91,77,255,0.08),inset_1px_1px_0_rgba(255,255,255,0.5)] p-1.5">
+        <nav className="sticky top-14 z-30 mx-4 mt-3 mb-3 flex items-center gap-1 rounded-2xl bg-white/40 backdrop-blur-md border border-white/50 shadow-[0_4px_20px_rgba(91,77,255,0.08),inset_1px_1px_0_rgba(255,255,255,0.5)] p-1.5">
           {feedTabs.map((tab) => {
             const isActive = activeTab === tab.key
             return (
