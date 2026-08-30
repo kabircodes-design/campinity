@@ -9,6 +9,7 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { computeExpiresAt, createPost, getAvatarColor, getInitials, uploadPostDocument, uploadPostImage } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
 import { moderateText } from '../moderation/profanityFilter.js'
+import { usePostingStatus } from '../context/PostingStatusContext.jsx'
 import { awardXP, getUserProgress } from '../gamification/xpService.js'
 import { checkAndAwardBadges } from '../gamification/badgeService.js'
 import { POINTS_REWARDS } from '../gamification/config.js'
@@ -34,20 +35,6 @@ const EXPIRATION_OPTIONS = [
 
 const MAX_LENGTH = 500
 
-/**
- * Post-To-Community assumption, stated plainly: createPost's `extra`
- * param already accepts arbitrary fields (category/isAnonymous were
- * already being passed through it before this change), so
- * communityId/communityName are added the same way rather than
- * changing createPost's signature. This assumes postService.js spreads
- * `extra` directly onto the created post document — I don't have that
- * file's real implementation to confirm it does. If it instead nests
- * `extra` under its own field, or only recognizes specific known keys,
- * communityId/communityName won't land on the post document as flat
- * fields, and every downstream query in this pass
- * (getCommunityFeedPosts, getCommunityMediaPosts) that filters posts
- * by a flat `communityId` field would return nothing.
- */
 function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -56,6 +43,7 @@ function formatFileSize(bytes) {
 
 export default function CreatePostPage() {
   const navigate = useNavigate()
+  const { startPosting, markSuccess, markError } = usePostingStatus()
   const imageInputRef = useRef(null)
   const pdfInputRef = useRef(null)
 
@@ -219,82 +207,134 @@ export default function CreatePostPage() {
     setError('')
     setIsPublishing(true)
 
-    try {
-      const moderationResult = moderateText(postText.trim())
-      // eslint-disable-next-line no-console
-      console.log('[ModerationDebug]', {
-        raw: postText.trim(),
-        sanitized: moderationResult.text,
-        wasModerated: moderationResult.wasModerated,
-        highestSeverity: moderationResult.highestSeverity,
-        flaggedForReview: moderationResult.flaggedForReview
-      })
+    // Moderation runs synchronously, before navigation — the brief is
+    // explicit that moderation must never be bypassed for speed. This
+    // is fast (pure JS, no network), so it doesn't meaningfully delay
+    // the "instant Home" feel; it just has to happen before the
+    // content is considered postable at all.
+    const moderationResult = moderateText(postText.trim())
+    // eslint-disable-next-line no-console
+    console.log('[ModerationDebug]', {
+      raw: postText.trim(),
+      sanitized: moderationResult.text,
+      wasModerated: moderationResult.wasModerated,
+      highestSeverity: moderationResult.highestSeverity,
+      flaggedForReview: moderationResult.flaggedForReview
+    })
 
+    // Snapshot everything handlePublish's background continuation
+    // needs — this component is about to unmount via navigate(),
+    // so nothing after this point can read component state/props
+    // again; it can only close over these already-captured values.
+    const publishData = {
+      uid,
+      text: moderationResult.text,
+      imageFile,
+      pdfFile,
+      isAnonymous,
+      displayName,
+      username,
+      avatar: profile?.avatar || '',
+      category,
+      expirationType,
+      noteSubject,
+      noteCollection,
+      noteChapter,
+      selectedCommunity: postTarget !== 'public' ? myCommunities.find((c) => c.id === postTarget) : null
+    }
+
+    startPosting(imageFile ? 'Posting your photo…' : 'Posting…')
+    navigate('/home')
+
+    // Everything below now runs in the background, after the user is
+    // already on Home. This function keeps running even though
+    // CreatePostPage has unmounted — it's a plain async function, not
+    // tied to component lifecycle, and only touches the global
+    // context's setters (markSuccess/markError) from here on, never
+    // this component's own setState.
+    try {
       let imageUrl = null
-      if (imageFile) {
-        imageUrl = await uploadPostImage(uid, imageFile)
+      if (publishData.imageFile) {
+        imageUrl = await uploadPostImage(publishData.uid, publishData.imageFile)
       }
 
       let fileData = null
-      if (pdfFile) {
-        const fileUrl = await uploadPostDocument(uid, pdfFile)
-        fileData = { name: pdfFile.name, size: formatFileSize(pdfFile.size), url: fileUrl, mimeType: 'application/pdf' }
+      if (publishData.pdfFile) {
+        const fileUrl = await uploadPostDocument(publishData.uid, publishData.pdfFile)
+        fileData = {
+          name: publishData.pdfFile.name,
+          size: formatFileSize(publishData.pdfFile.size),
+          url: fileUrl,
+          mimeType: 'application/pdf'
+        }
       }
 
-      const author = isAnonymous
+      const author = publishData.isAnonymous
         ? { displayName: 'Anonymous', username: 'anonymous', profilePhoto: '' }
-        : { displayName, username, profilePhoto: profile?.avatar || '' }
-
-      const selectedCommunity =
-        postTarget !== 'public' ? myCommunities.find((c) => c.id === postTarget) : null
+        : { displayName: publishData.displayName, username: publishData.username, profilePhoto: publishData.avatar }
 
       const newPostId = await createPost({
-        uid,
-        text: moderationResult.text,
+        uid: publishData.uid,
+        text: publishData.text,
         imageUrl,
         author,
         extra: {
-          category,
-          isAnonymous,
-          expirationType,
-          expiresAt: computeExpiresAt(expirationType),
-          ...(category === 'notes' && {
-            subject: noteSubject || 'unassigned',
-            collection: noteCollection || 'general',
-            ...(noteChapter.trim() && { chapter: noteChapter.trim() })
+          category: publishData.category,
+          isAnonymous: publishData.isAnonymous,
+          expirationType: publishData.expirationType,
+          expiresAt: computeExpiresAt(publishData.expirationType),
+          ...(publishData.category === 'notes' && {
+            subject: publishData.noteSubject || 'unassigned',
+            collection: publishData.noteCollection || 'general',
+            ...(publishData.noteChapter.trim() && { chapter: publishData.noteChapter.trim() })
           }),
           ...(fileData && { file: fileData }),
-          ...(selectedCommunity && {
-            communityId: selectedCommunity.id,
-            communityName: selectedCommunity.name
+          ...(publishData.selectedCommunity && {
+            communityId: publishData.selectedCommunity.id,
+            communityName: publishData.selectedCommunity.name
           })
         }
       })
 
-      // Gamification — deduped by the real, just-created post's own id.
-      // Honest scope: this protects against the SAME post id ever
-      // being awarded twice (e.g. if this award call itself were
-      // retried after a transient failure) — it does NOT prevent two
-      // genuinely separate posts from a true double-submit, since
-      // createPost always writes a fresh document with a fresh id
-      // regardless of dedup keys. The existing isPublishing guard
-      // above (and the Publish button's own disabled state) already
-      // prevents the common double-click case at the UI level before
-      // this code is ever reached a second time.
-      const postAward = await awardXP(uid, 'post_created', {
+      const postAward = await awardXP(publishData.uid, 'post_created', {
         campusPoints: POINTS_REWARDS.post_created || 0,
         dedupeKey: `post_created_${newPostId}`
       }).catch(() => null)
       if (postAward) {
-        const progress = await getUserProgress(uid).catch(() => null)
-        if (progress) await checkAndAwardBadges(uid, progress).catch(() => {})
+        const progress = await getUserProgress(publishData.uid).catch(() => null)
+        if (progress) await checkAndAwardBadges(publishData.uid, progress).catch(() => {})
       }
 
-      navigate('/home')
+      // Real post object for optimistic feed insertion — matches the
+      // real shape createPost/getFeedPosts produce (id + the fields
+      // PostCard actually reads), not a fabricated placeholder. Home
+      // is responsible for deduplicating this against whatever its
+      // own Firestore-backed load eventually returns for the same id.
+      markSuccess(
+        {
+          id: newPostId,
+          text: publishData.text,
+          imageUrl,
+          userId: publishData.uid,
+          name: author.displayName,
+          username: author.username,
+          avatarUrl: author.profilePhoto,
+          type: publishData.category,
+          time: 'now',
+          likes: 0,
+          likedByMe: false,
+          comments: 0,
+          feedCategories: ['forYou', 'campus'],
+          ...(fileData && { file: fileData }),
+          ...(publishData.selectedCommunity && {
+            communityId: publishData.selectedCommunity.id,
+            communityName: publishData.selectedCommunity.name
+          })
+        },
+        'Posted'
+      )
     } catch (err) {
-      setError(err?.message || 'Could not publish your post. Please try again.')
-    } finally {
-      setIsPublishing(false)
+      markError(err?.message || "Couldn't post. Try again.")
     }
   }
 
@@ -316,7 +356,7 @@ export default function CreatePostPage() {
               type="button"
               onClick={handlePublish}
               disabled={!isValid || isPublishing}
-              className="rounded-full bg-blue-600 text-white text-sm font-semibold px-4 py-2 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
+              className="rounded-full bg-blue-600 text-white text-sm font-semibold px-4 py-2 hover:bg-blue-700 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
             >
               {isPublishing ? 'Publishing…' : 'Publish'}
             </button>
@@ -592,7 +632,7 @@ export default function CreatePostPage() {
               type="button"
               onClick={handlePublish}
               disabled={!isValid || isPublishing}
-              className="flex-1 rounded-full bg-blue-600 text-white text-sm font-semibold py-3 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
+              className="flex-1 rounded-full bg-blue-600 text-white text-sm font-semibold py-3 hover:bg-blue-700 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
             >
               {isPublishing ? 'Publishing…' : 'Publish'}
             </button>

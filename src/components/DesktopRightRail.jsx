@@ -9,23 +9,6 @@ import { useMyVerification } from '../access/useMyVerification.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
 
-/**
- * Desktop-only contextual rail (hidden below lg). Deliberately does
- * NOT include a "trending topics" widget — this app has no real
- * hashtag/trend system to source that from, and fabricating one would
- * violate the explicit "do not create fake data" instruction.
- *
- * Campus Pulse metrics and Last Minute — relocated here from the top
- * of Home per the explicit instruction to remove the dashboard feel
- * from the main feed's first viewport. Reuses the exact same
- * CampusPulse.jsx and LastMinutePreview.jsx components as-is (not
- * duplicated logic) — same real data, same zero-new-query guarantee,
- * just rendered here instead of above Stories. Both are mobile-only
- * on Home now removed entirely from mobile's top flow — this rail is
- * desktop-only, so mobile users lose this particular presentation
- * this pass rather than force it into a first-viewport space the
- * brief explicitly wants kept clean.
- */
 export default function DesktopRightRail({ communities = [], posts = [], notesCount = null, notesForPreview = [], onViewNotes }) {
   const navigate = useNavigate()
   const verified = useMyVerification()
@@ -39,7 +22,7 @@ export default function DesktopRightRail({ communities = [], posts = [], notesCo
       <LastMinutePreview notes={notesForPreview} onViewAll={onViewNotes} />
 
       {topCommunities.length > 0 ? (
-        <div className="rounded-2xl border border-white/50 bg-white/50 backdrop-blur-lg shadow-[0_4px_16px_rgba(91,77,255,0.06),inset_1px_1px_0_rgba(255,255,255,0.5)] p-4">
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
           <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-3">
             <Users className="w-4 h-4 text-blue-500" /> Popular Communities
           </p>
@@ -49,7 +32,7 @@ export default function DesktopRightRail({ communities = [], posts = [], notesCo
                 key={community.id}
                 type="button"
                 onClick={() => navigate(`/community/${community.id}`)}
-                className="w-full flex items-center gap-2.5 text-left group rounded-xl px-2 py-1.5 -mx-2 bg-white/0 hover:bg-white/50 transition-all duration-200"
+                className="w-full flex items-center gap-2.5 text-left group rounded-xl px-2 py-1.5 -mx-2 hover:bg-gray-50 transition-all duration-200"
               >
                 <span className="text-[11px] font-bold text-gray-300 w-3 flex-shrink-0">{i + 1}</span>
                 <Avatar
@@ -82,8 +65,7 @@ export default function DesktopRightRail({ communities = [], posts = [], notesCo
         </div>
       )}
 
-      <div className="rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-4 text-white relative overflow-hidden">
-        <div className="absolute -bottom-8 -right-8 w-28 h-28 rounded-full bg-white/10 blur-xl pointer-events-none" />
+      <div className="rounded-2xl p-4 text-white relative overflow-hidden" style={{ backgroundColor: '#1677ff' }}>
         <p className="relative flex items-center gap-1.5 text-sm font-bold">
           <Sparkles className="w-4 h-4" /> Build your community
         </p>

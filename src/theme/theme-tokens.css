@@ -29,7 +29,7 @@
   --theme-border: #eef1f6;
   --theme-textPrimary: #10131a;
   --theme-textSecondary: #4a5568;
-  --theme-accent: #5b4dff;
+  --theme-accent: #1677ff;
   --theme-accentText: #ffffff;
   --theme-danger: #ef4444;
   --theme-success: #10b981;
@@ -41,8 +41,8 @@
      generic design-system set above. accentDeep/accentSecondary are
      used for gradient stops and pressed/emphasis states, not meant
      to be picked as a primary color anywhere on their own. ---- */
-  --theme-accentDeep: #4a38d6;
-  --theme-accentSecondary: #7b61ff;
+  --theme-accentDeep: #0e5fd6;
+  --theme-accentSecondary: #3b9bff;
 
   /* ---- Extended design-system tokens ---- */
   --theme-backgroundSecondary: #eef0fb;
@@ -54,7 +54,7 @@
   --theme-divider: #e5e9f0;
   --theme-muted: #8891a0;
   --theme-warning: #d97706;
-  --theme-gradientPrimary: linear-gradient(135deg, #5b4dff, #7b61ff);
+  --theme-gradientPrimary: linear-gradient(135deg, #1677ff, #3b9bff);
   --theme-gradientSecondary: linear-gradient(135deg, #eeecff, #dfe0fc);
   --theme-shadowSoft: 0 8px 24px rgba(15, 23, 42, 0.06);
   --theme-shadowStrong: 0 20px 48px rgba(74, 56, 214, 0.12);
@@ -81,9 +81,9 @@ html.dark {
   --theme-textPrimary: #f4f6fb;
   --theme-textSecondary: #d8dce6;
 
-  --theme-accent: #5b4dff;
-  --theme-accentDeep: #4a38d6;
-  --theme-accentSecondary: #7b61ff;
+  --theme-accent: #1677ff;
+  --theme-accentDeep: #0e5fd6;
+  --theme-accentSecondary: #3b9bff;
 
   --theme-backgroundSecondary: #0d0e15;
   --theme-surfaceElevated: #15171f;
@@ -94,7 +94,7 @@ html.dark {
   --theme-divider: rgba(255, 255, 255, 0.08);
   --theme-muted: #7c8494;
   --theme-warning: #f59e0b;
-  --theme-gradientPrimary: linear-gradient(135deg, #5b4dff, #7b61ff);
+  --theme-gradientPrimary: linear-gradient(135deg, #1677ff, #3b9bff);
   --theme-gradientSecondary: linear-gradient(135deg, #0d0e15, #171526);
   --theme-shadowSoft: 0 8px 24px rgba(0, 0, 0, 0.4);
   --theme-shadowStrong: 0 24px 56px rgba(0, 0, 0, 0.55);
@@ -126,13 +126,6 @@ html.dark .bg-white\/85 { background-color: color-mix(in srgb, var(--theme-surfa
 html.dark .bg-white\/90 { background-color: color-mix(in srgb, var(--theme-surface) 90%, transparent); }
 html.dark .bg-white\/95 { background-color: color-mix(in srgb, var(--theme-surface) 95%, transparent); }
 
-/* Same fix, extended to theme packs — ThemeProvider.jsx (confirmed by
-   reading it directly) sets data-theme-pack on <html> for every
-   active pack, applying that pack's --theme-* tokens as inline
-   styles. Without this, a fully-correct theme pack would still leave
-   every bg-white/N glass surface literally white, since that
-   Tailwind class only matches its own literal selector — never the
-   semantic token. Confirmed gap in the previous pass. */
 [data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/0 { background-color: transparent; }
 [data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/10 { background-color: color-mix(in srgb, var(--theme-surface) 10%, transparent); }
 [data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/30 { background-color: color-mix(in srgb, var(--theme-surface) 30%, transparent); }
@@ -151,14 +144,6 @@ html.dark .bg-white\/95 { background-color: color-mix(in srgb, var(--theme-surfa
 [data-theme-pack]:not([data-theme-pack="default"]) .bg-white\/95 { background-color: color-mix(in srgb, var(--theme-surface) 95%, transparent); }
 [data-theme-pack]:not([data-theme-pack="default"]) [class*="border-white/"] { border-color: color-mix(in srgb, var(--theme-border) 60%, transparent); }
 
-/* Same root cause, same fix, for the border-white/N and text-gray-900
-   etc. used alongside those glass surfaces — a near-invisible white
-   border on a dark surface, and (separately) any remaining literal
-   white/N text classes, both fail exactly the same way bg-white/N
-   did. border-white/N is overridden broadly since a translucent
-   light border is still the correct "soft luminous edge" the brief
-   asks for in dark mode (Section 8) — just needs to be visible
-   against a dark surface rather than invisible against a light one. */
 html.dark [class*="border-white/"] { border-color: rgba(255, 255, 255, 0.14); }
 html.dark [class*="hover\:bg-white/"]:hover { filter: brightness(1.15); }
 
@@ -193,15 +178,6 @@ html:not(.dark) body {
 .theme-bg-danger-tint { background-color: color-mix(in srgb, var(--theme-danger) 12%, var(--theme-surface)); }
 .theme-gradient-primary { background: var(--theme-gradientPrimary); }
 .theme-gradient-secondary { background: var(--theme-gradientSecondary); }
-/*
- * .theme-shadow-soft — the canonical "premium card surface" utility.
- * Every card across the landing page (PrivacySection, CampusVerified,
- * EventsShowcase) applies this class directly in its own JSX; this is
- * its complete definition, not a page-scoped override, so it applies
- * identically everywhere it's used with no `.chp-landing` prefix and
- * no `!important` needed. Glass surface + hover lift + light-sweep,
- * matching Hero's own glass treatment.
- */
 .theme-shadow-soft {
   box-shadow: var(--theme-shadowSoft);
   backdrop-filter: blur(16px) saturate(130%);
@@ -231,13 +207,6 @@ html:not(.dark) body {
   background-position: 40% 40%;
 }
 
-/*
- * .theme-section-glow — canonical ambient depth for banded sections,
- * matching Hero's own background language at low enough opacity to
- * read as atmosphere, not a second Hero. Applied directly in
- * JourneyTimeline.jsx and EventsShowcase.jsx's own className, not via
- * a blind selector targeting their other classes.
- */
 .theme-section-glow {
   position: relative;
   overflow: hidden;
@@ -280,12 +249,6 @@ html:not(.dark) body {
   outline: none;
   box-shadow: var(--theme-focusRing);
 }
-
-/* ==========================================================================
-   Global mappings — the app's EXISTING Tailwind classes, redefined to
-   resolve to the theme tokens above. No component file needs to
-   change for these to take effect.
-   ========================================================================== */
 
 .bg-white,
 .bg-gray-50 { background-color: var(--theme-surface); }
@@ -366,10 +329,6 @@ textarea.bg-gray-50::placeholder { color: var(--theme-textSecondary); }
   }
 }
 
-/* ==========================================================================
-   Brand assets + theme toggle
-   ========================================================================== */
-
 .chp-wordmark-asset {
   display: block;
   height: 22px;
@@ -426,23 +385,7 @@ textarea.bg-gray-50::placeholder { color: var(--theme-textSecondary); }
   }
 }
 
-/* ============================================================
-   CAMPINITY DESIGN SYSTEM — PHASE 1 (LOCKED)
-   ============================================================
-   The formal, namespaced token layer. Aliases the existing
-   --theme-* values as the single source of truth (same purple,
-   same text colors — not a second competing palette) and adds
-   the structure that didn't exist yet: a real 4-level glass
-   system, a locked radius scale, a documented spacing rhythm, a
-   shadow scale, and standardized transition timing. Additive
-   only — nothing renamed or removed, every existing .theme-*
-   class and every page already consuming --theme-* keeps
-   working unchanged.
-   ============================================================ */
-
 :root {
-  /* ---- Color — aliases of the existing brand tokens above,
-     given the formal Campinity naming the design system uses ---- */
   --campinity-primary: var(--theme-accent);
   --campinity-primary-soft: color-mix(in srgb, var(--theme-accent) 14%, var(--theme-surface));
   --campinity-primary-strong: var(--theme-accentDeep);
@@ -457,26 +400,16 @@ textarea.bg-gray-50::placeholder { color: var(--theme-textSecondary); }
   --campinity-bg: var(--theme-background);
   --campinity-bg-soft: var(--theme-backgroundSecondary);
 
-  /* ---- Radius scale — locked. Every rounded surface should map
-     to one of these five, not an arbitrary pixel value. ---- */
-  --campinity-radius-sm: 8px;   /* chips, micro controls */
-  --campinity-radius-md: 12px;  /* inputs, small cards */
-  --campinity-radius-lg: 16px;  /* post cards, community cards */
-  --campinity-radius-xl: 24px;  /* hero, major panels */
-  --campinity-radius-pill: 9999px; /* buttons, badges */
+  --campinity-radius-sm: 8px;
+  --campinity-radius-md: 12px;
+  --campinity-radius-lg: 16px;
+  --campinity-radius-xl: 24px;
+  --campinity-radius-pill: 9999px;
 
-  /* ---- Spacing rhythm — documented here as the canonical scale
-     (8/12/16/24/32/40/48), consumed via Tailwind's own spacing
-     utilities (p-2/p-3/p-4/p-6/p-8/p-10/p-12 map to this exact
-     rhythm already) rather than duplicated as separate CSS
-     variables — one spacing system, not two. ---- */
-
-  /* ---- Shadow scale ---- */
   --campinity-shadow-soft: 0 4px 16px rgba(91, 77, 255, 0.06);
   --campinity-shadow-medium: 0 8px 28px rgba(91, 77, 255, 0.10);
   --campinity-shadow-floating: 0 12px 40px rgba(91, 77, 255, 0.14);
 
-  /* ---- Motion — standardized micro-interaction timing ---- */
   --campinity-transition-fast: 120ms ease;
   --campinity-transition-base: 180ms ease;
   --campinity-transition-slow: 200ms ease;
@@ -488,10 +421,6 @@ html.dark {
   --campinity-shadow-medium: 0 8px 28px rgba(0, 0, 0, 0.45);
   --campinity-shadow-floating: 0 12px 40px rgba(0, 0, 0, 0.55);
 }
-
-/* ---- GLASS SYSTEM — the four official levels. Each defines its
-   own opacity/blur/border/shadow combination; components pick the
-   level by purpose, not by inventing new values per component. ---- */
 
 .glass-soft {
   background-color: rgba(255, 255, 255, 0.35);
@@ -524,19 +453,12 @@ html.dark {
   color: var(--theme-accentText);
 }
 
-/* ---- Radius utilities mapped to the locked scale, for use
-   alongside Tailwind's arbitrary-value classes where a component
-   needs the exact Campinity radius rather than Tailwind's own
-   rounded-2xl/rounded-3xl approximations. ---- */
 .radius-sm { border-radius: var(--campinity-radius-sm); }
 .radius-md { border-radius: var(--campinity-radius-md); }
 .radius-lg { border-radius: var(--campinity-radius-lg); }
 .radius-xl { border-radius: var(--campinity-radius-xl); }
 .radius-pill { border-radius: var(--campinity-radius-pill); }
 
-/* ---- Standardized transition utility — the ~120-200ms range,
-   not a dramatic spring/bounce, per the explicit micro-interaction
-   requirement. ---- */
 .transition-campinity {
   transition-property: background-color, border-color, color, box-shadow, transform, opacity;
   transition-duration: 180ms;
@@ -548,16 +470,6 @@ html.dark {
     transition: none !important;
   }
 }
-
-/* ==========================================================================
-   Living ambient background — slow, GPU-friendly drift for large soft
-   glow layers sitting behind glass surfaces. Pure CSS transform
-   (translate + scale), never affects layout (pointer-events: none,
-   absolute positioning, no dimension changes). Three different
-   durations/directions so the motion doesn't read as one obvious loop.
-   Reusable primitive — consumed by HomePage.jsx's three glow div
-   layers, not duplicated CSS per page.
-   ========================================================================== */
 
 .ambient-glow-layer {
   position: fixed;

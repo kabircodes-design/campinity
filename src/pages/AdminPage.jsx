@@ -1,23 +1,54 @@
-import { ShieldCheck } from 'lucide-react'
+import { useState } from 'react'
+import { AdminSessionProvider, useAdminSession } from '../admin/hooks/useAdminSession.jsx'
+import AdminLockScreen from '../admin/components/AdminLockScreen.jsx'
+import AdminSidebar from '../admin/components/AdminSidebar.jsx'
+import AdminOverviewPage from '../admin/pages/AdminOverviewPage.jsx'
+import AdminReportsPage from '../admin/pages/AdminReportsPage.jsx'
+import AdminComingSoon from '../admin/components/AdminComingSoon.jsx'
+
+const SECTION_TITLES = {
+  'photo-verification': 'Photo Verification',
+  'college-requests': 'College Requests',
+  'user-verification': 'User Verification',
+  moderation: 'Moderation',
+  'lost-found': 'Lost & Found',
+  marketplace: 'Marketplace',
+  notifications: 'Notifications',
+  'audit-log': 'Audit Log'
+}
+
+function AdminDashboard() {
+  const [activeSection, setActiveSection] = useState('overview')
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] flex">
+      <AdminSidebar activeSection={activeSection} onSelectSection={setActiveSection} />
+      <main className="flex-1 min-w-0 px-6 py-6 lg:px-10 lg:py-8 max-w-[900px]">
+        {activeSection === 'overview' && <AdminOverviewPage />}
+        {activeSection === 'reports' && <AdminReportsPage />}
+        {SECTION_TITLES[activeSection] && <AdminComingSoon title={SECTION_TITLES[activeSection]} />}
+      </main>
+    </div>
+  )
+}
+
+function AdminGate() {
+  const { isLoggedIn } = useAdminSession()
+  return isLoggedIn ? <AdminDashboard /> : <AdminLockScreen />
+}
 
 /**
- * Placeholder only — role gating (role === 'admin') is already enforced by
- * ProtectedRoute(stage="admin") before this component ever renders, so no
- * auth logic lives here. Real admin tooling (verification review, role
- * management, moderation) is future work per the spec.
+ * Entry point for /admin. Reachable by ANY authenticated Campinity
+ * user now — App.jsx's route uses stage="home", not stage="admin",
+ * per the explicit architectural pivot away from platformAdmins as a
+ * prerequisite. This component's password gate (AdminLockScreen) is
+ * the actual boundary from here on, backed by the server-verified
+ * session token every privileged admin action independently checks.
  */
 export default function AdminPage() {
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center px-6">
-      <div className="max-w-sm text-center">
-        <div className="w-12 h-12 rounded-2xl bg-accent-tint flex items-center justify-center mx-auto text-accent">
-          <ShieldCheck className="w-6 h-6" strokeWidth={1.7} />
-        </div>
-        <h1 className="mt-4 font-display font-bold text-xl text-ink">Admin console</h1>
-        <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-          Structure is in place — verification review, role management and moderation tools land here next.
-        </p>
-      </div>
-    </div>
+    <AdminSessionProvider>
+      <AdminGate />
+    </AdminSessionProvider>
   )
 }

@@ -224,7 +224,7 @@ export default function App() {
         <Route
           path="/college-requests"
           element={
-            <ProtectedRoute stage="home">
+            <ProtectedRoute stage="admin">
               <CollegeRequestsAdminPage />
             </ProtectedRoute>
           }
@@ -240,7 +240,7 @@ export default function App() {
         <Route
           path="/verification-requests"
           element={
-            <ProtectedRoute stage="home">
+            <ProtectedRoute stage="admin">
               <VerificationRequestsAdminPage />
             </ProtectedRoute>
           }
@@ -248,7 +248,7 @@ export default function App() {
         <Route
           path="/moderation"
           element={
-            <ProtectedRoute stage="home">
+            <ProtectedRoute stage="admin">
               <ModerationDashboardPage />
             </ProtectedRoute>
           }
@@ -497,7 +497,7 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute stage="admin">
+            <ProtectedRoute stage="home">
               <AdminPage />
             </ProtectedRoute>
           }

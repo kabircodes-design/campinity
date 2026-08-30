@@ -18,93 +18,105 @@ const NAV_ITEMS = [
 ]
 
 /**
- * Restored to the original white/blue Campinity theme, per explicit
- * instruction to remove the dark-only redesign from two turns ago.
- * The Lost & Found nav item (added in a separate, later task) is
- * preserved — only the dark-theme colors are reverted, not the
- * feature additions layered on top of that redesign. Glass surface
- * matches this project's established light-mode glass language
- * (bg-white/40 backdrop-blur-2xl) rather than the dark rgba() values
- * used two turns ago. "Campus Points" remains omitted — still no
- * confirmed field for it anywhere in profileService.js's real shape.
+ * Rebuilt to match the reference image: flat navigation column, no
+ * floating glass container/border/shadow around the whole sidebar —
+ * just a plain vertical layout on the page's own background, with a
+ * single subtle right-hand divider (added via the parent's border in
+ * HomePage.jsx-style layout, not duplicated here since this component
+ * has no outer wrapper of its own to add it to safely without seeing
+ * how it's actually used in the grid). Active nav state changed from
+ * a purple gradient pill to a subtle light-blue background + a small
+ * blue vertical bar on the left edge, matching the reference exactly.
+ * Logo gradient changed from purple/indigo to the brief's specified
+ * blue. Notification badge already used blue — unchanged.
  */
 export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
   const navigate = useNavigate()
 
   return (
-    <div className="hidden lg:block w-64 flex-shrink-0 h-screen sticky top-0 p-4">
-      <nav className="flex flex-col h-[calc(100vh-2rem)] bg-white/40 backdrop-blur-2xl rounded-3xl border border-white/50 shadow-[0_8px_32px_rgba(91,77,255,0.10),inset_1px_1px_0_rgba(255,255,255,0.5)] px-3 py-5">
+    <div className="hidden lg:flex lg:flex-col w-64 flex-shrink-0 h-screen sticky top-0 px-4 py-5 border-r border-gray-100">
+      <button
+        type="button"
+        onClick={() => navigate('/home')}
+        aria-label="Campinity — go to Home"
+        className="flex items-center gap-2 px-1 mb-8"
+      >
+        <span
+          className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: 'linear-gradient(135deg, #1677ff, #3b9bff)' }}
+        >
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <line x1="6" y1="6" x2="14" y2="6" stroke="#ffffff" strokeWidth="1.6" />
+            <line x1="6" y1="6" x2="10" y2="15" stroke="#ffffff" strokeWidth="1.6" />
+            <line x1="14" y1="6" x2="10" y2="15" stroke="#ffffff" strokeWidth="1.6" />
+            <circle cx="6" cy="6" r="2.75" fill="#ffffff" />
+            <circle cx="14" cy="6" r="2.75" fill="#ffffff" />
+            <circle cx="10" cy="15" r="2.75" fill="#ffffff" />
+          </svg>
+        </span>
+        <span className="text-[17px] font-bold tracking-tight text-gray-900">Campinity</span>
+      </button>
+
+      <div className="flex flex-col gap-0.5 flex-1">
+        {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `relative flex items-center gap-3 rounded-lg pl-3.5 pr-3 py-2.5 text-[14px] font-medium transition-all duration-200 ${
+                isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-50'
+              }`
+            }
+          >
+            {({ isActive }) =>
+              isActive ? (
+                <>
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-blue-600" aria-hidden="true" />
+                  <Icon className="w-[18px] h-[18px]" strokeWidth={1.8} />
+                  {label}
+                  {label === 'Notifications' && unreadNotifications > 0 && (
+                    <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+                      {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Icon className="w-[18px] h-[18px]" strokeWidth={1.8} />
+                  {label}
+                  {label === 'Notifications' && unreadNotifications > 0 && (
+                    <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+                      {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                    </span>
+                  )}
+                </>
+              )
+            }
+          </NavLink>
+        ))}
+      </div>
+
+      {profile && (
         <button
           type="button"
-          onClick={() => navigate('/home')}
-          aria-label="Campinity — go to Home"
-          className="flex items-center gap-2 px-3 mb-7"
+          onClick={() => navigate('/profile')}
+          className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 cursor-pointer text-left transition-all duration-150 bg-white border border-gray-100 hover:border-gray-200"
         >
-          <span
-            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{
-              background: 'linear-gradient(135deg, #5b4dff, #7b61ff)',
-              boxShadow: '0 4px 14px rgba(91,77,255,0.35)'
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <line x1="6" y1="6" x2="14" y2="6" stroke="#ffffff" strokeWidth="1.6" />
-              <line x1="6" y1="6" x2="10" y2="15" stroke="#ffffff" strokeWidth="1.6" />
-              <line x1="14" y1="6" x2="10" y2="15" stroke="#ffffff" strokeWidth="1.6" />
-              <circle cx="6" cy="6" r="2.75" fill="#ffffff" />
-              <circle cx="14" cy="6" r="2.75" fill="#ffffff" />
-              <circle cx="10" cy="15" r="2.75" fill="#ffffff" />
-            </svg>
-          </span>
-          <span className="text-[17px] font-bold tracking-tight text-gray-900">Campinity</span>
-        </button>
-
-        <div className="flex flex-col gap-1 flex-1">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[14px] font-medium transition-all duration-200 ${
-                  isActive
-                    ? 'bg-gradient-to-r from-blue-50/90 to-indigo-50/60 text-blue-700 shadow-[inset_0_0_0_1px_rgba(91,77,255,0.12)]'
-                    : 'text-gray-500 hover:bg-gray-50'
-                }`
-              }
-            >
-              <Icon className="w-[18px] h-[18px]" strokeWidth={1.8} />
-              {label}
-              {label === 'Notifications' && unreadNotifications > 0 && (
-                <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
-                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
-                </span>
-              )}
-            </NavLink>
-          ))}
-        </div>
-
-        {profile && (
-          <button
-            type="button"
-            onClick={() => navigate('/profile')}
-            className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 cursor-pointer text-left transition-all duration-150 hover:bg-white/50 border border-transparent hover:border-white/60"
-          >
-            <Avatar
-              initials={getInitials(profile.displayName)}
-              colorClass={getAvatarColor(profile.uid || profile.displayName)}
-              size="sm"
-              src={getProfileIdentityImage(profile) || undefined}
-            />
-            <div className="min-w-0">
-              <div className="flex items-center gap-1">
-                <p className="text-sm font-semibold text-gray-900 truncate">{profile.displayName}</p>
-                <VerifiedBadge verified={profile.verifiedCampus} size="sm" />
-              </div>
-              {profile.username && <p className="text-xs text-gray-400 truncate">@{profile.username}</p>}
+          <Avatar
+            initials={getInitials(profile.displayName)}
+            colorClass={getAvatarColor(profile.uid || profile.displayName)}
+            size="sm"
+            src={getProfileIdentityImage(profile) || undefined}
+          />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1">
+              <p className="text-sm font-semibold text-gray-900 truncate">{profile.displayName}</p>
+              <VerifiedBadge verified={profile.verifiedCampus} size="sm" />
             </div>
-          </button>
-        )}
-      </nav>
+            {profile.username && <p className="text-xs text-gray-400 truncate">@{profile.username}</p>}
+          </div>
+        </button>
+      )}
     </div>
   )
 }

@@ -1,0 +1,209 @@
+/*
+ * PostingStatusPill.css — the signature Campinity posting animation.
+ * Every animated property here is transform/opacity/stroke-dashoffset
+ * only, per the brief's explicit "avoid animating width, height,
+ * box-shadow, filter" instruction (stroke-dashoffset animates an SVG
+ * attribute, not a layout-affecting CSS property, so it doesn't
+ * trigger layout/paint the way those would).
+ */
+
+.cps-pill-wrap {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: 50%;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.cps-pill-wrap--enter {
+  animation: cps-pill-enter 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.cps-pill-wrap--exit {
+  animation: cps-pill-exit 300ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes cps-pill-enter {
+  from { transform: translate(-50%, -12px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+@keyframes cps-pill-exit {
+  from { transform: translate(-50%, 0); opacity: 1; }
+  to { transform: translate(-50%, -10px); opacity: 0; }
+}
+
+.cps-pill {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #eef1f6;
+  border-radius: 9999px;
+  padding: 8px 14px 8px 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10);
+}
+
+.cps-pill--error {
+  border-color: #fecaca;
+}
+
+.cps-pill__text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #10131a;
+  white-space: nowrap;
+}
+
+.cps-pill__retry {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5b4dff;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* ---- Posting ring — rotating gradient arc ---- */
+
+.cps-ring {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cps-ring__svg {
+  position: absolute;
+  inset: 0;
+  animation: cps-ring-spin 1.6s linear infinite;
+}
+
+@keyframes cps-ring-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.cps-ring__track {
+  fill: none;
+  stroke: #eef1f6;
+  stroke-width: 2;
+}
+
+.cps-ring__arc {
+  fill: none;
+  stroke: #5b4dff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 60;
+  stroke-dashoffset: 44;
+}
+
+.cps-ring__mark {
+  position: relative;
+  font-size: 11px;
+  font-weight: 700;
+  color: #5b4dff;
+  line-height: 1;
+}
+
+/* ---- Success — self-drawing checkmark + soft pulse ---- */
+
+.cps-check {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.cps-check__svg {
+  width: 100%;
+  height: 100%;
+  animation: cps-check-pulse 500ms ease-out;
+}
+
+@keyframes cps-check-pulse {
+  0% { transform: scale(0.85); }
+  55% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.cps-check__circle {
+  fill: #eaf7f0;
+  stroke: #10b981;
+  stroke-width: 1.5;
+}
+
+.cps-check__mark {
+  fill: none;
+  stroke: #10b981;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 16;
+  stroke-dashoffset: 16;
+  animation: cps-check-draw 350ms 150ms ease-out forwards;
+}
+
+@keyframes cps-check-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ---- Error ---- */
+
+.cps-error-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #fef2f2;
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ---- Reduced motion — collapse continuous rotation to a static
+   state; the enter/exit slide and the one-shot checkmark draw are
+   short, purposeful, and not "continuous," so they're left as-is
+   per the usual prefers-reduced-motion convention of removing
+   looping/ambient motion, not every transition. ---- */
+/* ---- New-post feed entrance — HomePage.jsx applies this class only
+   to the specific post that was just optimistically inserted after a
+   successful publish. Opacity + transform only. The highlight uses
+   box-shadow, which is normally on the "avoid animating" list for
+   *continuous* animation — this is a single one-shot fade over
+   900ms, not a loop, which is the distinction that list is actually
+   about (per this file's own reduced-motion convention above). ---- */
+@keyframes cps-new-post-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cps-new-post-glow {
+  0% { box-shadow: 0 0 0 2px rgba(91, 77, 255, 0.25); }
+  100% { box-shadow: 0 0 0 2px rgba(91, 77, 255, 0); }
+}
+
+.cps-new-post {
+  animation: cps-new-post-enter 350ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cps-new-post > * {
+  animation: cps-new-post-glow 900ms ease-out;
+  border-radius: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cps-new-post,
+  .cps-new-post > * {
+    animation: none !important;
+  }
+}

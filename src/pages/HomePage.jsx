@@ -22,9 +22,9 @@ import { useForYouFeed } from '../hooks/useForYouFeed.js'
 import { useCampusVerificationReminder } from '../hooks/useCampusVerificationReminder.js'
 import CampusVerificationModal from '../components/CampusVerificationModal.jsx'
 import CampusVerificationBanner from '../components/CampusVerificationBanner.jsx'
+import PostingStatusPill from '../components/PostingStatusPill.jsx'
+import { usePostingStatus } from '../context/PostingStatusContext.jsx'
 
-// Tab labels only — no student/user data, so this stays local instead of
-// importing from dummyFeed.js.
 const feedTabs = [
   { label: 'For You', key: 'forYou' },
   { label: 'Following', key: 'following' },
@@ -32,25 +32,6 @@ const feedTabs = [
   { label: 'Notes', key: 'notes' }
 ]
 
-/**
- * Presentation-only pass (OS-inspired depth: solid surfaces + soft
- * shadows, not glass, per the brief). Every hook, every Firebase call,
- * every prop passed to PostCard/StoryBubble/BottomNav/Avatar is
- * byte-identical to before — only spacing, elevation, borders, and
- * transitions on markup that lives directly in THIS file changed.
- *
- * Not touched, because they're separate files I don't have:
- * PostCard.jsx (the actual feed cards), StoryBubble.jsx, BottomNav.jsx,
- * Avatar.jsx. Their "premium card/nav" treatment from the brief still
- * needs those files pasted in before it can be done for real.
- *
- * bg-white/bg-gray-50/border-gray-100/text-gray-900 etc. here already
- * run through the app's global theme-tokens.css remap (that file is
- * imported once in main.jsx, not scoped to the landing page), so this
- * screen was already theme-reactive before this pass — the classes
- * below are unchanged in that respect, only depth/spacing/motion
- * layered on top.
- */
 export default function HomePage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(feedTabs[0].key)
@@ -74,10 +55,6 @@ export default function HomePage() {
         const data = await getUserProfile(uid)
         if (!cancelled) {
           setProfile(data)
-          // Merged from a previously separate effect that called
-          // getUserProfile a second time just for this field — same
-          // fetch result now serves both, removing one duplicate
-          // Firestore read per Home mount.
           const types = data?.preferences?.contentTypes
           if (Array.isArray(types) && types.length > 0) setContentPreferences(types)
         }
@@ -115,12 +92,6 @@ export default function HomePage() {
     }
   }, [])
 
-  // Real-time notification badge — separate from the one-time
-  // profile/feed load above, and intentionally not blocking that
-  // load's `setLoading(false)` (the badge count arriving a moment
-  // later than the feed shouldn't hold up the whole page rendering).
-  // Lives for the component's full lifetime, updating live as
-  // notifications are created/read elsewhere, not just once on mount.
   useEffect(() => {
     const uid = auth.currentUser?.uid
     const unsubscribe = subscribeToUnreadCount(uid, setUnreadCount)
@@ -148,48 +119,26 @@ export default function HomePage() {
     hasMore: forYouHasMore
   } = useForYouFeed(auth.currentUser?.uid, contentPreferences)
 
-  // Callback ref, not useRef+useEffect — the prior version's effect
-  // dependency array never included forYouLoading, so on the very
-  // first load the effect ran once while the sentinel div didn't
-  // exist yet (it's only rendered in the "loaded" branch of the
-  // loading/error/empty/loaded ternary), found sentinelRef.current
-  // null, and exited. Nothing in the dependency list changed again
-  // when loading finished and the real sentinel mounted, so the
-  // effect never re-ran and the observer was never attached to
-  // anything — confirmed as the actual cause, not assumed. A callback
-  // ref fires exactly when React attaches/detaches the DOM node,
-  // independent of any other state, which is the correct fix for a
-  // conditionally-rendered observation target.
   const forYouObserverRef = useRef(null)
 
-  const forYouSentinelCallbackRef = useCallback(
-    (node) => {
-      if (forYouObserverRef.current) {
-        forYouObserverRef.current.disconnect()
-        forYouObserverRef.current = null
-      }
-      if (!node) return // node is null on unmount — nothing to observe
+  const forYouSentinelCallbackRef = useCallback((node) => {
+    if (forYouObserverRef.current) {
+      forYouObserverRef.current.disconnect()
+      forYouObserverRef.current = null
+    }
+    if (!node) return
 
-      forYouObserverRef.current = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting) {
-            console.log('[ForYou] sentinel intersecting — observer fired') // TEMPORARY — remove once confirmed
-            loadMoreForYouRef.current()
-          }
-        },
-        { rootMargin: '600px' } // triggers well before the sentinel is visible, so the next page is ready before the user hits the true bottom
-      )
-      forYouObserverRef.current.observe(node)
-      console.log('[ForYou] observer attached to real sentinel node; scroll root: window (verified — no overflow/height constraint found in App.jsx, SwipeablePage.jsx, or this page\'s own outer wrapper)') // TEMPORARY — remove once confirmed
-    },
-    [] // stable identity — the callback itself never needs to change; loadMoreForYouRef (below) always calls the latest loadMore/hasMore/loadingMore via a ref, so this doesn't need them as dependencies either
-  )
+    forYouObserverRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreForYouRef.current()
+        }
+      },
+      { rootMargin: '600px' }
+    )
+    forYouObserverRef.current.observe(node)
+  }, [])
 
-  // loadMoreForYouRef always points at a fresh closure over the
-  // current loadMore/hasMore/loadingMore — this is what lets the
-  // IntersectionObserver's callback (created once, via the stable
-  // forYouSentinelCallbackRef above) always see current state instead
-  // of a stale closure from whenever the observer was first created.
   const loadMoreForYouRef = useRef(() => {})
   useEffect(() => {
     loadMoreForYouRef.current = () => {
@@ -240,14 +189,37 @@ export default function HomePage() {
           setNotesForPreview(data.filter((n) => n.file))
         }
       })
-      .catch(() => {
-        // Supplementary metric only — CampusPulse simply omits it if
-        // this stays null, no error shown to the user.
-      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
   }, [])
+
+  const { status: postingStatus, newPost: postingNewPost } = usePostingStatus()
+
+  // Optimistic feed insertion — only for the local `posts` state this
+  // component owns directly (the 'campus' tab's source, via
+  // getFeedPosts). Dedup by id is the actual fix for "duplicate
+  // appearance when the Firestore listener eventually returns the
+  // same post": if a post with this id is already present (e.g. this
+  // effect already ran once for it, or a future reload already
+  // brought it back from Firestore), it's left untouched rather than
+  // inserted a second time.
+  //
+  // Deliberately NOT applied to followingPosts/forYouPosts — those
+  // are owned by useFollowingFeed/useForYouFeed, hooks I don't have
+  // and can't safely mutate without risking the exact duplication bug
+  // this feature exists to prevent. A real, stated limitation, not a
+  // silent one: a post created while viewing "For You" or "Following"
+  // won't optimistically appear in those specific tabs, only in
+  // "Campus," until those hooks' own next real reload picks it up.
+  useEffect(() => {
+    if (postingStatus !== 'success' || !postingNewPost) return
+    setPosts((prev) => {
+      if (prev.some((p) => String(p.id) === String(postingNewPost.id))) return prev
+      return [postingNewPost, ...prev]
+    })
+  }, [postingStatus, postingNewPost])
 
   const displayName = profile?.displayName || ''
   const firstName = displayName.split(' ')[0] || 'there'
@@ -266,11 +238,6 @@ export default function HomePage() {
       colorClass: myColorClass,
       avatar: myGroup?.avatar || getProfileIdentityImage(profile) || '',
       isAdd: true,
-      // Carries the real story data when present — StoryBubble.jsx
-      // uses this to open the viewer on tap (real avatar, real ring)
-      // instead of only ever being able to open the composer, while
-      // still exposing the add affordance separately. Deliberately
-      // never duplicated into otherGroups below.
       stories: myGroup?.stories || []
     }
     const moreStory = { id: 'more', label: 'More', isMore: true }
@@ -291,46 +258,12 @@ export default function HomePage() {
     <>
     <div
       className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:gap-3 lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]"
-      style={{ backgroundColor: '#f3f0fb' }}
-    >
-      <div
-        className="ambient-glow-layer ambient-glow-1"
-        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-2"
-        style={{
-          background:
-            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
-        }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-3"
-        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
-      />
-    <DesktopSidebar unreadNotifications={unreadCount} profile={profile} />
+      style={{ backgroundColor: '#f8fafc' }}
+    ><DesktopSidebar unreadNotifications={unreadCount} profile={profile} />
     <SwipeablePage>
     <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
-      {/* Mobile: narrow centered column, natural page scroll,
-          unchanged. Desktop: this column now sits in a real CSS Grid
-          middle track (minmax(0,1fr)) rather than a fixed-width flex
-          sibling — it genuinely grows with available viewport space
-          instead of jumping between two hardcoded breakpoints. Grid's
-          default stretch behavior also solves a previously-documented
-          constraint: SwipeablePage's root (a bare motion.div with no
-          className passthrough) now automatically fills this track's
-          width, since Grid items stretch by default unlike Flexbox's
-          content-sizing default — no workaround needed. This element
-          remains the actual scroll container (lg:h-screen
-          lg:overflow-y-auto) — the browser page itself never scrolls
-          at lg:. The inner max-w-[760px] below caps individual post
-          readability on very wide tracks without capping the track
-          itself. */}
-      <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-screen lg:min-h-0 bg-white/85 backdrop-blur-md lg:bg-transparent lg:backdrop-blur-none border-x border-white/40">
-        {/* -------------------------------------------------------- */}
-        {/* Top header — logo + notifications, stays pinned          */}
-        {/* -------------------------------------------------------- */}
-        <header className="sticky top-0 z-40 bg-white/60 backdrop-blur-xl border-b border-white/40 shadow-[0_4px_20px_rgba(91,77,255,0.05)]">
+      <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-screen lg:min-h-0 bg-white lg:bg-transparent border-x border-gray-100">
+        <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
           <div className="h-14 flex items-center justify-between lg:justify-end px-4">
             <button
               type="button"
@@ -338,17 +271,11 @@ export default function HomePage() {
               aria-label="Campinity — go to Home"
               className="lg:hidden flex items-center gap-1.5"
             >
-              {/* Minimal abstract mark — three connected nodes, not a
-                  letter. Deliberately echoes the "network/community"
-                  motif this app is actually about (same idea behind
-                  swapping the bottom-nav Communities icon to Orbit),
-                  rather than a generic lettermark. Royal Indigo
-                  gradient fill, matching the wordmark beside it. */}
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                 <defs>
                   <linearGradient id="campinityMarkGradient" x1="0" y1="0" x2="20" y2="20">
-                    <stop offset="0%" stopColor="var(--theme-accentSecondary, #7b61ff)" />
-                    <stop offset="100%" stopColor="var(--theme-accent, #5b4dff)" />
+                    <stop offset="0%" stopColor="#3b9bff" />
+                    <stop offset="100%" stopColor="#1677ff" />
                   </linearGradient>
                 </defs>
                 <line x1="6" y1="6" x2="14" y2="6" stroke="url(#campinityMarkGradient)" strokeWidth="1.4" />
@@ -363,7 +290,7 @@ export default function HomePage() {
                 style={{
                   fontWeight: 650,
                   backgroundImage:
-                    'linear-gradient(90deg, var(--theme-accent, #5b4dff), var(--theme-accentSecondary, #7b61ff))',
+                    'linear-gradient(90deg, #1677ff, #3b9bff)',
                   WebkitBackgroundClip: 'text',
                   backgroundClip: 'text',
                   color: 'transparent'
@@ -374,12 +301,12 @@ export default function HomePage() {
             </button>
 
             <div className="flex items-center gap-1">
-              <div className="flex items-center gap-1 lg:gap-0.5 lg:p-1 lg:rounded-full lg:bg-white/40 lg:border lg:border-white/50 lg:shadow-[0_4px_16px_rgba(91,77,255,0.08),inset_1px_1px_0_rgba(255,255,255,0.5)]">
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
                   aria-label="Create post"
                   onClick={() => navigate('/create')}
-                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 lg:hover:bg-white/70 active:scale-95 transition-all duration-200"
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -388,7 +315,7 @@ export default function HomePage() {
                   type="button"
                   aria-label="Radar"
                   onClick={() => navigate('/radar')}
-                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 lg:hover:bg-white/70 active:scale-95 transition-all duration-200"
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
                 >
                   <Radar className="w-5 h-5" />
                 </button>
@@ -411,10 +338,7 @@ export default function HomePage() {
 
         {showBanner && <CampusVerificationBanner onDismiss={dismissBanner} />}
 
-        {/* -------------------------------------------------------- */}
-        {/* Greeting + search — real Firebase profile                */}
-        {/* -------------------------------------------------------- */}
-        <section className="mx-4 mt-3 mb-3 rounded-2xl bg-white/35 backdrop-blur-md border border-white/50 shadow-[inset_1px_1px_0_rgba(255,255,255,0.5),0_4px_16px_rgba(91,77,255,0.06)] px-4 py-4">
+        <section className="mx-4 mt-5 mb-5 px-0 py-0">
           <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
             {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {firstName}
           </h1>
@@ -433,10 +357,7 @@ export default function HomePage() {
           </button>
         </section>
 
-        {/* -------------------------------------------------------- */}
-        {/* Stories row — real Firestore stories                     */}
-        {/* -------------------------------------------------------- */}
-        <section className="mx-4 mb-3 rounded-2xl bg-white/35 backdrop-blur-md border border-white/50 shadow-[inset_1px_1px_0_rgba(255,255,255,0.5),0_4px_16px_rgba(91,77,255,0.06)] py-3.5">
+        <section className="mx-4 mb-5 py-0">
           <div className="flex items-start gap-3.5 px-4 overflow-x-auto scroll-hidden">
             {storyBubbles.map((story) => {
               const seen =
@@ -462,10 +383,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* -------------------------------------------------------- */}
-        {/* Feed tabs                                                 */}
-        {/* -------------------------------------------------------- */}
-        <nav className="sticky top-14 z-30 mx-4 mt-3 mb-3 flex items-center gap-1 rounded-2xl bg-white/40 backdrop-blur-md border border-white/50 shadow-[0_4px_20px_rgba(91,77,255,0.08),inset_1px_1px_0_rgba(255,255,255,0.5)] p-1.5">
+        <nav className="sticky top-14 z-30 bg-white flex items-center gap-6 px-4 border-b border-gray-100 mb-3">
           {feedTabs.map((tab) => {
             const isActive = activeTab === tab.key
             return (
@@ -473,16 +391,14 @@ export default function HomePage() {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`relative flex-1 rounded-xl py-2 text-[13px] font-semibold text-center transition-all duration-200 ${
-                  isActive
-                    ? 'bg-gradient-to-b from-blue-50/90 to-indigo-50/70 text-blue-700 shadow-[inset_0_0_0_1px_rgba(91,77,255,0.14)]'
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-white/40'
+                className={`relative py-3 text-[14px] font-semibold transition-colors duration-200 ${
+                  isActive ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 {tab.label}
                 <span
-                  className={`absolute left-4 right-4 -bottom-0.5 h-[2px] rounded-full bg-blue-600 transition-all duration-300 ease-out ${
-                    isActive ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-50'
+                  className={`absolute left-0 right-0 -bottom-px h-[2px] bg-blue-600 transition-opacity duration-200 ${
+                    isActive ? 'opacity-100' : 'opacity-0'
                   }`}
                   aria-hidden="true"
                 />
@@ -491,9 +407,6 @@ export default function HomePage() {
           })}
         </nav>
 
-        {/* -------------------------------------------------------- */}
-        {/* Feed — Firestore posts                                    */}
-        {/* -------------------------------------------------------- */}
         <main className="pb-24" style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}>
           {activeTab === 'notes' ? (
             <NotesView />
@@ -577,7 +490,14 @@ export default function HomePage() {
               <p className="mt-1 text-sm text-gray-400">Be the first to share something.</p>
             </div>
           ) : (
-            visiblePosts.map((post) => <PostCard key={post.id} post={post} />)
+            visiblePosts.map((post) => (
+              <div
+                key={post.id}
+                className={String(post.id) === String(postingNewPost?.id) ? 'cps-new-post' : undefined}
+              >
+                <PostCard post={post} />
+              </div>
+            ))
           )}
         </main>
       </div>
@@ -592,22 +512,11 @@ export default function HomePage() {
     />
     </div>
 
-      {/* -------------------------------------------------------- */}
-      {/* Bottom mobile navigation — sticky, centered to match column.
-          Deliberately OUTSIDE SwipeablePage: that wrapper applies a
-          CSS transform during drag, and a transformed ancestor becomes
-          the containing block for any position:fixed descendant — left
-          inside, BottomNav would drag along with the page instead of
-          staying pinned to the viewport. Same reasoning for the
-          verification modal below it. The lg:hidden wrapper is a
-          plain, non-transformed div — display:none at the lg
-          breakpoint correctly removes BottomNav (and its fixed-
-          positioned root) from the render tree entirely, replaced by
-          DesktopSidebar's own navigation above. */}
-      {/* -------------------------------------------------------- */}
       <div className="lg:hidden">
         <BottomNav />
       </div>
+
+      <PostingStatusPill />
 
       <CampusVerificationModal open={showModal} onRemindLater={closeModal} />
     </>
