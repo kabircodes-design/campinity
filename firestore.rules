@@ -11,9 +11,23 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
-    // users/{uid} — each user can read and write only their own profile.
+    // users/{uid} — readable by any signed-in user (this is a social
+    // feed app: every other student's name/avatar/bio needs to be
+    // visible in the feed, on their profile page, in followers lists,
+    // comments, Radar, search, etc. — profileService.js's own comments
+    // already documented this as the intended rule, e.g. the "RADAR"
+    // section: "users/{uid}'s read rule is unconditional for any
+    // signed-in user (allow read: if isSignedIn())"). The deployed rule
+    // had drifted to owner-only, which silently broke every one of
+    // those cross-user reads: feed posts showed "Student" instead of
+    // the real name (useAuthorEnrichment's getUserProfile call on
+    // someone else's uid was denied and fell back to a placeholder),
+    // and opening a student's profile via a card built its link from
+    // that same empty fallback username, landing on `/student/` (no
+    // param) which falls through to the catch-all route ("/").
+    // Writes remain owner-only — no change there.
     match /users/{uid} {
-      allow read: if isOwner(uid);
+      allow read: if isSignedIn();
       allow create: if isOwner(uid);
       allow update: if isOwner(uid);
       allow delete: if false;
@@ -36,6 +50,28 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
+    // usernames/{username} — the reservation collection backing
+    // checkUsernameAvailable/reserveUsername/ensureUsernameReservation
+    // in usernameService.js. Never had a rule here before, so every
+    // read fell through to the catch-all deny below — this is what
+    // made username availability checks and profile creation fail
+    // with a silent Firestore permission-denied ("Network error — try
+    // again" in the UI, no console log, no distinct Network-tab entry
+    // since Firestore reads share its long-lived channel connection).
+    // Read is open to any signed-in user (this doc is just {uid,
+    // createdAt} — no sensitive data, and other users' profiles are
+    // legitimately looked up by username via getUserIdByUsername).
+    // Write is restricted to the reservation's own owner in both
+    // directions, matching exactly what reserveUsername's transaction
+    // does (create a new reservation for yourself, delete your own old
+    // one) — never lets one uid touch a reservation owned by another.
+    match /usernames/{username} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
     // verificationRequests/{requestId} — created during onboarding's
     // campus-verification step. Only the submitting user may create or
     // read their own request; no listing, no updates, no deletes from
@@ -44,6 +80,30 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
       allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
       allow update, delete: if false;
+    }
+
+    // emailVerificationTokens/{tokenHash} — custom email verification.
+    // Written and read exclusively by Cloud Functions via the Admin SDK
+    // (which bypasses these rules entirely), never by the client. No
+    // client, including the token's own owner, may create, read,
+    // update, or delete a token, or otherwise influence emailVerified.
+    // Already covered by the catch-all below; stated explicitly here
+    // for auditability given how security-sensitive this collection is.
+    match /emailVerificationTokens/{tokenHash} {
+      allow read, write: if false;
+    }
+
+    // emailVerificationRateLimits/{uid} — server-only counters backing
+    // resendEmailVerification's rate limit. Same rationale as above.
+    match /emailVerificationRateLimits/{uid} {
+      allow read, write: if false;
+    }
+
+    // emailVerificationActiveTokens/{uid} — server-only pointer to each
+    // user's current live token, used to invalidate a previous token
+    // without a compound query. Same rationale as above.
+    match /emailVerificationActiveTokens/{uid} {
+      allow read, write: if false;
     }
 
     // Deny everything else by default — Firestore is NOT public.

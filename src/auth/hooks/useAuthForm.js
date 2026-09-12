@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { isFormValid } from '../validation/authValidation.js'
+import { getAuthErrorMessage, logAuthErrorForDebug } from '../utils/authErrorMessages.js'
 
 /**
  * @param {Object} config
@@ -64,7 +65,8 @@ export function useAuthForm({ initialValues, sanitizers = {}, validate }) {
         await onValid(values)
         setSubmitSuccess(true)
       } catch (err) {
-        setSubmitError(err?.message || 'Something went wrong. Please try again.')
+        logAuthErrorForDebug('useAuthForm', err)
+        setSubmitError(getAuthErrorMessage(err))
       } finally {
         setIsSubmitting(false)
       }

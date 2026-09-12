@@ -9,6 +9,7 @@ import ContentPreferences from '../onboarding/ContentPreferences.jsx'
 import { logOut } from '../firebase/accountService.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
+import { getAuthErrorMessage, logAuthErrorForDebug } from '../auth/utils/authErrorMessages.js'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
@@ -29,7 +30,8 @@ export default function SettingsPage() {
       await logOut()
       navigate('/login', { replace: true })
     } catch (err) {
-      setLogoutError(err?.message || 'Could not log out. Please try again.')
+      logAuthErrorForDebug('SettingsPage.handleLogout', err)
+      setLogoutError(getAuthErrorMessage(err))
       setIsLoggingOut(false)
     }
   }

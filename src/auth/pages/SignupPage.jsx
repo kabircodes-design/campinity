@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { createUserWithEmailAndPassword, sendEmailVerification, signInWithPopup, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
@@ -14,8 +14,10 @@ import { useAuthForm } from '../hooks/useAuthForm.js'
 import { validateSignupForm } from '../validation/authValidation.js'
 import { sanitizeEmail, sanitizePassword, sanitizeText } from '../utils/sanitize.js'
 import { auth, googleProvider } from '../../firebase/firebase.js'
-import { createInitialUserDoc, ensureUserDoc } from '../utils/userProfile.js'
-import { resolveOnboardingRoute } from '../components/ProtectedRoute.jsx'
+import { createInitialUserDoc } from '../utils/userProfile.js'
+import { createEmailVerification } from '../../firebase/emailVerificationService.js'
+import { getAuthErrorMessage, logAuthErrorForDebug } from '../utils/authErrorMessages.js'
+import { completeGoogleRedirect, routeAfterGoogleSignIn, signInWithGoogle } from '../utils/googleAuth.js'
 
 export default function SignupPage() {
   const navigate = useNavigate()
@@ -39,6 +41,26 @@ export default function SignupPage() {
     nameRef.current?.focus()
   }, [])
 
+  // Picks up the result of a signInWithRedirect() from the previous page
+  // load — the fallback path handleGoogle below uses when a popup can't
+  // be shown (blocked, or an environment that doesn't support it).
+  useEffect(() => {
+    let cancelled = false
+    completeGoogleRedirect(auth)
+      .then((user) => {
+        if (user && !cancelled) return routeAfterGoogleSignIn(user, navigate)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        logAuthErrorForDebug('SignupPage.completeGoogleRedirect', err)
+        setGoogleError(getAuthErrorMessage(err))
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const onSubmit = handleSubmit(async ({ fullName, email, password }) => {
     // 1. Create the Firebase Auth account.
     const { user } = await createUserWithEmailAndPassword(auth, email, password)
@@ -50,8 +72,10 @@ export default function SignupPage() {
     // 2. Immediately create the Firestore users/{uid} doc with defaults.
     await createInitialUserDoc(user.uid, user.email)
 
-    // 3. Send the verification email.
-    await sendEmailVerification(user)
+    // 3. Send the verification email via our custom token system
+    //    (Cloud Function createEmailVerification) — not Firebase's
+    //    hosted sendEmailVerification()/oobCode flow.
+    await createEmailVerification()
 
     // 4. Navigate to the verification step.
     navigate('/verify-email')
@@ -68,17 +92,12 @@ export default function SignupPage() {
     setGoogleLoading(true)
     setGoogleError('')
     try {
-      const { user } = await signInWithPopup(auth, googleProvider)
-
-      if (!user.emailVerified) {
-        navigate('/verify-email')
-        return
-      }
-
-      const profile = await ensureUserDoc(user)
-      navigate(resolveOnboardingRoute(profile))
+      const { user, redirecting } = await signInWithGoogle(auth, googleProvider)
+      if (redirecting) return // page is navigating away to complete sign-in
+      await routeAfterGoogleSignIn(user, navigate)
     } catch (err) {
-      setGoogleError(err?.message || 'Could not sign up with Google. Please try again.')
+      logAuthErrorForDebug('SignupPage.handleGoogle', err)
+      setGoogleError(getAuthErrorMessage(err))
     } finally {
       setGoogleLoading(false)
     }

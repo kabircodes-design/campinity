@@ -49,6 +49,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const { setGlobalOptions } = require('firebase-functions/v2')
 const admin = require('firebase-admin')
 const { moderateImage } = require('./moderation/openaiProvider.js')
+const { sendVerificationEmail } = require('./email/mailer.js')
 
 admin.initializeApp()
 setGlobalOptions({ maxInstances: 10 })
@@ -695,5 +696,345 @@ exports.adminListReports = onCall({ region: 'us-central1' }, async (request) => 
   } catch (err) {
     console.error('[adminListReports] unexpected error', { status, message: err?.message, code: err?.code })
     throw new HttpsError('internal', 'Could not load reports. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * CUSTOM EMAIL VERIFICATION — replaces Firebase's hosted
+ * sendEmailVerification()/__/auth/action/oobCode flow with our own
+ * cryptographically-random, SHA-256-hashed, single-use tokens stored
+ * in emailVerificationTokens/{tokenHash} (locked to
+ * `allow read, write: if false` in firestore.rules — Admin SDK only,
+ * same pattern as adminSession/platformAdmins above). Firebase
+ * Authentication itself is NOT replaced — accounts, sessions, Google
+ * Sign-In and password reset are untouched; only how emailVerified
+ * gets flipped to true changes.
+ *
+ * The raw token only ever exists in memory long enough to build the
+ * verification URL and hand it to the mailer — it is never stored,
+ * returned to the caller, or logged. Only its SHA-256 hash (which also
+ * doubles as the Firestore document ID, so lookup is a direct get(),
+ * no query needed) is persisted.
+ *
+ * Email sending itself goes through email/mailer.js -> resendProvider.js.
+ * No email provider existed anywhere in this repo before this change
+ * (confirmed by searching for Resend/SendGrid/Mailgun/Postmark/SMTP/
+ * Nodemailer/Brevo/SES and every functions/env config). Resend was
+ * chosen as the provider — see this feature's final report for setup
+ * steps. Until RESEND_API_KEY is configured via
+ * `firebase functions:secrets:set RESEND_API_KEY`, these functions'
+ * token/Firestore logic is fully wired and correct, but the actual
+ * send will fail — that failure is surfaced as a clear 'unavailable'
+ * error rather than silently pretending an email went out.
+ * =====================================================================
+ */
+
+const EMAIL_VERIFICATION_TOKEN_BYTES = 32 // 32 bytes = 256 bits of entropy, well above the brief's 32-byte floor
+const EMAIL_VERIFICATION_TOKEN_TTL_MS = 20 * 60 * 1000 // 20 minutes — within the requested 15-30 minute window
+const EMAIL_VERIFICATION_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+const EMAIL_VERIFICATION_RATE_LIMIT_MAX = 3 // matches the brief's suggested "max 3 per 15 minutes per user"
+const EMAIL_VERIFICATION_STALE_CLAIM_MS = 2 * 60 * 1000 // see claimEmailVerificationToken below
+// APP_BASE_URL is a plain (non-secret) env var, NOT Secret Manager — set
+// it via functions/functions/.env.<projectId> if it should ever differ
+// from this default in production. functions/functions/.env.local (used
+// only by the emulator, never deployed) overrides it to localhost for
+// local testing so production links can never point at localhost.
+// Default is the actual deployed app (confirmed live, returns 200) —
+// campinity.in does not currently resolve to anything and must not be
+// used as the default until/unless it's a real custom domain for this
+// app.
+const APP_BASE_URL = process.env.APP_BASE_URL || 'https://campinity-app.vercel.app'
+
+function emailVerificationTokens() {
+  return db().collection('emailVerificationTokens')
+}
+
+// emailVerificationActiveTokens/{uid} — a single pointer doc per user to
+// whichever token is currently their "live" one. Storing this instead of
+// querying emailVerificationTokens by uid means invalidating a previous
+// token is always a direct-by-ID get/update, never a compound Firestore
+// query — sidesteps any question of whether such a query would need a
+// manual composite index (Task 10).
+function emailVerificationActiveTokenDoc(uid) {
+  return db().collection('emailVerificationActiveTokens').doc(uid)
+}
+
+function emailVerificationRateLimitDoc(uid) {
+  return db().collection('emailVerificationRateLimits').doc(uid)
+}
+
+function hashVerificationToken(rawToken) {
+  const crypto = require('crypto')
+  return crypto.createHash('sha256').update(rawToken).digest('hex')
+}
+
+/**
+ * Server-side rate limit, independent of anything the client claims —
+ * a fixed-window counter stored per-uid so this never needs a Firestore
+ * range query (which would require a manual composite index) just to
+ * count recent sends. Throws resource-exhausted once the window's
+ * budget is used up; otherwise increments (or starts a fresh window).
+ */
+async function enforceEmailVerificationRateLimit(uid) {
+  const rateRef = emailVerificationRateLimitDoc(uid)
+  await db().runTransaction(async (transaction) => {
+    const snap = await transaction.get(rateRef)
+    const now = Date.now()
+    const data = snap.exists ? snap.data() : null
+    const windowExpired = !data?.windowStart || now - data.windowStart.toMillis() > EMAIL_VERIFICATION_RATE_LIMIT_WINDOW_MS
+
+    if (windowExpired) {
+      transaction.set(rateRef, { windowStart: admin.firestore.Timestamp.fromMillis(now), count: 1 })
+      return
+    }
+
+    if (data.count >= EMAIL_VERIFICATION_RATE_LIMIT_MAX) {
+      throw new HttpsError('resource-exhausted', 'Too many verification emails requested. Please wait a few minutes and try again.')
+    }
+
+    transaction.update(rateRef, { count: admin.firestore.FieldValue.increment(1) })
+  })
+}
+
+/**
+ * Generates a fresh token and sends the verification email BEFORE
+ * touching Firestore at all. Only once the send has actually succeeded
+ * does this persist the new token and invalidate the previous one for
+ * this uid, in a single transaction. This ordering matters (Task 8): the
+ * previous implementation invalidated the old token and wrote the new
+ * one first, then sent the email — so a Resend failure left the user
+ * with a freshly "active" token they were never actually sent, while
+ * their previous (possibly still-valid) link had already been burned.
+ * With this ordering, a send failure leaves any previous token exactly
+ * as it was — nothing the user already has stops working.
+ */
+async function issueEmailVerificationToken(uid, email) {
+  await enforceEmailVerificationRateLimit(uid)
+
+  const crypto = require('crypto')
+  const rawToken = crypto.randomBytes(EMAIL_VERIFICATION_TOKEN_BYTES).toString('hex')
+  const tokenHash = hashVerificationToken(rawToken)
+  const verifyUrl = `${APP_BASE_URL}/verify-email?token=${rawToken}`
+
+  try {
+    await sendVerificationEmail({ to: email, verifyUrl })
+  } catch (err) {
+    // Do not log verifyUrl/rawToken — only the failure itself.
+    console.error('[issueEmailVerificationToken] send failed', { uid, message: err?.message })
+    throw new HttpsError('unavailable', 'Could not send the verification email. Please try again shortly.')
+  }
+
+  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS)
+  const activeRef = emailVerificationActiveTokenDoc(uid)
+
+  try {
+    await db().runTransaction(async (transaction) => {
+      const activeSnap = await transaction.get(activeRef)
+      const previousTokenHash = activeSnap.exists ? activeSnap.data()?.tokenHash : null
+
+      if (previousTokenHash && previousTokenHash !== tokenHash) {
+        transaction.update(emailVerificationTokens().doc(previousTokenHash), {
+          status: 'invalidated',
+          invalidatedAt: admin.firestore.FieldValue.serverTimestamp()
+        })
+      }
+
+      transaction.set(emailVerificationTokens().doc(tokenHash), {
+        uid,
+        email,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt,
+        status: 'active'
+      })
+      transaction.set(activeRef, { tokenHash, expiresAt })
+    })
+  } catch (err) {
+    // The email is already out with a working link at this point — a
+    // failure here just means we couldn't also invalidate the *previous*
+    // link or update the pointer doc. Not ideal, but never worse than
+    // before this pass, and never silently swallowed.
+    console.error('[issueEmailVerificationToken] persist failed after send', { uid, message: err?.message })
+    throw new HttpsError('internal', 'The verification email was sent, but something went wrong finishing setup. If the link in your email does not work, please resend.')
+  }
+}
+
+/**
+ * Atomically claims a token for verification: active -> claiming. Using
+ * a three-state model (active / claiming / verified / invalidated)
+ * instead of a plain used boolean (Task 9) means a transient failure in
+ * the Admin Auth call that follows this (outside any Firestore
+ * transaction) can never permanently strand a token as "used" without
+ * the email ever actually being verified — see the caller below, which
+ * rolls the status back to 'active' on any such failure. A stale
+ * 'claiming' status (a previous attempt crashed between claiming and
+ * finishing) is treated as retryable after EMAIL_VERIFICATION_STALE_CLAIM_MS;
+ * a fresh 'claiming' status is treated the same as already-used, so two
+ * concurrent requests for the same token still cannot both succeed.
+ */
+async function claimEmailVerificationToken(tokenRef) {
+  return db().runTransaction(async (transaction) => {
+    const snap = await transaction.get(tokenRef)
+    if (!snap.exists) {
+      throw new HttpsError('not-found', 'This verification link is invalid.', { reason: 'invalid' })
+    }
+
+    const data = snap.data()
+    if (!data.expiresAt || data.expiresAt.toMillis() < Date.now()) {
+      throw new HttpsError('failed-precondition', 'This verification link has expired.', { reason: 'expired' })
+    }
+    if (data.status === 'verified' || data.status === 'invalidated') {
+      throw new HttpsError('failed-precondition', 'This verification link has already been used.', { reason: 'already-used' })
+    }
+    if (data.status === 'claiming') {
+      const claimAgeMs = data.claimedAt ? Date.now() - data.claimedAt.toMillis() : Infinity
+      if (claimAgeMs < EMAIL_VERIFICATION_STALE_CLAIM_MS) {
+        throw new HttpsError('failed-precondition', 'This verification link is already being processed. Please wait a moment and try again.', { reason: 'already-used' })
+      }
+      // Stale claim from a crashed/failed previous attempt — safe to retry.
+    }
+
+    transaction.update(tokenRef, { status: 'claiming', claimedAt: admin.firestore.FieldValue.serverTimestamp() })
+    return { uid: data.uid, email: data.email }
+  })
+}
+
+/**
+ * createEmailVerification — called once right after signup. UID and
+ * email come only from the authenticated Firebase Auth context/Admin
+ * SDK lookup, never from client-supplied data.
+ *
+ * NOT declaring `secrets: ['RESEND_API_KEY']` here yet — Firebase
+ * Functions v2 refuses to deploy a function that references a secret
+ * that doesn't exist in Secret Manager yet, and RESEND_API_KEY has
+ * never been set for this project (confirmed via
+ * `firebase functions:secrets:access`, which 404'd). Once it's set
+ * (see this bugfix's final report), add `secrets: ['RESEND_API_KEY']`
+ * back to both this function and resendEmailVerification below and
+ * redeploy — until then, process.env.RESEND_API_KEY is simply
+ * undefined and resendProvider.js throws its own clear "not
+ * configured" error, which is the intended, honest failure mode.
+ */
+exports.createEmailVerification = onCall({ region: 'us-central1' }, async (request) => {
+  const uid = request.auth?.uid
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'You need to be signed in.')
+  }
+
+  try {
+    const userRecord = await admin.auth().getUser(uid)
+    if (userRecord.emailVerified) {
+      return { ok: true, alreadyVerified: true }
+    }
+    if (!userRecord.email) {
+      throw new HttpsError('failed-precondition', 'This account has no email address to verify.')
+    }
+
+    await issueEmailVerificationToken(uid, userRecord.email)
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[createEmailVerification] unexpected error', { uid, message: err?.message, code: err?.code })
+    throw new HttpsError('internal', 'Could not send the verification email. Please try again.')
+  }
+})
+
+/**
+ * resendEmailVerification — Phase 5. Same authenticated-only,
+ * server-derived-email rules as createEmailVerification, plus the
+ * shared rate limit inside issueEmailVerificationToken above. See the
+ * comment on createEmailVerification above re: RESEND_API_KEY not
+ * being declared in `secrets` yet.
+ */
+exports.resendEmailVerification = onCall({ region: 'us-central1' }, async (request) => {
+  const uid = request.auth?.uid
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'You need to be signed in.')
+  }
+
+  try {
+    const userRecord = await admin.auth().getUser(uid)
+    if (userRecord.emailVerified) {
+      return { ok: true, alreadyVerified: true }
+    }
+    if (!userRecord.email) {
+      throw new HttpsError('failed-precondition', 'This account has no email address to verify.')
+    }
+
+    await issueEmailVerificationToken(uid, userRecord.email)
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[resendEmailVerification] unexpected error', { uid, message: err?.message, code: err?.code })
+    throw new HttpsError('internal', 'Could not resend the verification email. Please try again.')
+  }
+})
+
+/**
+ * verifyEmailVerificationToken — Phase 3. Deliberately does NOT require
+ * request.auth: the person clicking the emailed link may be on a
+ * different browser/device than the one they signed up on (exactly why
+ * Firebase's own oobCode links don't require an active session either).
+ * The token itself, hashed and matched against Firestore, is the only
+ * credential. claimEmailVerificationToken above atomically transitions
+ * active -> claiming so two concurrent requests with the same token
+ * cannot both succeed; emailVerified is only flipped via the Admin SDK
+ * afterward, and the client can never set it directly (no firestore.rules
+ * path lets a client touch emailVerified, and the Firebase Auth user
+ * record itself is only ever writable server-side).
+ *
+ * If the Admin Auth call fails after a successful claim (Task 9), the
+ * claim is rolled back to 'active' so the same token remains usable —
+ * a transient Admin Auth failure must never permanently burn a token
+ * the user never actually got verified with.
+ */
+exports.verifyEmailVerificationToken = onCall({ region: 'us-central1' }, async (request) => {
+  const { token } = request.data || {}
+
+  if (!token || typeof token !== 'string') {
+    throw new HttpsError('invalid-argument', 'Missing verification token.', { reason: 'invalid' })
+  }
+  // A 32-byte token hex-encodes to 64 characters. Reject anything wildly
+  // off that shape before it ever touches Firestore.
+  if (token.length < 32 || token.length > 128 || !/^[a-f0-9]+$/i.test(token)) {
+    throw new HttpsError('invalid-argument', 'This verification link is invalid.', { reason: 'invalid' })
+  }
+
+  const tokenHash = hashVerificationToken(token)
+  const tokenRef = emailVerificationTokens().doc(tokenHash)
+
+  let claim
+  try {
+    claim = await claimEmailVerificationToken(tokenRef)
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[verifyEmailVerificationToken] claim failed', { message: err?.message, code: err?.code })
+    throw new HttpsError('internal', 'Something went wrong. Please try again.', { reason: 'server-error' })
+  }
+
+  try {
+    const userRecord = await admin.auth().getUser(claim.uid)
+    // If the account's email changed since this token was issued, the
+    // token is stale — do not verify an email it was never issued for.
+    if (claim.email && userRecord.email && userRecord.email !== claim.email) {
+      throw new HttpsError('failed-precondition', 'This verification link is no longer valid.', { reason: 'invalid' })
+    }
+
+    await admin.auth().updateUser(claim.uid, { emailVerified: true })
+    await tokenRef.update({ status: 'verified', verifiedAt: admin.firestore.FieldValue.serverTimestamp() })
+    return { ok: true }
+  } catch (err) {
+    // Roll the claim back so a legitimate retry can still complete —
+    // see this function's own doc comment and Task 9.
+    await tokenRef.update({ status: 'active', claimedAt: admin.firestore.FieldValue.delete() }).catch((rollbackErr) => {
+      console.error('[verifyEmailVerificationToken] rollback failed', { uid: claim.uid, message: rollbackErr?.message })
+    })
+
+    if (err instanceof HttpsError) throw err
+    console.error('[verifyEmailVerificationToken] finalize failed', { uid: claim.uid, message: err?.message, code: err?.code })
+    if (err?.code === 'auth/user-not-found') {
+      throw new HttpsError('not-found', 'This account no longer exists.', { reason: 'invalid' })
+    }
+    throw new HttpsError('internal', 'Something went wrong. Please try again.', { reason: 'server-error' })
   }
 })

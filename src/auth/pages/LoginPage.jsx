@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth'
+import { browserLocalPersistence, browserSessionPersistence, setPersistence, signInWithEmailAndPassword } from 'firebase/auth'
 import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
@@ -12,8 +12,10 @@ import { useAuthForm } from '../hooks/useAuthForm.js'
 import { validateLoginForm } from '../validation/authValidation.js'
 import { sanitizeEmail, sanitizePassword } from '../utils/sanitize.js'
 import { auth, googleProvider } from '../../firebase/firebase.js'
-import { ensureUserDoc, getUserProfile } from '../utils/userProfile.js'
+import { getUserProfile } from '../utils/userProfile.js'
 import { resolveOnboardingRoute } from '../components/ProtectedRoute.jsx'
+import { getAuthErrorMessage, logAuthErrorForDebug } from '../utils/authErrorMessages.js'
+import { completeGoogleRedirect, routeAfterGoogleSignIn, signInWithGoogle } from '../utils/googleAuth.js'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -33,7 +35,33 @@ export default function LoginPage() {
     emailRef.current?.focus()
   }, [])
 
+  // Picks up the result of a signInWithRedirect() from the previous page
+  // load — the fallback path handleGoogle below uses when a popup can't
+  // be shown (blocked, or an environment that doesn't support it).
+  useEffect(() => {
+    let cancelled = false
+    completeGoogleRedirect(auth)
+      .then((user) => {
+        if (user && !cancelled) return routeAfterGoogleSignIn(user, navigate)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        logAuthErrorForDebug('LoginPage.completeGoogleRedirect', err)
+        setGoogleError(getAuthErrorMessage(err))
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const onSubmit = handleSubmit(async ({ email, password }) => {
+    // "Remember me" was previously decorative — this is what actually
+    // makes it do something: local persistence survives closing the
+    // browser entirely, session persistence clears when the tab/browser
+    // closes. Must be set before signIn for it to apply to this session.
+    await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence)
+
     const { user } = await signInWithEmailAndPassword(auth, email, password)
 
     // Spec step 1 of the login flow: always reload before trusting
@@ -54,17 +82,12 @@ export default function LoginPage() {
     setGoogleLoading(true)
     setGoogleError('')
     try {
-      const { user } = await signInWithPopup(auth, googleProvider)
-
-      if (!user.emailVerified) {
-        navigate('/verify-email')
-        return
-      }
-
-      const profile = await ensureUserDoc(user)
-      navigate(resolveOnboardingRoute(profile))
+      const { user, redirecting } = await signInWithGoogle(auth, googleProvider)
+      if (redirecting) return // page is navigating away to complete sign-in
+      await routeAfterGoogleSignIn(user, navigate)
     } catch (err) {
-      setGoogleError(err?.message || 'Could not sign in with Google. Please try again.')
+      logAuthErrorForDebug('LoginPage.handleGoogle', err)
+      setGoogleError(getAuthErrorMessage(err))
     } finally {
       setGoogleLoading(false)
     }

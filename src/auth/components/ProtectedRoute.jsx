@@ -39,6 +39,15 @@ export default function ProtectedRoute({ stage, children }) {
 
   if (loading) return <FullScreenLoader />
 
+  // A verification-link click can land on this route with no active
+  // session at all (a different browser/device than the one used to
+  // sign up, or a session that already expired) — the token itself,
+  // not an authenticated session, is what verifyEmailVerificationToken
+  // checks server-side. Let VerifyEmailPage render and handle it.
+  if (stage === 'verify-email' && !user && new URLSearchParams(location.search).has('token')) {
+    return children
+  }
+
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
