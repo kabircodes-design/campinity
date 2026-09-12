@@ -28,6 +28,8 @@ export default function DiscoverCommunitiesPage() {
   const [communities, setCommunities] = useState([])
   const [membershipStates, setMembershipStates] = useState(new Map())
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
   const [typeFilter, setTypeFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState(null)
@@ -42,28 +44,37 @@ export default function DiscoverCommunitiesPage() {
   useEffect(() => {
     let cancelled = false
     const uid = auth.currentUser?.uid
+    setLoading(true)
+    setLoadError('')
 
     Promise.all([
       getTrendingCommunities({ pageSize: 40 }),
       uid ? getUserCommunityMemberships(uid).catch(() => []) : Promise.resolve([]),
       uid ? getUserPendingRequests(uid).catch(() => []) : Promise.resolve([])
-    ]).then(([communitiesData, memberships, pendingRequests]) => {
-      if (cancelled) return
-      setCommunities(communitiesData)
-      const states = new Map()
-      memberships.forEach((m) => states.set(m.communityId, m.role === 'owner' ? 'owner' : 'member'))
-      pendingRequests.forEach((r) => {
-        if (!states.has(r.communityId)) states.set(r.communityId, 'pending')
+    ])
+      .then(([communitiesData, memberships, pendingRequests]) => {
+        if (cancelled) return
+        setCommunities(communitiesData)
+        const states = new Map()
+        memberships.forEach((m) => states.set(m.communityId, m.role === 'owner' ? 'owner' : 'member'))
+        pendingRequests.forEach((r) => {
+          if (!states.has(r.communityId)) states.set(r.communityId, 'pending')
+        })
+        setMembershipStates(states)
       })
-      setMembershipStates(states)
-    }).finally(() => {
-      if (!cancelled) setLoading(false)
-    })
+      .catch((err) => {
+        if (cancelled) return
+        console.error('Could not load communities:', err)
+        setLoadError("Couldn't load communities.")
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadKey])
 
   // Search is local to this page — a real Firestore query
   // (searchCommunitiesByName), completely separate from the app's
@@ -138,7 +149,7 @@ export default function DiscoverCommunitiesPage() {
           <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden">
             <div className="mx-auto max-w-[480px] lg:max-w-[760px] bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl min-h-screen lg:min-h-0 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:border lg:border-white/50 lg:rounded-3xl lg:my-4 pb-24">
               <header className="sticky top-0 z-40 bg-white/60 backdrop-blur-xl border-b border-white/40 shadow-[0_4px_20px_rgba(91,77,255,0.05)]">
-                <div className="h-14 flex items-center justify-between px-3">
+                <div className="h-14 flex items-center justify-between px-3 lg:px-5">
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -159,10 +170,10 @@ export default function DiscoverCommunitiesPage() {
                   <Plus className="w-5 h-5" />
                 </button>
               </div>
-              <p className="px-4 pb-2.5 text-xs text-gray-400">Find your people. Join the conversation.</p>
+              <p className="px-4 lg:px-6 pb-2.5 text-xs text-gray-400">Find your people. Join the conversation.</p>
             </header>
 
-            <div className="px-4 pt-3">
+            <div className="px-4 lg:px-6 pt-3">
               <div className="relative">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 <input
@@ -193,10 +204,21 @@ export default function DiscoverCommunitiesPage() {
               </div>
             </div>
 
-            <main className="px-4 py-4">
+            <main className="px-4 lg:px-6 py-4">
               {loading ? (
                 <div className="py-16 flex justify-center">
                   <Loader size="md" tone="dark" />
+                </div>
+              ) : loadError ? (
+                <div className="py-16 text-center">
+                  <p className="text-sm font-semibold text-gray-900">{loadError}</p>
+                  <button
+                    type="button"
+                    onClick={() => setReloadKey((k) => k + 1)}
+                    className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
+                  >
+                    Try Again
+                  </button>
                 </div>
               ) : communities.length === 0 && !searchTerm ? (
                 <div className="py-16 text-center">

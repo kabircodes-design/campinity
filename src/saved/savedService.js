@@ -234,14 +234,21 @@ export async function mergeCollections(uid, sourceCollectionId, targetCollection
   await deleteDoc(collectionDoc(uid, sourceCollectionId))
 }
 
-export function subscribeToCollections(uid, callback) {
-  return onSnapshot(query(collectionsCollection(uid), orderBy('updatedAt', 'desc')), (snap) => {
-    const collections = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-    // Pinned first, per "pinned always appear first" — same sort
-    // pattern already used for pinned chats in the Sharing System.
-    collections.sort((a, b) => (a.pinned === b.pinned ? 0 : a.pinned ? -1 : 1))
-    callback(collections)
-  })
+export function subscribeToCollections(uid, callback, onError) {
+  return onSnapshot(
+    query(collectionsCollection(uid), orderBy('updatedAt', 'desc')),
+    (snap) => {
+      const collections = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      // Pinned first, per "pinned always appear first" — same sort
+      // pattern already used for pinned chats in the Sharing System.
+      collections.sort((a, b) => (a.pinned === b.pinned ? 0 : a.pinned ? -1 : 1))
+      callback(collections)
+    },
+    (err) => {
+      console.error('subscribeToCollections failed:', err)
+      onError?.(err)
+    }
+  )
 }
 
 export async function getCollection(uid, collectionId) {

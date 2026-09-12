@@ -188,14 +188,14 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         <button
           type="button"
           onClick={goToCommunity}
-          className="flex items-center gap-1.5 px-4 pt-3 text-[12px] font-medium text-blue-600 hover:text-blue-700 transition-all duration-300"
+          className="flex items-center gap-1.5 px-4 lg:px-6 pt-3 text-[12px] font-medium text-blue-600 hover:text-blue-700 transition-all duration-300"
         >
           <Users className="w-3.5 h-3.5" />
           Posted in {post.communityName || 'a community'}
         </button>
       )}
 
-      <div className={`flex items-start gap-3 px-4 ${post.communityId ? 'pt-2' : 'pt-4'}`}>
+      <div className={`flex items-start gap-3 px-4 lg:px-6 ${post.communityId ? 'pt-2' : 'pt-4'}`}>
         <button type="button" onClick={goToProfile} aria-label={`Open ${post.name}'s profile`}>
           <Avatar initials={post.initials} colorClass={post.avatarColor} size="md" src={post.avatarUrl || undefined} />
         </button>
@@ -279,7 +279,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
       </div>
 
       {isEditing ? (
-        <div className="px-4 mt-3">
+        <div className="px-4 lg:px-6 mt-3">
           <textarea
             value={editText}
             onChange={(event) => setEditText(event.target.value)}
@@ -313,7 +313,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         </div>
       ) : (
         <button type="button" onClick={goToPost} className="block w-full text-left">
-          <p className="px-4 mt-3 text-[14.5px] text-gray-700 leading-relaxed">
+          <p className="px-4 lg:px-6 mt-3 text-[14.5px] text-gray-700 leading-relaxed">
             {currentText}
             {isEdited && <span className="ml-1.5 text-xs text-gray-400 font-normal">· Edited</span>}
           </p>
@@ -335,7 +335,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
               goToPost()
             }
           }}
-          className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-white/50 bg-white/40 backdrop-blur-sm lg:bg-white/35 lg:backdrop-blur-md p-3 w-[calc(100%-2rem)] text-left hover:border-blue-100 lg:hover:bg-white/50 transition-all duration-300"
+          className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-white/50 bg-white/40 backdrop-blur-sm lg:bg-white/35 lg:backdrop-blur-md p-3 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left hover:border-blue-100 lg:hover:bg-white/50 transition-all duration-300"
         >
           <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
             <FileText className="w-5 h-5 text-white" />
@@ -356,14 +356,14 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
       />
 
       {expiryBadgeText && (
-        <p className="mx-4 mt-2 text-[11px] text-gray-400">⏳ {expiryBadgeText}</p>
+        <p className="mx-4 lg:mx-6 mt-2 text-[11px] text-gray-400">⏳ {expiryBadgeText}</p>
       )}
 
       {post.type === 'event' && post.event && (
         <button
           type="button"
           onClick={goToPost}
-          className="mx-4 mt-3 rounded-xl overflow-hidden border border-gray-100 w-[calc(100%-2rem)] text-left"
+          className="mx-4 lg:mx-6 mt-3 rounded-xl overflow-hidden border border-gray-100 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left"
         >
           <div className="h-28 bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center">
             <CalendarDays className="w-8 h-8 text-white/80" />
@@ -388,7 +388,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         <button
           type="button"
           onClick={goToPost}
-          className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 p-3 w-[calc(100%-2rem)] text-left hover:border-blue-100 transition-all duration-300"
+          className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 p-3 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left hover:border-blue-100 transition-all duration-300"
         >
           <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
             <ShoppingBag className="w-6 h-6 text-gray-400" />
@@ -401,7 +401,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
       )}
 
       {post.type === 'lostfound' && post.lostFound && (
-        <div className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-pink-100 bg-pink-50/50 p-3">
+        <div className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-pink-100 bg-pink-50/50 p-3">
           <PackageSearch className="w-5 h-5 text-pink-500 flex-shrink-0" />
           <p className="text-sm font-medium text-gray-900 min-w-0">
             {post.lostFound.status} near {post.lostFound.location}
@@ -409,7 +409,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         </div>
       )}
 
-      <div className="flex items-center gap-5 px-4 py-3 mt-1">
+      <div className="flex items-center gap-5 px-4 lg:px-6 py-3 mt-1">
         <button
           type="button"
           onClick={toggleLike}
@@ -545,14 +545,14 @@ function PostImage({ src }) {
 
   if (status === 'error') {
     return (
-      <div className="mx-4 mt-3 rounded-2xl bg-gray-100 h-40 flex items-center justify-center">
+      <div className="mx-4 lg:mx-6 mt-3 rounded-2xl bg-gray-100 h-40 flex items-center justify-center">
         <span className="text-xs text-gray-400">Couldn't load image</span>
       </div>
     )
   }
 
   return (
-    <div className="mx-4 mt-3 rounded-2xl overflow-hidden bg-gray-100 relative">
+    <div className="mx-4 lg:mx-6 mt-3 rounded-2xl overflow-hidden bg-gray-100 relative">
       {status === 'loading' && <div className="absolute inset-0 animate-pulse bg-gray-100" />}
       <img
         src={src}

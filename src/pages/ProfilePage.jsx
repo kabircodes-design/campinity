@@ -299,7 +299,7 @@ export default function ProfilePage() {
     <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden">
       <div className="mx-auto max-w-[480px] lg:max-w-[600px] min-h-screen lg:min-h-0 bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:border lg:border-white/50 lg:rounded-3xl lg:my-4">
         <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40">
-          <div className="h-14 flex items-center justify-between px-4">
+          <div className="h-14 flex items-center justify-between px-4 lg:px-6">
             <span className="text-base font-bold tracking-tight text-gray-900">Profile</span>
             <button
               type="button"
@@ -447,7 +447,7 @@ export default function ProfilePage() {
                 <p className="mt-1 text-sm text-gray-400">Join a community or create your own.</p>
               </div>
             ) : (
-              <div className="px-4 py-4 space-y-5">
+              <div className="px-4 lg:px-6 py-4 space-y-5">
                 {communities.some((c) => c.role === 'owner') && (
                   <div>
                     <p className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Owned by you</p>

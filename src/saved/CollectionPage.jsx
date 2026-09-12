@@ -28,6 +28,8 @@ export default function CollectionPage() {
   const [collection, setCollection] = useState(null)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
   const [allCollections, setAllCollections] = useState([])
 
   const [menuItemId, setMenuItemId] = useState(null)
@@ -39,19 +41,27 @@ export default function CollectionPage() {
   useEffect(() => {
     if (!currentUid) return
     let cancelled = false
-    Promise.all([getCollection(currentUid, collectionId), getItemsInCollection(currentUid, collectionId)]).then(
-      ([coll, { items: fetchedItems }]) => {
+    setLoading(true)
+    setLoadError('')
+    Promise.all([getCollection(currentUid, collectionId), getItemsInCollection(currentUid, collectionId)])
+      .then(([coll, { items: fetchedItems }]) => {
         if (cancelled) return
         setCollection(coll)
         setRenameValue(coll?.name || '')
         setItems(fetchedItems)
-        setLoading(false)
-      }
-    )
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.error('Could not load this collection:', err)
+        setLoadError("Couldn't load this collection.")
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
     return () => {
       cancelled = true
     }
-  }, [currentUid, collectionId])
+  }, [currentUid, collectionId, reloadKey])
 
   useEffect(() => {
     if (!currentUid) return undefined
@@ -94,6 +104,21 @@ export default function CollectionPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="w-6 h-6 border-2 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-6 text-center">
+        <p className="text-sm font-semibold text-gray-900">{loadError}</p>
+        <button
+          type="button"
+          onClick={() => setReloadKey((k) => k + 1)}
+          className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
+        >
+          Try Again
+        </button>
       </div>
     )
   }

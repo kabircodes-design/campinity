@@ -289,7 +289,7 @@ export default function SearchPage() {
           {!isSearching && (
             <div className="pt-2">
               {recent.length > 0 && (
-                <section className="px-4 py-3">
+                <section className="px-4 lg:px-6 py-3">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Recent</p>
                     <button
@@ -326,7 +326,7 @@ export default function SearchPage() {
               )}
 
               {popularCommunities.length > 0 && (
-                <section className="px-4 pt-2 pb-3">
+                <section className="px-4 lg:px-6 pt-2 pb-3">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">🔥 Trending on campus</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {popularCommunities.map((community) => (
@@ -377,7 +377,7 @@ export default function SearchPage() {
               {showStudents && students.length > 0 && (
                 <section>
                   {activeTab === 'all' && (
-                    <p className="px-4 pt-3 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <p className="px-4 lg:px-6 pt-3 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       Students
                     </p>
                   )}
@@ -390,7 +390,7 @@ export default function SearchPage() {
               {showColleges && colleges.length > 0 && (
                 <section>
                   {activeTab === 'all' && (
-                    <p className="px-4 pt-3 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <p className="px-4 lg:px-6 pt-3 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       Colleges
                     </p>
                   )}
@@ -401,7 +401,7 @@ export default function SearchPage() {
               )}
 
               {showCommunities && communities.length > 0 && (
-                <section className="px-4">
+                <section className="px-4 lg:px-6">
                   {activeTab === 'all' && (
                     <p className="pt-3 pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       Communities
@@ -418,7 +418,7 @@ export default function SearchPage() {
               {showPosts && posts.length > 0 && (
                 <section>
                   {activeTab === 'all' && (
-                    <p className="px-4 pt-3 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <p className="px-4 lg:px-6 pt-3 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       Posts
                     </p>
                   )}

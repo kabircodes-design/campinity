@@ -264,7 +264,7 @@ export default function HomePage() {
     <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
       <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-screen lg:min-h-0 bg-white lg:bg-transparent border-x border-gray-100">
         <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
-          <div className="h-14 flex items-center justify-between lg:justify-end px-4">
+          <div className="h-14 flex items-center justify-between lg:justify-end px-4 lg:px-6">
             <button
               type="button"
               onClick={() => navigate('/home')}
@@ -338,7 +338,7 @@ export default function HomePage() {
 
         {showBanner && <CampusVerificationBanner onDismiss={dismissBanner} />}
 
-        <section className="mx-4 mt-5 mb-5 px-0 py-0">
+        <section className="mx-4 lg:mx-6 mt-5 mb-5 px-0 py-0">
           <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
             {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {firstName}
           </h1>
@@ -357,8 +357,8 @@ export default function HomePage() {
           </button>
         </section>
 
-        <section className="mx-4 mb-5 py-0">
-          <div className="flex items-start gap-3.5 px-4 overflow-x-auto scroll-hidden">
+        <section className="mx-4 lg:mx-6 mb-5 py-0">
+          <div className="flex items-start gap-3.5 overflow-x-auto scroll-hidden">
             {storyBubbles.map((story) => {
               const seen =
                 !story.isAdd && !story.isMore && story.stories?.length > 0
@@ -383,7 +383,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <nav className="sticky top-14 z-30 bg-white flex items-center gap-6 px-4 border-b border-gray-100 mb-3">
+        <nav className="sticky top-14 z-30 bg-white flex items-center gap-6 px-4 lg:px-6 border-b border-gray-100 mb-3">
           {feedTabs.map((tab) => {
             const isActive = activeTab === tab.key
             return (

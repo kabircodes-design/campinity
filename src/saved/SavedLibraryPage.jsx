@@ -25,10 +25,14 @@ export default function SavedLibraryPage() {
 
   const [allItems, setAllItems] = useState([])
   const [allLoading, setAllLoading] = useState(true)
+  const [allError, setAllError] = useState('')
   const [recentItems, setRecentItems] = useState([])
   const [recentLoading, setRecentLoading] = useState(true)
+  const [recentError, setRecentError] = useState('')
   const [collections, setCollections] = useState([])
   const [collectionsLoading, setCollectionsLoading] = useState(true)
+  const [collectionsError, setCollectionsError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   const [creatingNew, setCreatingNew] = useState(false)
   const [newName, setNewName] = useState('')
@@ -39,24 +43,44 @@ export default function SavedLibraryPage() {
 
   useEffect(() => {
     if (!currentUid) return
-    getAllSavedItems(currentUid).then(({ items }) => {
-      setAllItems(items)
-      setAllLoading(false)
-    })
-    getRecentlySavedItems(currentUid).then((items) => {
-      setRecentItems(items)
-      setRecentLoading(false)
-    })
-  }, [currentUid])
+    setAllLoading(true)
+    setAllError('')
+    getAllSavedItems(currentUid)
+      .then(({ items }) => setAllItems(items))
+      .catch((err) => {
+        console.error('Could not load saved items:', err)
+        setAllError("Couldn't load your saved items.")
+      })
+      .finally(() => setAllLoading(false))
+
+    setRecentLoading(true)
+    setRecentError('')
+    getRecentlySavedItems(currentUid)
+      .then(setRecentItems)
+      .catch((err) => {
+        console.error('Could not load recently saved items:', err)
+        setRecentError("Couldn't load recently saved items.")
+      })
+      .finally(() => setRecentLoading(false))
+  }, [currentUid, reloadKey])
 
   useEffect(() => {
     if (!currentUid) return undefined
-    const unsubscribe = subscribeToCollections(currentUid, (data) => {
-      setCollections(data)
-      setCollectionsLoading(false)
-    })
+    setCollectionsLoading(true)
+    setCollectionsError('')
+    const unsubscribe = subscribeToCollections(
+      currentUid,
+      (data) => {
+        setCollections(data)
+        setCollectionsLoading(false)
+      },
+      () => {
+        setCollectionsError("Couldn't load your collections.")
+        setCollectionsLoading(false)
+      }
+    )
     return unsubscribe
-  }, [currentUid])
+  }, [currentUid, reloadKey])
 
   const handleCreate = async () => {
     if (!newName.trim() || creating) return
@@ -222,6 +246,17 @@ export default function SavedLibraryPage() {
               <div className="grid grid-cols-3 gap-1.5">
                 {Array.from({ length: 6 }).map((_, i) => <div key={i} className="aspect-square rounded-xl bg-gray-100 animate-pulse" />)}
               </div>
+            ) : allError ? (
+              <div className="py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">{allError}</p>
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((k) => k + 1)}
+                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
+                >
+                  Try Again
+                </button>
+              </div>
             ) : allItems.length === 0 ? (
               <EmptyState />
             ) : (
@@ -252,6 +287,17 @@ export default function SavedLibraryPage() {
               <div className="grid grid-cols-3 gap-1.5">
                 {Array.from({ length: 6 }).map((_, i) => <div key={i} className="aspect-square rounded-xl bg-gray-100 animate-pulse" />)}
               </div>
+            ) : recentError ? (
+              <div className="py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">{recentError}</p>
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((k) => k + 1)}
+                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
+                >
+                  Try Again
+                </button>
+              </div>
             ) : recentItems.length === 0 ? (
               <EmptyState />
             ) : (
@@ -264,6 +310,17 @@ export default function SavedLibraryPage() {
             (collectionsLoading ? (
               <div className="grid grid-cols-2 gap-3">
                 {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-32 rounded-2xl bg-gray-100 animate-pulse" />)}
+              </div>
+            ) : collectionsError ? (
+              <div className="py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">{collectionsError}</p>
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((k) => k + 1)}
+                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
+                >
+                  Try Again
+                </button>
               </div>
             ) : filteredCollections.length === 0 ? (
               <p className="text-center text-sm text-gray-400 py-12">No collections yet — tap New to create one.</p>

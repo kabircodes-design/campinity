@@ -301,6 +301,22 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
     }
 
+    // products/{productId} — Marketplace. marketplaceService.js's own
+    // comment confirms the intent exactly: "the real authorization
+    // boundary is the Firestore rule itself ... never trust sellerId
+    // from client." Public read (browsing/searching listings); create
+    // requires the declared sellerId to match the requester; only the
+    // seller may edit or remove their own listing. This collection had
+    // zero rule coverage before this pass — the same class of gap as
+    // chats/communities/follows found and fixed earlier — which is why
+    // Marketplace never actually loaded any data despite real products
+    // existing in the database.
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.sellerId == request.auth.uid;
+    }
+
     // savedItems/{uid}/items/{itemId} and savedCollections/{uid}/collections/{id}
     // — private, owner-only bookmarking system (savedService.js).
     match /savedItems/{uid}/items/{itemId} {
