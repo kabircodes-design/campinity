@@ -11,38 +11,121 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
-    // users/{uid} — readable by any signed-in user (this is a social
-    // feed app: every other student's name/avatar/bio needs to be
-    // visible in the feed, on their profile page, in followers lists,
-    // comments, Radar, search, etc. — profileService.js's own comments
-    // already documented this as the intended rule, e.g. the "RADAR"
-    // section: "users/{uid}'s read rule is unconditional for any
-    // signed-in user (allow read: if isSignedIn())"). The deployed rule
-    // had drifted to owner-only, which silently broke every one of
-    // those cross-user reads: feed posts showed "Student" instead of
-    // the real name (useAuthorEnrichment's getUserProfile call on
-    // someone else's uid was denied and fell back to a placeholder),
-    // and opening a student's profile via a card built its link from
-    // that same empty fallback username, landing on `/student/` (no
-    // param) which falls through to the catch-all route ("/").
-    // Writes remain owner-only — no change there.
+    function onlyChanged(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    /**
+     * =====================================================================
+     * INCIDENT NOTE (this pass): a full audit found that firestore.rules
+     * has NEVER covered most of this app's collections — chats, messages,
+     * communities, follows, likes/comments field carve-outs on posts,
+     * notifications, radar, gamification, colleges, lost & found, saved
+     * items, and more. Confirmed via full git history: the very first
+     * commit that ever added this file already lacked them. Confirmed via
+     * a temporary read-only Admin SDK diagnostic (deployed, run once,
+     * then removed) that REAL DATA EXISTS in every one of these
+     * collections — nothing was deleted; it was simply never readable,
+     * because every unlisted collection falls through to the catch-all
+     * deny at the bottom of this file. Every rule added below is written
+     * to match an exact, already-documented design already sitting in
+     * this codebase's own comments (chatService.js, communityService.js,
+     * engagementService.js, notificationService.js, profileService.js,
+     * radarLocationService.js, blockService.js, muteService.js,
+     * reportService.js all describe the specific rule they expected to
+     * exist) — restoring intent, not inventing a new security model.
+     * =====================================================================
+     */
+
+    // users/{uid} — readable by any signed-in user (social feed app:
+    // names/avatars/bios must be visible in feeds, profiles, followers
+    // lists, comments, Radar, mention search). Writes are owner-only,
+    // with one narrow exception: followUser/unfollowUser (profileService.js)
+    // updates followersCount/followingCount on the OTHER party's doc as
+    // part of the same transaction — that field-scoped carve-out is what
+    // makes follow/unfollow work at all.
     match /users/{uid} {
       allow read: if isSignedIn();
       allow create: if isOwner(uid);
-      allow update: if isOwner(uid);
+      allow update: if isOwner(uid) || (isSignedIn() && onlyChanged(['followersCount', 'followingCount']));
       allow delete: if false;
+
+      // users/{uid}/notifications/{notificationId} — per notificationService.js's
+      // own documented rule: create requires actorUid == requester AND
+      // actorUid != uid (no self-notifications); read/delete owner-only;
+      // update restricted to the `read` flag only.
+      match /notifications/{notificationId} {
+        allow read: if isOwner(uid);
+        allow create: if isSignedIn() && request.resource.data.actorUid == request.auth.uid && request.resource.data.actorUid != uid;
+        allow update: if isOwner(uid) && onlyChanged(['read']);
+        allow delete: if isOwner(uid);
+      }
+
+      // Private per-user subcollections — savedPosts (legacy save
+      // system, savedService.js's own comment confirms it's kept
+      // alongside the newer savedItems/ collection below), blockedUsers
+      // (never readable by the blocked party — structurally impossible
+      // since only the owner can read their own subcollection at all),
+      // mutedUsers, mutedCommunities. All owner-only, every direction.
+      match /savedPosts/{postId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /blockedUsers/{blockedUid} {
+        allow read, create, delete: if isOwner(uid);
+        allow update: if false;
+      }
+      match /mutedUsers/{mutedUid} {
+        allow read, write: if isOwner(uid);
+      }
+      match /mutedCommunities/{communityId} {
+        allow read, write: if isOwner(uid);
+      }
     }
 
-    // posts/{postId} — any signed-in user can read public posts.
-    // Only the declared author can create/update/delete their own post.
+    // posts/{postId} — public read, author-owned writes, plus the
+    // specific field-scoped carve-outs engagementService.js's own
+    // comments document as already-expected: likedBy/likesCount (any
+    // signed-in user liking/unliking), commentsCount (incremented by
+    // whoever adds a top-level comment), shareCount (incremented on
+    // share), communityDeleted (set by deleteCommunity's cascade when
+    // its owner deletes the community).
     match /posts/{postId} {
       allow read: if isSignedIn() && resource.data.visibility == 'public';
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        onlyChanged(['likedBy', 'likesCount']) ||
+        onlyChanged(['commentsCount']) ||
+        onlyChanged(['shareCount']) ||
+        onlyChanged(['communityDeleted'])
+      );
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // posts/{postId}/comments/{commentId} — schema and rule intent
+      // both documented directly in engagementService.js. Author owns
+      // their comment; any signed-in user may like/unlike
+      // (likedBy/likesCount) or toggle pinned; replyCount is
+      // incremented by whoever posts a reply. Delete is comment-author
+      // or the post's own owner (community-admin moderation of others'
+      // comments is not covered here — a narrower, deliberate scope
+      // decision, not an oversight; see final report).
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow update: if isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          onlyChanged(['likedBy', 'likesCount']) ||
+          onlyChanged(['pinned']) ||
+          onlyChanged(['replyCount'])
+        );
+        allow delete: if isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          get(/databases/$(database)/documents/posts/$(postId)).data.userId == request.auth.uid
+        );
+      }
     }
 
-    // stories/{storyId} — same read/write pattern as posts.
+    // stories/{storyId} — same read/write pattern as posts. Unchanged.
     match /stories/{storyId} {
       allow read: if isSignedIn() && resource.data.visibility == 'public';
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
@@ -50,26 +133,220 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
-    // usernames/{username} — the reservation collection backing
-    // checkUsernameAvailable/reserveUsername/ensureUsernameReservation
-    // in usernameService.js. Never had a rule here before, so every
-    // read fell through to the catch-all deny below — this is what
-    // made username availability checks and profile creation fail
-    // with a silent Firestore permission-denied ("Network error — try
-    // again" in the UI, no console log, no distinct Network-tab entry
-    // since Firestore reads share its long-lived channel connection).
-    // Read is open to any signed-in user (this doc is just {uid,
-    // createdAt} — no sensitive data, and other users' profiles are
-    // legitimately looked up by username via getUserIdByUsername).
-    // Write is restricted to the reservation's own owner in both
-    // directions, matching exactly what reserveUsername's transaction
-    // does (create a new reservation for yourself, delete your own old
-    // one) — never lets one uid touch a reservation owned by another.
+    // storyViews/{storyId}_{viewerUid} — idempotent per-viewer record
+    // (storyService.js). Read open to signed-in users (getStoryViewers
+    // shows who viewed a story to that story's owner — enforcing
+    // "owner only" here would need a get() on the parent story, skipped
+    // as an unnecessary restriction for a low-sensitivity read: seeing
+    // that someone viewed a public story is not private information).
+    // Create restricted to the viewer recording their own view.
+    match /storyViews/{viewId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.viewerUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // usernames/{username} — reservation collection. Unchanged from the
+    // previous incident fix.
     match /usernames/{username} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
       allow update: if isSignedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // follows/{followerId}_{followingId} — profileService.js's own
+    // comment confirms the intended design exactly: read open to any
+    // signed-in user (follower/following lists, mutual-followers,
+    // follow-status checks are all cross-user reads), create/delete
+    // restricted to the follower themselves (you can only create or
+    // remove YOUR OWN follow relationship, never act on someone else's
+    // behalf). No update — follow is a binary exists/doesn't-exist
+    // relationship, never edited in place.
+    match /follows/{followId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.followerId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.followerId == request.auth.uid;
+      allow update: if false;
+    }
+
+    // chats/{chatId} — doc id "{uidA}_{uidB}" (1:1) or auto-id (group),
+    // schema documented directly in chatService.js. Read/update/delete
+    // restricted to participants; create requires the requester to be
+    // one of the chat's own listed participants, and (per
+    // chatService.js's own MIN_GROUP_MEMBERS comment) a group chat must
+    // list at least 3 participants at creation.
+    match /chats/{chatId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() && request.auth.uid in request.resource.data.participants &&
+        (request.resource.data.get('type', 'direct') != 'group' || request.resource.data.participants.size() >= 3);
+      allow update: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow delete: if isSignedIn() && request.auth.uid in resource.data.participants;
+
+      // chats/{chatId}/messages/{messageId} — participant-only in every
+      // direction; create requires the sender field to match the
+      // requester; delete restricted to the message's own sender
+      // (deleteMessageForEveryone), matching chatService.js exactly.
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow create: if isSignedIn() &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow update: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
+      }
+    }
+
+    // communities/{communityId} — public discovery read. Create by the
+    // declared owner only. Update: the owner may change anything;
+    // an existing admin may change only the fields
+    // updateCommunityDetails's own comment documents as admin-editable
+    // (description/coverImage/icon/tags/rules) plus the admins/
+    // moderators arrays (promote/demote); any signed-in user may adjust
+    // ONLY membersCount, as a side effect of joining/leaving. Delete is
+    // owner-only (deleteCommunity).
+    match /communities/{communityId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (request.auth.uid in resource.data.admins &&
+          onlyChanged(['description', 'coverImage', 'icon', 'tags', 'rules', 'admins', 'moderators'])) ||
+        onlyChanged(['membersCount'])
+      );
+      allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // communityMembers/{communityId}_{uid} — communityService.js's own
+    // comment confirms the schema. Read open (member lists/roles are
+    // normal social-app data, not private). Create: the member joining
+    // themselves (joinCommunity/createCommunity's owner doc), OR the
+    // community's owner/admin admitting someone else (acceptRequest).
+    // Update/delete (role changes, leaving, being removed): the member
+    // themselves, or the community's owner/admin.
+    match /communityMembers/{memberId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        request.resource.data.uid == request.auth.uid ||
+        get(/databases/$(database)/documents/communities/$(request.resource.data.communityId)).data.ownerId == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/communities/$(request.resource.data.communityId)).data.admins
+      );
+      allow update: if isSignedIn() && (
+        get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.admins
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.admins
+      );
+    }
+
+    // communityRequests/{communityId}_{uid} — requestToJoin creates its
+    // own; read/delete available to the requester themselves or the
+    // community's owner/admin (viewing/accepting/rejecting requests).
+    match /communityRequests/{requestId} {
+      allow read: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.admins
+      );
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.admins
+      );
+      allow update: if false;
+    }
+
+    // communityHandles/{handle} — same reservation pattern as
+    // usernames/{}. Read open (handle-availability checks); create/
+    // delete restricted to the reservation's own owner (createCommunity
+    // reserves it, deleteCommunity releases it).
+    match /communityHandles/{handle} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
+    // colleges/{collegeId} — public reference data (onboarding college
+    // search, community college filter). Read-only for clients; writes
+    // only ever happen via collegeRequestService.js's admin-approval
+    // transaction, which this pass deliberately does NOT re-enable —
+    // that flow depends on the platformAdmins-based admin check this
+    // project has already moved away from (see final report). Colleges
+    // already in the database remain fully readable either way.
+    match /colleges/{collegeId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // collegeRequests/{requestId} — any signed-in user may submit a
+    // request to add a missing college (AddCollegePage.jsx). Reading/
+    // reviewing requests is an admin action, intentionally left
+    // unavailable for the same reason as colleges/ above.
+    match /collegeRequests/{requestId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if false;
+    }
+
+    // lostFound/{itemId} — public campus board; only the poster can
+    // edit/remove their own listing (createLostFoundItem's own comment:
+    // "authenticated uid passed in — never trusted from anywhere else").
+    match /lostFound/{itemId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
+    }
+
+    // savedItems/{uid}/items/{itemId} and savedCollections/{uid}/collections/{id}
+    // — private, owner-only bookmarking system (savedService.js).
+    match /savedItems/{uid}/items/{itemId} {
+      allow read, write: if isOwner(uid);
+    }
+    match /savedCollections/{uid}/collections/{collectionId} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // reports/{reportId} — reportService.js's own comment documents the
+    // exact intended rule: create requires reporterUid == requester;
+    // read/update/delete are admin-only. Admin review now happens via
+    // adminResolveReport/adminListReports (Cloud Functions, Admin SDK —
+    // bypasses these rules entirely), not a client-side platformAdmins
+    // check, so read/update/delete stay denied for every client here.
+    match /reports/{reportId} {
+      allow create: if isSignedIn() && request.resource.data.reporterUid == request.auth.uid;
+      allow read, update, delete: if false;
+    }
+
+    // radarLocations/{uid} — radarLocationService.js's own comment
+    // documents this exactly: "Read: any signed-in user (required)...
+    // Write: owner only."
+    match /radarLocations/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid);
+    }
+
+    // Gamification — userProgress/{uid}, userBadges/{uid}/earned/{id},
+    // xpLog/{uid}/entries/{id}. XP/badges are awarded to OTHER users as
+    // a side effect of their actions (e.g. liking someone's post awards
+    // THEM xp, not you), so these cannot be owner-only for write.
+    // Treated as coarse-grained, low-stakes data (consistent with how
+    // likesCount/followersCount/membersCount are already handled above)
+    // rather than gated field-by-field.
+    match /userProgress/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /userBadges/{uid}/earned/{badgeId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /xpLog/{uid}/entries/{entryId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     // verificationRequests/{requestId} — created during onboarding's
