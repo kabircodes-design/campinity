@@ -15,6 +15,18 @@ const firebaseConfig = {
   
 const app = initializeApp(firebaseConfig);
 
+// TEMPORARY DIAGNOSTIC — remove once the auth/unauthorized-domain
+// issue is confirmed fixed. Logs only projectId/authDomain (never
+// apiKey or any other secret), read from the actual firebaseConfig
+// object above — this reflects exactly what Vite loaded into this
+// running process, not what's supposed to be in .env. Runs
+// automatically on app load since this file is imported at startup —
+// no console command needed.
+console.log('[Firebase Config Check]', {
+  projectId: firebaseConfig.projectId,
+  authDomain: firebaseConfig.authDomain
+});
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
