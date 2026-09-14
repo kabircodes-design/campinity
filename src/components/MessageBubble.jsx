@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, CheckCheck, Clock, X } from 'lucide-react'
+import { Check, CheckCheck, Clock, Download, FileText, X } from 'lucide-react'
 import SharedCard from '../sharing/SharedCard.jsx'
+
+function formatFileSize(bytes) {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 /**
  * Props match ChatPage.jsx's exact usage: <MessageBubble message={...}
@@ -34,12 +41,35 @@ export default function MessageBubble({ message, isMine, currentUid, onRetry }) 
       <div
         className={`max-w-[78%] lg:max-w-[68%] rounded-2xl ${type === 'image' ? 'p-1' : 'px-3.5 py-2'} ${
           isMine
-            ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-br-md shadow-sm'
+            ? 'bg-blue-600 text-white rounded-br-md shadow-sm'
             : 'bg-white text-gray-900 rounded-bl-md border border-gray-100 shadow-sm'
         } ${message.pending ? 'opacity-60' : 'opacity-100'} transition-opacity duration-300`}
       >
         {type === 'text' ? (
           <p className="text-[14px] leading-relaxed whitespace-pre-wrap break-words">{message.text}</p>
+        ) : type === 'file' ? (
+          <div>
+            <a
+              href={message.fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 -mx-1 transition-colors duration-200 ${
+                isMine ? 'hover:bg-white/10' : 'hover:bg-gray-50'
+              }`}
+            >
+              <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isMine ? 'bg-white/15' : 'bg-blue-50 text-blue-600'}`}>
+                <FileText className="w-4.5 h-4.5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold truncate">{message.fileName || 'File'}</p>
+                <p className={`text-[11px] ${isMine ? 'text-white/70' : 'text-gray-400'}`}>{formatFileSize(message.fileSize)}</p>
+              </div>
+              <Download className={`w-4 h-4 flex-shrink-0 ${isMine ? 'text-white/80' : 'text-gray-400'}`} />
+            </a>
+            {message.text && (
+              <p className="mt-1 px-1 text-[14px] leading-relaxed whitespace-pre-wrap break-words">{message.text}</p>
+            )}
+          </div>
         ) : type === 'image' ? (
           <div>
             {imageFailed ? (

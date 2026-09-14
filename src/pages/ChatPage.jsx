@@ -1,20 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Clock, Users } from 'lucide-react'
+import {
+  ArrowLeft,
+  Bell,
+  Clock,
+  Download,
+  FileText,
+  MessageCircle,
+  Phone,
+  Radar,
+  Search,
+  ShieldAlert,
+  Users,
+  Video
+} from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 import DesktopSidebar from '../components/DesktopSidebar.jsx'
 import ChatListPanel from '../components/ChatListPanel.jsx'
 import MessageBubble from '../components/MessageBubble.jsx'
 import MessageInput from '../components/MessageInput.jsx'
+import CallOverlay from '../components/CallOverlay.jsx'
+import ReportModal from '../components/ReportModal.jsx'
+import Logo from '../components/Logo.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { markChatRead, subscribeToUserChats, subscribeToSentPendingChats } from '../firebase/chatService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
+import { subscribeToUnreadCount } from '../firebase/notificationService.js'
+import { isOnline, presenceLabel } from '../firebase/presenceService.js'
+import { blockUser } from '../firebase/blockService.js'
+import { getCollegeById } from '../data/dummyColleges.js'
 import { useChat } from '../hooks/useChat.js'
 import { useMessages } from '../hooks/useMessages.js'
+import { useCall } from '../hooks/useCall.js'
 
 function dayLabelFor(timestamp) {
   if (!timestamp?.toDate) return ''
@@ -31,27 +52,27 @@ function dayLabelFor(timestamp) {
   return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
+function formatFileSize(bytes) {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 /**
- * Phase 1 foundation change: this page now also renders the desktop
- * 3-column shell (sidebar + chat list + this active conversation),
- * not just the conversation alone. The chat-list data subscription
- * below (subscribeToUserChats/subscribeToSentPendingChats/profile
- * enrichment) intentionally duplicates MessagesPage.jsx's own — this
- * is a genuine architectural cost of the app's existing two-separate-
- * routes design (/messages vs /messages/:chatId), not something a
- * shared hook could avoid without a much larger routing rewrite this
- * phase's scope explicitly avoids. What's NOT duplicated is the list
- * ITEM markup — both pages render the same ChatListPanel.jsx.
- *
- * The composer was previously position:fixed, centered via
- * left-1/2/translate-x — that only worked because the whole app was a
- * single narrow mobile-width column. In the new 3-column desktop
- * shell it would center on the full viewport instead of the
- * conversation column. Converted to a normal flex-column layout
- * (header, flex-1 scrollable messages, composer as a plain flex
- * child) — this is also what correctly satisfies "composer should
- * remain fixed/sticky at the bottom of the active chat" without the
- * fragile viewport-centering hack.
+ * Redesigned to match the finished Home page's design system, PLUS a
+ * real fix for the reported scroll/composer bug: the previous version
+ * only applied `overflow-y-auto` to the messages region (and
+ * `overflow-hidden`/`h-screen` on its ancestor) at the `lg:` breakpoint
+ * — on mobile there was no such constraint, so the whole PAGE scrolled
+ * as one long document instead of just the message list, which is
+ * exactly what made the composer "move away" while scrolling and
+ * required manually scrolling down to reach the latest message. Fixed
+ * by applying `h-screen overflow-hidden` on the conversation column and
+ * `overflow-y-auto` on the message list at every breakpoint, not just
+ * lg:. The actual scroll-to-bottom / "near bottom vs. show new-messages
+ * button" / composer-stays-fixed LOGIC below was already correct
+ * (confirmed by reading it) — only this CSS constraint was missing.
  */
 export default function ChatPage() {
   const { chatId } = useParams()
@@ -63,13 +84,15 @@ export default function ChatPage() {
     chatId,
     otherUid
   )
+  const call = useCall()
 
-  // Desktop chat-list column — see the file-level comment above for
-  // why this duplicates MessagesPage.jsx's own subscription.
   const [listChats, setListChats] = useState([])
   const [listSentPending, setListSentPending] = useState([])
   const [listProfiles, setListProfiles] = useState({})
   const [listSearchTerm, setListSearchTerm] = useState('')
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [otherCollege, setOtherCollege] = useState(null)
   const fetchedUidsRef = useRef(new Set())
 
   useEffect(() => {
@@ -130,6 +153,26 @@ export default function ChatPage() {
     if (uid) getUserProfile(uid).then(setProfile).catch(() => {})
   }, [])
 
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    const unsubscribe = subscribeToUnreadCount(uid, setUnreadNotifCount)
+    return () => unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!otherProfile?.collegeId) {
+      setOtherCollege(null)
+      return
+    }
+    let cancelled = false
+    getCollegeById(otherProfile.collegeId).then((c) => {
+      if (!cancelled) setOtherCollege(c)
+    }).catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [otherProfile?.collegeId])
+
   const messagesContainerRef = useRef(null)
   const [showNewMessagesButton, setShowNewMessagesButton] = useState(false)
   const isNearBottomRef = useRef(true)
@@ -148,19 +191,25 @@ export default function ChatPage() {
     setShowNewMessagesButton(false)
   }
 
+  // Opening a conversation (or switching to a new one) always starts at
+  // the latest message — isNearBottomRef defaults to true and this
+  // effect fires the first time `messages` populates, same mechanism
+  // that also handles new incoming messages while already at the
+  // bottom. Only skips the jump if the user has manually scrolled up.
   useEffect(() => {
-    // Real fix for the auto-scroll UX gap: previously this always
-    // force-scrolled to bottom on every message change, regardless of
-    // where the user currently was — meaning reading old messages
-    // while new ones arrived would yank the view back down. Now it
-    // only auto-scrolls when the user is already near the bottom;
-    // otherwise it shows a floating "New messages" indicator instead.
     if (isNearBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     } else {
       setShowNewMessagesButton(true)
     }
   }, [messages])
+
+  // Reset scroll tracking when switching conversations, so opening chat
+  // B right after chat A doesn't inherit "user had scrolled up" from A.
+  useEffect(() => {
+    isNearBottomRef.current = true
+    setShowNewMessagesButton(false)
+  }, [chatId])
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
@@ -184,14 +233,31 @@ export default function ChatPage() {
     return groups
   }, [messages])
 
+  const sharedFiles = useMemo(() => messages.filter((m) => m.type === 'file').slice(-8).reverse(), [messages])
+  const mediaItems = useMemo(() => messages.filter((m) => m.type === 'image' && m.imageUrl).slice(-8).reverse(), [messages])
+
   const loading = chatLoading || (messagesLoading && messages.length === 0)
   const displayName = otherProfile?.displayName || 'Student'
   const isGroup = chat?.type === 'group'
   const currentUid = auth.currentUser?.uid
+  const initials = getInitials(profile?.displayName || '')
+  const myColorClass = getAvatarColor(currentUid || profile?.displayName)
 
   const isPending = chat?.status === 'pending'
   const isMyRequest = isPending && chat?.requestedBy === currentUid
   const pendingLimitReached = isMyRequest && (chat?.pendingMessageCount || 0) >= 3
+  const otherOnline = !isGroup && isOnline(otherProfile)
+
+  const handleCall = (type) => {
+    if (isGroup || !otherUid) return
+    call.startCall(otherUid, chatId, type)
+  }
+
+  const handleBlock = async () => {
+    if (!currentUid || !otherUid) return
+    await blockUser(currentUid, otherUid).catch(() => {})
+    navigate('/messages')
+  }
 
   if (loading) {
     return (
@@ -222,154 +288,329 @@ export default function ChatPage() {
   }
 
   return (
-    <div
-      className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
-      style={{ backgroundColor: '#f3f0fb' }}
-    >
+    <>
       <div
-        className="ambient-glow-layer ambient-glow-1"
-        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-2"
-        style={{
-          background:
-            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
-        }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-3"
-        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
-      />
-      <DesktopSidebar profile={profile} />
+        className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_1fr]"
+        style={{ backgroundColor: '#f8fafc' }}
+      >
+        <DesktopSidebar unreadNotifications={unreadNotifCount} profile={profile} />
 
-      {/* Desktop chat-list column — same panel MessagesPage.jsx uses.
-          Now a distinct floating glass panel (rounded, margined,
-          bordered) rather than a flush-bordered strip, so it visibly
-          separates from both the sidebar and the active chat next to
-          it, per Section 4's explicit requirement. */}
-      <div className="hidden lg:flex lg:flex-col w-[380px] flex-shrink-0 h-screen lg:my-4 lg:rounded-3xl lg:border lg:border-white/50 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] bg-white/40 backdrop-blur-2xl overflow-y-auto">
-        <div className="h-14 flex items-center px-4 flex-shrink-0 border-b border-white/40">
-          <span className="text-base font-bold tracking-tight text-gray-900">Chats</span>
-        </div>
-        <ChatListPanel
-          error=""
-          allChats={listAllChats}
-          visibleChats={listVisibleChats}
-          profiles={listProfiles}
-          searchTerm={listSearchTerm}
-          onSearchChange={setListSearchTerm}
-          activeChatId={chatId}
-        />
-      </div>
-
-      {/* Active conversation — a real flex column now, not a
-          viewport-fixed composer hack. h-screen/overflow-hidden on
-          this column plus flex-1/overflow-y-auto on <main> below is
-          what makes only the message history scroll, matching the
-          brief's own application-shell requirement. Now its own
-          floating glass panel (rounded, margined, bordered) distinct
-          from the chat-list panel beside it — the shared page-level
-          ambient glow layers show through here directly, so no
-          separate inline gradient is needed on this column anymore. */}
-      <div className="flex-1 min-h-screen lg:h-screen lg:overflow-hidden overflow-x-hidden flex flex-col lg:my-4 lg:mr-4 lg:rounded-3xl lg:border lg:border-white/50 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:bg-white/35 lg:backdrop-blur-2xl">
-        <div className="mx-auto w-full max-w-[480px] lg:max-w-none lg:h-full bg-white/85 backdrop-blur-md lg:bg-transparent flex flex-col flex-1 min-h-screen lg:min-h-0">
-          <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40 flex-shrink-0">
-            <div className="h-14 flex items-center gap-2 px-3">
+        <div className="flex flex-col h-screen overflow-hidden min-w-0">
+          {/* Global header — identical treatment to Home/Messages, duplicated (not extracted) so Home's own file stays untouched. */}
+          <header className="sticky top-0 z-40 bg-white border-b border-gray-100 flex-shrink-0 hidden lg:block">
+            <div className="h-14 flex items-center gap-3 px-4 lg:px-6">
               <button
                 type="button"
-                aria-label="Back"
-                onClick={() => navigate('/messages')}
-                className="lg:hidden w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+                onClick={() => navigate('/home')}
+                aria-label="Campinity — go to Home"
+                className="flex items-center flex-shrink-0"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <Logo className="w-7 h-7" withWordmark />
               </button>
-              {isGroup ? (
-                <button
-                  type="button"
-                  onClick={() => navigate(`/messages/${chatId}/info`)}
-                  className="flex items-center gap-2 flex-1 min-w-0 text-left"
-                >
-                  {chat?.groupAvatar ? (
-                    <img src={chat.groupAvatar} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center flex-shrink-0">
-                      <Users className="w-4 h-4 text-white" />
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{chat?.groupName || 'Group'}</p>
-                    <p className="text-[11px] text-gray-400 truncate">{chat?.participants?.length || 0} members</p>
-                  </div>
+              <button
+                type="button"
+                onClick={() => navigate('/search')}
+                className="group relative flex flex-1 max-w-md mx-auto items-center text-left"
+                aria-label="Search Campinity"
+              >
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-colors duration-200 group-hover:text-gray-500" />
+                <span className="flex items-center justify-between w-full rounded-full border border-gray-200 bg-gray-50 pl-10 pr-2.5 py-2 text-sm text-gray-400 transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)]">
+                  Search for people, communities, posts...
+                  <kbd className="flex-shrink-0 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">
+                    Ctrl K
+                  </kbd>
+                </span>
+              </button>
+              <div className="flex items-center gap-1 ml-auto">
+                <button type="button" aria-label="Radar" onClick={() => navigate('/radar')} className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200">
+                  <Radar className="w-5 h-5" />
                 </button>
-              ) : (
-                <>
-                  <Avatar
-                    initials={getInitials(displayName)}
-                    colorClass={getAvatarColor(otherUid || chatId)}
-                    size="sm"
-                    src={getProfileIdentityImage(otherProfile) || undefined}
-                  />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
-                    {otherProfile?.username && <p className="text-[11px] text-gray-400 truncate">@{otherProfile.username}</p>}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {isMyRequest && (
-              <div className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 border-t border-amber-100">
-                <Clock className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-                <p className="text-[12px] text-amber-700">
-                  <span className="font-semibold">Message Request Sent</span> — waiting for acceptance
-                </p>
+                <button type="button" aria-label="Messages" onClick={() => navigate('/messages')} className="w-9 h-9 rounded-full flex items-center justify-center text-blue-600 bg-blue-50 transition-all duration-200">
+                  <MessageCircle className="w-5 h-5" />
+                </button>
+                <button type="button" aria-label="Notifications" onClick={() => navigate('/notifications')} className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200">
+                  <Bell className="w-5 h-5" />
+                  {unreadNotifCount > 0 && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />}
+                </button>
+                {profile && (
+                  <button type="button" onClick={() => navigate('/profile')} aria-label="Your profile" className="flex items-center ml-1 rounded-full hover:bg-gray-100 p-0.5 transition-all duration-200">
+                    <Avatar initials={initials} colorClass={myColorClass} size="sm" src={getProfileIdentityImage(profile) || undefined} />
+                  </button>
+                )}
               </div>
-            )}
+            </div>
           </header>
 
-          <main
-            ref={messagesContainerRef}
-            onScroll={handleMessagesScroll}
-            className="relative flex-1 lg:overflow-y-auto px-4 py-4 space-y-3"
-          >
-            {messagesError && <p className="text-center text-xs text-red-500">{messagesError}</p>}
+          <div className="flex-1 flex overflow-hidden min-h-0">
+            {/* Desktop chat-list column — same panel MessagesPage.jsx uses. */}
+            <div className="hidden lg:flex lg:flex-col w-[320px] flex-shrink-0 h-full border-r border-gray-100 bg-white overflow-y-auto">
+              <div className="px-4 pt-4 pb-1">
+                <h2 className="text-lg font-bold text-gray-900 tracking-tight">Messages</h2>
+              </div>
+              <ChatListPanel
+                error=""
+                allChats={listAllChats}
+                visibleChats={listVisibleChats}
+                profiles={listProfiles}
+                searchTerm={listSearchTerm}
+                onSearchChange={setListSearchTerm}
+                activeChatId={chatId}
+              />
+            </div>
 
-            {groupedMessages.length === 0 ? (
-              <p className="py-12 text-center text-sm text-gray-400">Say hello 👋</p>
-            ) : (
-              groupedMessages.map((item) =>
-                item.type === 'separator' ? (
-                  <div key={item.id} className="flex items-center justify-center py-2">
-                    <span className="text-[11px] font-medium text-gray-500 bg-white/50 backdrop-blur-sm border border-white/40 rounded-full px-3 py-1">
-                      {item.label}
-                    </span>
+            {/* Active conversation — real flex-column, h-full +
+                overflow-hidden at every breakpoint (not just lg:), which
+                is the actual fix for "composer moves / have to scroll
+                down manually" on mobile. */}
+            <div className="flex-1 h-screen lg:h-full overflow-hidden flex flex-col min-w-0 bg-white">
+              <header className="sticky top-0 z-30 bg-white border-b border-gray-100 flex-shrink-0">
+                <div className="h-14 flex items-center gap-2 px-3">
+                  <button
+                    type="button"
+                    aria-label="Back"
+                    onClick={() => navigate('/messages')}
+                    className="lg:hidden w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  {isGroup ? (
+                    <button type="button" onClick={() => navigate(`/messages/${chatId}/info`)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                      {chat?.groupAvatar ? (
+                        <img src={chat.groupAvatar} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center flex-shrink-0">
+                          <Users className="w-4 h-4 text-white" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{chat?.groupName || 'Group'}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{chat?.participants?.length || 0} members</p>
+                      </div>
+                    </button>
+                  ) : (
+                    <>
+                      <div className="relative flex-shrink-0">
+                        <Avatar
+                          initials={getInitials(displayName)}
+                          colorClass={getAvatarColor(otherUid || chatId)}
+                          size="sm"
+                          src={getProfileIdentityImage(otherProfile) || undefined}
+                        />
+                        {otherOnline && (
+                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" aria-label="Online" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
+                        <p className={`text-[11px] truncate ${otherOnline ? 'text-emerald-600' : 'text-gray-400'}`}>
+                          {presenceLabel(otherProfile)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Voice call"
+                        title="Voice call"
+                        onClick={() => handleCall('voice')}
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200"
+                      >
+                        <Phone className="w-4.5 h-4.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Video call"
+                        title="Video call"
+                        onClick={() => handleCall('video')}
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200"
+                      >
+                        <Video className="w-4.5 h-4.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {isMyRequest && (
+                  <div className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 border-t border-amber-100">
+                    <Clock className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                    <p className="text-[12px] text-amber-700">
+                      <span className="font-semibold">Message Request Sent</span> — waiting for acceptance
+                    </p>
                   </div>
-                ) : (
-                  <MessageBubble key={item.id} message={item.message} isMine={item.message.senderId === currentUid} currentUid={currentUid} onRetry={retryMessage} />
-                )
-              )
-            )}
-            <div ref={bottomRef} />
+                )}
+              </header>
 
-            {showNewMessagesButton && (
-              <button
-                type="button"
-                onClick={() => scrollToBottom('smooth')}
-                className="sticky bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 mx-auto rounded-full bg-gray-900 text-white text-xs font-semibold px-3.5 py-2 shadow-lg hover:bg-gray-800 transition-all duration-200"
+              <main
+                ref={messagesContainerRef}
+                onScroll={handleMessagesScroll}
+                className="relative flex-1 overflow-y-auto px-4 py-4 space-y-3"
               >
-                ↓ New messages
-              </button>
-            )}
-          </main>
+                {messagesError && <p className="text-center text-xs text-red-500">{messagesError}</p>}
 
-          <div className="flex-shrink-0 mx-3 mb-3 lg:mb-4 rounded-2xl bg-white/55 backdrop-blur-xl border border-white/50 shadow-[0_4px_20px_rgba(91,77,255,0.08),inset_1px_1px_0_rgba(255,255,255,0.5)] pb-16 lg:pb-0">
-            {pendingLimitReached ? (
-              <p className="px-4 py-3.5 text-center text-xs text-gray-400">
-                You've sent your message — you can reply again once they accept.
-              </p>
-            ) : (
-              <MessageInput onSend={sendMessage} disabled={sending} chatId={chatId} />
+                {groupedMessages.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-gray-400">Say hello 👋</p>
+                ) : (
+                  groupedMessages.map((item) =>
+                    item.type === 'separator' ? (
+                      <div key={item.id} className="flex items-center justify-center py-2">
+                        <span className="text-[11px] font-medium text-gray-500 bg-gray-100 rounded-full px-3 py-1">
+                          {item.label}
+                        </span>
+                      </div>
+                    ) : (
+                      <MessageBubble key={item.id} message={item.message} isMine={item.message.senderId === currentUid} currentUid={currentUid} onRetry={retryMessage} />
+                    )
+                  )
+                )}
+                <div ref={bottomRef} />
+              </main>
+
+              {showNewMessagesButton && (
+                <div className="relative flex-shrink-0 flex justify-center -mt-14 mb-2 pointer-events-none">
+                  <button
+                    type="button"
+                    onClick={() => scrollToBottom('smooth')}
+                    className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-gray-900 text-white text-xs font-semibold px-3.5 py-2 shadow-lg hover:bg-gray-800 transition-all duration-200"
+                  >
+                    ↓ New messages
+                  </button>
+                </div>
+              )}
+
+              <div className="flex-shrink-0 border-t border-gray-100 bg-white pb-16 lg:pb-[env(safe-area-inset-bottom)]">
+                {pendingLimitReached ? (
+                  <p className="px-4 py-3.5 text-center text-xs text-gray-400">
+                    You've sent your message — you can reply again once they accept.
+                  </p>
+                ) : (
+                  <MessageInput onSend={sendMessage} disabled={sending} chatId={chatId} />
+                )}
+              </div>
+            </div>
+
+            {/* Right info rail — desktop only, real data only. */}
+            {!isGroup && (
+              <aside className="hidden lg:flex lg:flex-col w-72 flex-shrink-0 h-full overflow-y-auto border-l border-gray-100 bg-white px-4 py-5 gap-4">
+                <div className="text-center">
+                  <div className="relative inline-block">
+                    <Avatar
+                      initials={getInitials(displayName)}
+                      colorClass={getAvatarColor(otherUid || chatId)}
+                      size="lg"
+                      src={getProfileIdentityImage(otherProfile) || undefined}
+                    />
+                    {otherOnline && (
+                      <span className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                    )}
+                  </div>
+                  <p className="mt-2.5 text-sm font-bold text-gray-900">{displayName}</p>
+                  <p className={`text-xs ${otherOnline ? 'text-emerald-600' : 'text-gray-400'}`}>{presenceLabel(otherProfile)}</p>
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCall('voice')}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-full bg-blue-600 text-white text-xs font-semibold py-2.5 hover:bg-blue-700 transition-all duration-200"
+                    >
+                      <Phone className="w-3.5 h-3.5" /> Call
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCall('video')}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-full border border-gray-200 text-gray-900 text-xs font-semibold py-2.5 hover:border-gray-300 transition-all duration-200"
+                    >
+                      <Video className="w-3.5 h-3.5" /> Video
+                    </button>
+                  </div>
+                </div>
+
+                {(otherCollege || otherProfile?.course || otherProfile?.year) && (
+                  <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
+                    <p className="text-sm font-bold text-gray-900 mb-2.5">Quick Info</p>
+                    <div className="space-y-2 text-xs">
+                      {otherCollege?.name && (
+                        <div>
+                          <p className="text-gray-400">College</p>
+                          <p className="font-medium text-gray-800">{otherCollege.name}</p>
+                        </div>
+                      )}
+                      {otherProfile?.year && (
+                        <div>
+                          <p className="text-gray-400">Year</p>
+                          <p className="font-medium text-gray-800">{otherProfile.year}</p>
+                        </div>
+                      )}
+                      {otherProfile?.course && (
+                        <div>
+                          <p className="text-gray-400">Course</p>
+                          <p className="font-medium text-gray-800">{otherProfile.course}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {sharedFiles.length > 0 && (
+                  <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
+                    <p className="text-sm font-bold text-gray-900 mb-2.5">Shared Files</p>
+                    <div className="space-y-1.5">
+                      {sharedFiles.slice(0, 3).map((m) => (
+                        <a
+                          key={m.id}
+                          href={m.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 -mx-2 hover:bg-gray-50 transition-all duration-200"
+                        >
+                          <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                            <FileText className="w-4 h-4" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-gray-900 truncate">{m.fileName || 'File'}</p>
+                            <p className="text-[10px] text-gray-400">{formatFileSize(m.fileSize)}</p>
+                          </div>
+                          <Download className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {mediaItems.length > 0 && (
+                  <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
+                    <p className="text-sm font-bold text-gray-900 mb-2.5">Media</p>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {mediaItems.slice(0, 6).map((m) => (
+                        <a key={m.id} href={m.imageUrl} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                          <img src={m.imageUrl} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-200" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
+                  <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-2">
+                    <ShieldAlert className="w-4 h-4 text-gray-400" /> Safety
+                  </p>
+                  <p className="text-xs text-gray-400 leading-relaxed mb-3">
+                    Feeling uncomfortable with this conversation? You can report or block {displayName.split(' ')[0]}.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReportOpen(true)}
+                      className="flex-1 rounded-full border border-gray-200 text-gray-700 text-xs font-semibold py-2 hover:border-gray-300 transition-all duration-200"
+                    >
+                      Report
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBlock}
+                      className="flex-1 rounded-full border border-rose-100 text-rose-600 text-xs font-semibold py-2 hover:bg-rose-50 transition-all duration-200"
+                    >
+                      Block
+                    </button>
+                  </div>
+                </div>
+              </aside>
             )}
           </div>
         </div>
@@ -378,6 +619,9 @@ export default function ChatPage() {
       <div className="lg:hidden">
         <BottomNav />
       </div>
-    </div>
+
+      <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} targetType="user" targetId={otherUid} targetOwnerUid={otherUid} />
+      <CallOverlay call={call} />
+    </>
   )
 }

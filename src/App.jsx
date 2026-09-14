@@ -52,6 +52,7 @@ const CommunityDetailPage = lazy(() => import('./pages/CommunityDetailPage.jsx')
 const CommunitySettingsPage = lazy(() => import('./pages/CommunitySettingsPage.jsx'))
 const DiscoverCommunitiesPage = lazy(() => import('./pages/DiscoverCommunitiesPage.jsx'))
 const LostFoundPage = lazy(() => import('./pages/LostFoundPage.jsx'))
+const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage.jsx'))
 
 export default function App() {
   return (
@@ -259,6 +260,14 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/leaderboard"
+          element={
+            <ProtectedRoute stage="home">
+              <LeaderboardPage />
             </ProtectedRoute>
           }
         />

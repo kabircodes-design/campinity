@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Plus, Radar, Search, Sparkles, UserPlus } from 'lucide-react'
+import { Bell, MessageCircle, Radar, Search, Sparkles, UserPlus } from 'lucide-react'
+import Avatar from '../components/Avatar.jsx'
 import StoryBubble from '../components/StoryBubble.jsx'
 import PostCard from '../components/PostCard.jsx'
+import PostComposer from '../components/PostComposer.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 import DesktopSidebar from '../components/DesktopSidebar.jsx'
 import DesktopRightRail from '../components/DesktopRightRail.jsx'
 import NotesView from '../components/NotesView.jsx'
 import Loader from '../auth/components/Loader.jsx'
+import Logo from '../components/Logo.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
@@ -264,85 +267,103 @@ export default function HomePage() {
     <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
       <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-screen lg:min-h-0 bg-white lg:bg-transparent border-x border-gray-100">
         <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
-          <div className="h-14 flex items-center justify-between lg:justify-end px-4 lg:px-6">
+          <div className="h-14 flex items-center gap-3 px-4 lg:px-6">
             <button
               type="button"
               onClick={() => navigate('/home')}
               aria-label="Campinity — go to Home"
-              className="lg:hidden flex items-center gap-1.5"
+              className="lg:hidden flex items-center flex-shrink-0"
             >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <defs>
-                  <linearGradient id="campinityMarkGradient" x1="0" y1="0" x2="20" y2="20">
-                    <stop offset="0%" stopColor="#3b9bff" />
-                    <stop offset="100%" stopColor="#1677ff" />
-                  </linearGradient>
-                </defs>
-                <line x1="6" y1="6" x2="14" y2="6" stroke="url(#campinityMarkGradient)" strokeWidth="1.4" />
-                <line x1="6" y1="6" x2="10" y2="15" stroke="url(#campinityMarkGradient)" strokeWidth="1.4" />
-                <line x1="14" y1="6" x2="10" y2="15" stroke="url(#campinityMarkGradient)" strokeWidth="1.4" />
-                <circle cx="6" cy="6" r="2.75" fill="url(#campinityMarkGradient)" />
-                <circle cx="14" cy="6" r="2.75" fill="url(#campinityMarkGradient)" />
-                <circle cx="10" cy="15" r="2.75" fill="url(#campinityMarkGradient)" />
-              </svg>
-              <span
-                className="text-[17px] leading-none tracking-tight"
-                style={{
-                  fontWeight: 650,
-                  backgroundImage:
-                    'linear-gradient(90deg, #1677ff, #3b9bff)',
-                  WebkitBackgroundClip: 'text',
-                  backgroundClip: 'text',
-                  color: 'transparent'
-                }}
-              >
-                Campinity
+              <Logo className="w-7 h-7" withWordmark />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/search')}
+              className="group relative hidden lg:flex flex-1 max-w-md mx-auto items-center text-left"
+              aria-label="Search Campinity"
+            >
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-colors duration-200 group-hover:text-gray-500" />
+              <span className="flex items-center justify-between w-full rounded-full border border-gray-200 bg-gray-50 pl-10 pr-2.5 py-2 text-sm text-gray-400 transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)]">
+                Search for people, communities, posts...
+                <kbd className="flex-shrink-0 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">
+                  Ctrl K
+                </kbd>
               </span>
             </button>
 
-            <div className="flex items-center gap-1">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label="Create post"
-                  onClick={() => navigate('/create')}
-                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
+            <div className="flex items-center gap-1 ml-auto">
+              <button
+                type="button"
+                aria-label="Radar"
+                onClick={() => navigate('/radar')}
+                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+              >
+                <Radar className="w-5 h-5" />
+              </button>
 
-                <button
-                  type="button"
-                  aria-label="Radar"
-                  onClick={() => navigate('/radar')}
-                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
-                >
-                  <Radar className="w-5 h-5" />
-                </button>
-              </div>
+              <button
+                type="button"
+                aria-label="Messages"
+                onClick={() => navigate('/messages')}
+                className="relative hidden lg:flex w-9 h-9 rounded-full items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+              >
+                <MessageCircle className="w-5 h-5" />
+              </button>
 
               <button
                 type="button"
                 aria-label="Notifications"
                 onClick={() => navigate('/notifications')}
-                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200 lg:hidden"
+                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
               >
                 <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
                   <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />
                 )}
               </button>
+
+              {profile && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/profile')}
+                  aria-label="Your profile"
+                  className="hidden lg:flex items-center ml-1 rounded-full hover:bg-gray-100 p-0.5 transition-all duration-200"
+                >
+                  <Avatar initials={initials} colorClass={myColorClass} size="sm" src={getProfileIdentityImage(profile) || undefined} />
+                </button>
+              )}
             </div>
           </div>
         </header>
 
         {showBanner && <CampusVerificationBanner onDismiss={dismissBanner} />}
 
-        <section className="mx-4 lg:mx-6 mt-5 mb-5 px-0 py-0">
-          <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
-            {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {firstName}
-          </h1>
-          <p className="mt-0.5 text-[13px] text-gray-400">Catch up on what's happening across campus.</p>
+        <section className="mx-4 lg:mx-6 mt-5 mb-5">
+          <div
+            className="relative overflow-hidden rounded-2xl lg:rounded-3xl px-5 py-5 lg:px-7 lg:py-6"
+            style={{ background: 'linear-gradient(120deg, #eaf3ff 0%, #dcecff 45%, #e7f7f7 100%)' }}
+          >
+            <div
+              className="absolute -top-10 -right-6 w-40 h-40 rounded-full opacity-60 pointer-events-none"
+              style={{ background: 'radial-gradient(circle, rgba(59,155,255,0.35), transparent 70%)' }}
+              aria-hidden="true"
+            />
+            <div
+              className="absolute -bottom-12 right-8 w-32 h-32 rounded-full opacity-50 pointer-events-none"
+              style={{ background: 'radial-gradient(circle, rgba(45,212,191,0.30), transparent 70%)' }}
+              aria-hidden="true"
+            />
+            <p className="relative text-[11px] font-bold tracking-wide text-blue-700/70 uppercase">
+              {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}
+            </p>
+            <h1 className="relative mt-1 text-2xl lg:text-[28px] font-bold text-gray-900 tracking-tight leading-tight">
+              {firstName} 👋
+            </h1>
+            <p className="relative mt-1.5 text-[13px] lg:text-sm text-gray-500 max-w-xs leading-relaxed">
+              Great things happen across campus. Stay connected, stay updated.
+            </p>
+          </div>
 
           <button
             type="button"
@@ -355,6 +376,10 @@ export default function HomePage() {
               Search Campinity
             </span>
           </button>
+
+          <div className="mt-4">
+            <PostComposer profile={profile} initials={initials} colorClass={myColorClass} firstName={firstName} />
+          </div>
         </section>
 
         <section className="mx-4 lg:mx-6 mb-5 py-0">

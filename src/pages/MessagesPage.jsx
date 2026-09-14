@@ -1,45 +1,49 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, MessageCircle, MoreVertical, Users } from 'lucide-react'
+import { Bell, MessageCircle, MessageSquarePlus, Radar, Search, Users } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import DesktopSidebar from '../components/DesktopSidebar.jsx'
+import Avatar from '../components/Avatar.jsx'
+import Logo from '../components/Logo.jsx'
 import ChatListPanel from '../components/ChatListPanel.jsx'
+import CallOverlay from '../components/CallOverlay.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import CreateGroupFlow from '../messaging/CreateGroupFlow.jsx'
 import { auth } from '../firebase/firebase.js'
 import { subscribeToUserChats, subscribeToSentPendingChats, subscribeToMessageRequests } from '../firebase/chatService.js'
 import { getUserProfile } from '../firebase/profileService.js'
+import { subscribeToUnreadCount } from '../firebase/notificationService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { getAvatarColor, getInitials } from '../firebase/postService.js'
+import { useCall } from '../hooks/useCall.js'
 
 /**
- * Phase 1 foundation change: the list-rendering JSX that used to live
- * directly in this file's <main> is now ChatListPanel.jsx — a pure
- * presentational extraction, not a rewrite. Every data-fetching effect
- * below (subscribeToUserChats, subscribeToSentPendingChats,
- * subscribeToMessageRequests, profile enrichment) is completely
- * unchanged from before this pass, byte-for-byte the same logic, just
- * still living here rather than being duplicated into the panel
- * component. This is what lets ChatPage.jsx (a separate route) also
- * render the identical panel in a later pass without copying the
- * list-item markup a second time.
+ * Redesigned to match the finished Home page's design system (clean
+ * white surfaces, blue accent, no glassmorphism) instead of this page's
+ * previous purple/lavender glass theme — presentation only. Every
+ * existing data subscription (subscribeToUserChats/
+ * subscribeToSentPendingChats/subscribeToMessageRequests, profile
+ * enrichment) is unchanged, byte-for-byte the same logic as before this
+ * pass.
  *
- * Desktop (lg+): sidebar + this list panel (widened) + a third column
- * showing "select a conversation" — since no chat is active at this
- * route specifically. Mobile is the exact same single-panel view as
- * before Phase 1, unchanged.
+ * No Stories anywhere on this page, by explicit instruction — the slot
+ * where a Stories row might otherwise go is Message Requests instead,
+ * now a full prominent row (not a small pill) directly under search.
  */
 export default function MessagesPage() {
   const navigate = useNavigate()
   const [chats, setChats] = useState([])
   const [sentPendingChats, setSentPendingChats] = useState([])
   const [incomingRequestCount, setIncomingRequestCount] = useState(0)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [createGroupOpen, setCreateGroupOpen] = useState(false)
   const [profiles, setProfiles] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [chatSearchTerm, setChatSearchTerm] = useState('')
   const [profile, setProfile] = useState(null)
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0)
   const fetchedUidsRef = useRef(new Set())
+  const call = useCall()
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
@@ -61,12 +65,9 @@ export default function MessagesPage() {
         safeChats.forEach((chat) => {
           if (!chat?.otherUid || fetchedUidsRef.current.has(chat.otherUid)) return
           fetchedUidsRef.current.add(chat.otherUid)
-
           getUserProfile(chat.otherUid)
-            .then((profile) => {
-              if (profile) {
-                setProfiles((prev) => ({ ...prev, [chat.otherUid]: profile }))
-              }
+            .then((p) => {
+              if (p) setProfiles((prev) => ({ ...prev, [chat.otherUid]: p }))
             })
             .catch(() => {})
         })
@@ -78,28 +79,15 @@ export default function MessagesPage() {
       }
     )
 
-    // Second, separate subscription — chats I sent a request for that
-    // haven't been accepted yet. subscribeToUserChats only shows
-    // 'accepted' chats by design (that's the actual inbox); without
-    // this, a chat I created and am actively sending messages in
-    // (allowed while pending, since I'm the requester) would never
-    // appear in any list here — only reachable by already knowing its
-    // exact chatId. Kept in separate state rather than merged into
-    // `chats`, so ChatCard.jsx can show "Message Request Sent" instead
-    // of treating it identically to an accepted conversation.
     const unsubscribeSent = subscribeToSentPendingChats(uid, (data) => {
       const safeSent = Array.isArray(data) ? data.filter(Boolean) : []
       setSentPendingChats(safeSent)
-
       safeSent.forEach((chat) => {
         if (!chat?.otherUid || fetchedUidsRef.current.has(chat.otherUid)) return
         fetchedUidsRef.current.add(chat.otherUid)
-
         getUserProfile(chat.otherUid)
-          .then((profile) => {
-            if (profile) {
-              setProfiles((prev) => ({ ...prev, [chat.otherUid]: profile }))
-            }
+          .then((p) => {
+            if (p) setProfiles((prev) => ({ ...prev, [chat.otherUid]: p }))
           })
           .catch(() => {})
       })
@@ -120,6 +108,12 @@ export default function MessagesPage() {
     return unsubscribe
   }, [])
 
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    const unsubscribe = subscribeToUnreadCount(uid, setUnreadNotifCount)
+    return () => unsubscribe()
+  }, [])
+
   const allChats = [
     ...chats,
     ...sentPendingChats.map((chat) => ({ ...chat, isPendingSent: true }))
@@ -129,10 +123,6 @@ export default function MessagesPage() {
     return bMs - aMs
   })
 
-  // Chat-only search — filters the already-loaded allChats list
-  // locally using data already in this component's own state
-  // (profiles map + each chat's own fields). No new Firestore query,
-  // no connection to the app's global Search page.
   const normalizedSearch = chatSearchTerm.trim().toLowerCase()
   const visibleChats = normalizedSearch
     ? allChats.filter((chat) => {
@@ -147,6 +137,9 @@ export default function MessagesPage() {
       })
     : allChats
 
+  const initials = getInitials(profile?.displayName || '')
+  const myColorClass = getAvatarColor(auth.currentUser?.uid || profile?.displayName)
+
   if (loading) {
     return (
       <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
@@ -156,95 +149,123 @@ export default function MessagesPage() {
   }
 
   return (
-    <div
-      className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
-      style={{ backgroundColor: '#f3f0fb' }}
-    >
+    <>
       <div
-        className="ambient-glow-layer ambient-glow-1"
-        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-2"
-        style={{
-          background:
-            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
-        }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-3"
-        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
-      />
-      <DesktopSidebar profile={profile} />
+        className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_1fr]"
+        style={{ backgroundColor: '#f8fafc' }}
+      >
+        <DesktopSidebar unreadNotifications={unreadNotifCount} profile={profile} />
 
-      <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:w-[380px] lg:flex-shrink-0 lg:my-4 lg:rounded-3xl lg:border lg:border-white/50 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] overflow-x-hidden">
-        <div className="mx-auto max-w-[480px] lg:max-w-none min-h-screen lg:min-h-0 bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl lg:rounded-3xl">
-          <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40">
-            <div className="h-14 flex items-center gap-2 px-3">
+        <div className="flex flex-col h-screen lg:overflow-hidden overflow-x-hidden min-w-0">
+          {/* Global header — same treatment as the finished Home page,
+              duplicated rather than extracted so Home's own file is
+              never touched. */}
+          <header className="sticky top-0 z-40 bg-white border-b border-gray-100 flex-shrink-0">
+            <div className="h-14 flex items-center gap-3 px-4 lg:px-6">
               <button
                 type="button"
-                aria-label="Back"
                 onClick={() => navigate('/home')}
-                className="lg:hidden w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+                aria-label="Campinity — go to Home"
+                className="lg:hidden flex items-center flex-shrink-0"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <Logo className="w-7 h-7" withWordmark />
               </button>
-              <span className="text-base font-bold tracking-tight text-gray-900 flex-1">Chats</span>
 
-              <div className="relative flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => navigate('/search')}
+                className="group relative hidden lg:flex flex-1 max-w-md mx-auto items-center text-left"
+                aria-label="Search Campinity"
+              >
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-colors duration-200 group-hover:text-gray-500" />
+                <span className="flex items-center justify-between w-full rounded-full border border-gray-200 bg-gray-50 pl-10 pr-2.5 py-2 text-sm text-gray-400 transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)]">
+                  Search for people, communities, posts...
+                  <kbd className="flex-shrink-0 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">
+                    Ctrl K
+                  </kbd>
+                </span>
+              </button>
+
+              <div className="flex items-center gap-1 ml-auto">
                 <button
                   type="button"
-                  aria-label="More options"
-                  onClick={() => setMenuOpen((v) => !v)}
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+                  aria-label="Radar"
+                  onClick={() => navigate('/radar')}
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
                 >
-                  <MoreVertical className="w-5 h-5" />
+                  <Radar className="w-5 h-5" />
                 </button>
-                {menuOpen && (
-                  <div className="absolute right-0 top-11 w-44 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        setCreateGroupOpen(true)
-                      }}
-                      className="w-full flex items-center gap-2.5 text-left px-3.5 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      <Users className="w-4 h-4 text-gray-400" />
-                      Create Group
-                    </button>
-                  </div>
+                <button
+                  type="button"
+                  aria-label="Messages"
+                  onClick={() => navigate('/messages')}
+                  className="relative hidden lg:flex w-9 h-9 rounded-full items-center justify-center text-blue-600 bg-blue-50 transition-all duration-200"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Notifications"
+                  onClick={() => navigate('/notifications')}
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadNotifCount > 0 && (
+                    <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />
+                  )}
+                </button>
+                {profile && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/profile')}
+                    aria-label="Your profile"
+                    className="hidden lg:flex items-center ml-1 rounded-full hover:bg-gray-100 p-0.5 transition-all duration-200"
+                  >
+                    <Avatar initials={initials} colorClass={myColorClass} size="sm" src={getProfileIdentityImage(profile) || undefined} />
+                  </button>
                 )}
               </div>
             </div>
           </header>
 
-          <ChatListPanel
-            error={error}
-            allChats={allChats}
-            visibleChats={visibleChats}
-            profiles={profiles}
-            searchTerm={chatSearchTerm}
-            onSearchChange={setChatSearchTerm}
-            onOpenRequests={() => navigate('/messages/requests')}
-            incomingRequestCount={incomingRequestCount}
-          />
-        </div>
-      </div>
+          <div className="flex-1 flex lg:overflow-hidden min-h-0">
+            <div className="w-full lg:w-[360px] lg:flex-shrink-0 lg:h-full lg:overflow-y-auto lg:border-r lg:border-gray-100 bg-white">
+              <div className="px-4 pt-4 pb-1 flex items-center justify-between">
+                <h1 className="text-lg font-bold text-gray-900 tracking-tight">Messages</h1>
+                <button
+                  type="button"
+                  aria-label="New group"
+                  onClick={() => setCreateGroupOpen(true)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-blue-600 hover:bg-blue-50 transition-all duration-200"
+                >
+                  <MessageSquarePlus className="w-4.5 h-4.5" />
+                </button>
+              </div>
 
-      {/* Desktop third column — no conversation is active at this
-          route, so this is a real, honest placeholder rather than
-          leaving a blank white area. Only shown at lg:+. */}
-      <div className="hidden lg:flex lg:flex-1 lg:items-center lg:justify-center lg:h-screen">
-        <div className="text-center">
-          <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-200 to-indigo-200 blur-xl opacity-60" />
-            <div className="relative w-14 h-14 rounded-full bg-white/50 backdrop-blur-md border border-white/50 shadow-[0_4px_16px_rgba(91,77,255,0.08)] flex items-center justify-center">
-              <MessageCircle className="w-6 h-6 text-indigo-400" />
+              <ChatListPanel
+                error={error}
+                allChats={allChats}
+                visibleChats={visibleChats}
+                profiles={profiles}
+                searchTerm={chatSearchTerm}
+                onSearchChange={setChatSearchTerm}
+                onOpenRequests={() => navigate('/messages/requests')}
+                incomingRequestCount={incomingRequestCount}
+              />
+            </div>
+
+            {/* Desktop content placeholder — no conversation is active
+                at this route. Real, honest state, not a blank area. */}
+            <div className="hidden lg:flex lg:flex-1 lg:items-center lg:justify-center">
+              <div className="text-center">
+                <div className="mx-auto w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center">
+                  <MessageCircle className="w-6 h-6 text-blue-500" />
+                </div>
+                <p className="mt-4 text-sm font-semibold text-gray-900">Your conversations start here.</p>
+                <p className="mt-1 text-sm text-gray-400">Pick a chat from the left to start messaging.</p>
+              </div>
             </div>
           </div>
-          <p className="mt-4 text-sm font-semibold text-gray-900">Your conversations start here.</p>
-          <p className="mt-1 text-sm text-gray-400">Pick a chat from the left to start messaging.</p>
         </div>
       </div>
 
@@ -252,6 +273,7 @@ export default function MessagesPage() {
         <BottomNav />
       </div>
       <CreateGroupFlow open={createGroupOpen} onClose={() => setCreateGroupOpen(false)} />
-    </div>
+      <CallOverlay call={call} />
+    </>
   )
 }

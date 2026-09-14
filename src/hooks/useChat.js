@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { auth } from '../firebase/firebase.js'
+import { doc, onSnapshot } from 'firebase/firestore'
+import { auth, db } from '../firebase/firebase.js'
 import { subscribeToChat, getOrCreateChat } from '../firebase/chatService.js'
-import { getUserProfile } from '../firebase/profileService.js'
+import { mapProfileDoc } from '../firebase/profileService.js'
 
 /**
  * Resolves a chat's metadata + the other participant's live profile.
@@ -54,17 +55,17 @@ export function useChat(chatId) {
     return unsubscribe
   }, [chatId, uid])
 
+  // Live subscription, not a one-time fetch — presence (lastActiveAt)
+  // must update in real time while the conversation is open, not just
+  // reflect whatever was true the moment the chat was opened.
   useEffect(() => {
-    if (!chatData?.otherUid) return
-    let cancelled = false
-    getUserProfile(chatData.otherUid)
-      .then((profile) => {
-        if (!cancelled) setOtherProfile(profile)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
+    if (!chatData?.otherUid) return undefined
+    const unsubscribe = onSnapshot(
+      doc(db, 'users', chatData.otherUid),
+      (snap) => setOtherProfile(snap.exists() ? mapProfileDoc(snap.data()) : null),
+      () => {}
+    )
+    return unsubscribe
   }, [chatData?.otherUid])
 
   return { chat: chatData, otherProfile, otherUid: chatData?.otherUid || null, loading, error }

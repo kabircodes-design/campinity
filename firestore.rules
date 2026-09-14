@@ -197,6 +197,37 @@ service cloud.firestore {
       }
     }
 
+    // calls/{callId} — WebRTC signaling for 1:1 voice/video calls
+    // (callService.js). Restricted to the two named participants
+    // (callerUid/calleeUid) in every direction, the same participant-
+    // only pattern as chats/{chatId} above. offer/answer SDP live on
+    // the call doc itself; ICE candidates live in two subcollections
+    // (one per side) so each side can only ever write its OWN
+    // candidates, never forge the other's.
+    match /calls/{callId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.callerUid || request.auth.uid == resource.data.calleeUid);
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.callerUid;
+      allow update: if isSignedIn() && (request.auth.uid == resource.data.callerUid || request.auth.uid == resource.data.calleeUid);
+      allow delete: if false;
+
+      match /callerCandidates/{candidateId} {
+        allow read: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.callerUid ||
+          request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.calleeUid
+        );
+        allow create: if isSignedIn() && request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.callerUid;
+        allow update, delete: if false;
+      }
+      match /calleeCandidates/{candidateId} {
+        allow read: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.callerUid ||
+          request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.calleeUid
+        );
+        allow create: if isSignedIn() && request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.calleeUid;
+        allow update, delete: if false;
+      }
+    }
+
     // communities/{communityId} — public discovery read. Create by the
     // declared owner only. Update: the owner may change anything;
     // an existing admin may change only the fields

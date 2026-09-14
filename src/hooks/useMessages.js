@@ -67,9 +67,8 @@ export function useMessages(chatId, otherUid) {
   }, [chatId, uid])
 
   const attemptSend = async (optimisticEntry, text, options) => {
-    const { type = 'text', imageUrl = null } = options
     try {
-      await sendMessageToFirestore(chatId, uid, text || '', { type, imageUrl })
+      await sendMessageToFirestore(chatId, uid, text || '', options)
     } catch (err) {
       // Real fix, not a debugging aid: previously this removed the
       // optimistic entry entirely on failure, meaning a failed
@@ -89,7 +88,7 @@ export function useMessages(chatId, otherUid) {
   }
 
   const sendMessage = async (text, options = {}) => {
-    const { type = 'text', imageUrl = null } = options
+    const { type = 'text', imageUrl = null, fileUrl = null, fileName = null, fileSize = null, mimeType = null } = options
     if (!chatId || !uid) return
     if (type === 'text' && !text?.trim()) return
     setSending(true)
@@ -101,6 +100,10 @@ export function useMessages(chatId, otherUid) {
       text: text?.trim() || '',
       type,
       imageUrl,
+      fileUrl,
+      fileName,
+      fileSize,
+      mimeType,
       read: false,
       edited: false,
       deletedFor: [],

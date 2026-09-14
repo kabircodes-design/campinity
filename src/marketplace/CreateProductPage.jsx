@@ -1,13 +1,16 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ImagePlus } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { createProduct, uploadProductImage, CATEGORIES } from '../firebase/marketplaceService.js'
+import { getCollegeById } from '../data/dummyColleges.js'
 
 export default function CreateProductPage() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
+  const [profile, setProfile] = useState(null)
+  const [collegeName, setCollegeName] = useState('')
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState('')
   const [name, setName] = useState('')
@@ -16,6 +19,24 @@ export default function CreateProductPage() {
   const [category, setCategory] = useState(CATEGORIES[0])
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    if (uid) getUserProfile(uid).then(setProfile).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!profile?.collegeId) return
+    let cancelled = false
+    getCollegeById(profile.collegeId)
+      .then((college) => {
+        if (!cancelled && college?.name) setCollegeName(college.name)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.collegeId])
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0]
@@ -33,8 +54,6 @@ export default function CreateProductPage() {
       let imageUrl = ''
       if (imageFile) imageUrl = await uploadProductImage(uid, imageFile)
 
-      const profile = await getUserProfile(uid).catch(() => null)
-
       const productId = await createProduct({
         uid,
         name,
@@ -42,7 +61,9 @@ export default function CreateProductPage() {
         description,
         category,
         imageUrl,
-        sellerName: profile?.displayName || 'Student'
+        sellerName: profile?.displayName || 'Student',
+        collegeId: profile?.collegeId || null,
+        collegeName: collegeName || null
       })
       navigate(`/marketplace/${productId}`)
     } catch (err) {
@@ -56,9 +77,9 @@ export default function CreateProductPage() {
   const canPublish = name.trim().length > 0 && Number(price) > 0 && !publishing
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden" style={{ backgroundColor: '#f8fafc' }}>
+      <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-[0_1px_3px_rgba(15,23,42,0.04)] lg:border-x lg:border-gray-100">
+        <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
           <div className="h-14 flex items-center justify-between px-3">
             <button type="button" aria-label="Back" onClick={() => navigate(-1)} className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100">
               <ArrowLeft className="w-5 h-5" />
@@ -68,7 +89,7 @@ export default function CreateProductPage() {
               type="button"
               onClick={handlePublish}
               disabled={!canPublish}
-              className="rounded-full bg-blue-600 text-white text-sm font-semibold px-4 py-2 disabled:opacity-40 transition-all duration-300"
+              className="rounded-full bg-blue-600 text-white text-sm font-semibold px-4 py-2 hover:bg-blue-700 disabled:opacity-40 transition-all duration-300"
             >
               {publishing ? 'Publishing...' : 'Publish'}
             </button>
@@ -81,7 +102,7 @@ export default function CreateProductPage() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="w-full aspect-square rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden bg-gray-50"
+            className="w-full aspect-square rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden bg-gray-50 hover:border-blue-300 hover:bg-blue-50/40 transition-all duration-200"
           >
             {imagePreview ? (
               <img src={imagePreview} alt="" className="w-full h-full object-cover" />
@@ -101,7 +122,7 @@ export default function CreateProductPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Oversized Campus Hoodie"
-              className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-200"
             />
           </div>
 
@@ -113,7 +134,7 @@ export default function CreateProductPage() {
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               placeholder="799"
-              className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-200"
             />
           </div>
 
@@ -142,9 +163,16 @@ export default function CreateProductPage() {
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               placeholder="Tell students about this product..."
-              className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-300 resize-none"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-200 resize-none"
             />
           </div>
+
+          {profile?.displayName && (
+            <p className="text-xs text-gray-400 px-0.5">
+              Posting as <span className="font-medium text-gray-600">{profile.displayName}</span>
+              {collegeName && ` · ${collegeName}`}
+            </p>
+          )}
         </div>
       </div>
     </div>

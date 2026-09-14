@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '../../firebase/firebase.js'
+import { HEARTBEAT_INTERVAL_MS, touchPresence } from '../../firebase/presenceService.js'
 
 /**
  * Provides { user, profile, loading } for the currently signed-in user.
@@ -61,6 +62,31 @@ export function useAuthUser() {
       if (unsubscribeProfile) unsubscribeProfile()
     }
   }, [])
+
+  // Presence heartbeat — see presenceService.js for the honest scope of
+  // what this can and can't guarantee. Runs once at mount (so "Online"
+  // is accurate immediately, not just after the first interval tick)
+  // and every HEARTBEAT_INTERVAL_MS while a user is signed in and this
+  // hook (i.e. any protected route) is mounted; only while the tab is
+  // actually visible, so a backgrounded tab doesn't keep writing.
+  useEffect(() => {
+    if (!user?.uid) return undefined
+
+    touchPresence(user.uid)
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') touchPresence(user.uid)
+    }, HEARTBEAT_INTERVAL_MS)
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') touchPresence(user.uid)
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [user?.uid])
 
   return { user, profile, loading }
 }

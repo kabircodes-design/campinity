@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Search, Users } from 'lucide-react'
+import { BarChart3, Bell, Check, MessageCircle, Plus, Radar, Search, Sparkles, TrendingUp, Users } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import DesktopSidebar from '../components/DesktopSidebar.jsx'
+import Avatar from '../components/Avatar.jsx'
+import Logo from '../components/Logo.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
-import SwipeablePage from '../components/SwipeablePage.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getTrendingCommunities, getUserCommunityMemberships, getUserPendingRequests, searchCommunitiesByName } from '../firebase/communityService.js'
+import { subscribeToUnreadCount } from '../firebase/notificationService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { getAvatarColor, getInitials } from '../firebase/postService.js'
 
 // Real types, taken directly from CommunityCard.jsx's own typeLabels
 // — not invented. "All" is added as the default/unfiltered option.
@@ -23,6 +27,19 @@ const TYPE_FILTERS = [
   { id: 'batch', label: 'Batch' }
 ]
 
+/**
+ * Full redesign to match the rest of the rebuilt app (Home, Lost &
+ * Found, Messages, Marketplace) — clean white surfaces, blue accent,
+ * no glassmorphism, no dark theme. This was the last page still on the
+ * old purple/lavender `#f3f0fb` + ambient-glow-layer theme.
+ *
+ * All data fetching/state (trending communities, membership states,
+ * pending requests, debounced search) is unchanged from before this
+ * pass — presentation only. "Trending on Campus" in the right rail is
+ * the same already-fetched, membersCount-sorted list this page already
+ * has (getTrendingCommunities orders by membersCount desc server-side)
+ * — zero new query, zero fabricated activity metric.
+ */
 export default function DiscoverCommunitiesPage() {
   const navigate = useNavigate()
   const [communities, setCommunities] = useState([])
@@ -35,10 +52,17 @@ export default function DiscoverCommunitiesPage() {
   const [searchResults, setSearchResults] = useState(null)
   const [searching, setSearching] = useState(false)
   const [profile, setProfile] = useState(null)
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0)
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
     if (uid) getUserProfile(uid).then(setProfile).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    const unsubscribe = subscribeToUnreadCount(uid, setUnreadNotifCount)
+    return () => unsubscribe()
   }, [])
 
   useEffect(() => {
@@ -120,174 +144,343 @@ export default function DiscoverCommunitiesPage() {
     () => filteredCommunities.filter((c) => !membershipStates.has(c.id) || membershipStates.get(c.id) === 'pending'),
     [filteredCommunities, membershipStates]
   )
+  const trendingCommunities = useMemo(() => communities.slice(0, 5), [communities])
+
+  const quickStats = useMemo(
+    () => [
+      { key: 'total', label: 'Communities', value: communities.length, tint: 'bg-blue-50 text-blue-600', icon: Users },
+      { key: 'yours', label: 'Yours', value: yourCommunities.length, tint: 'bg-emerald-50 text-emerald-600', icon: Check },
+      { key: 'new', label: 'New This Week', value: communities.filter((c) => c.createdAt?.toMillis && Date.now() - c.createdAt.toMillis() < 7 * 24 * 60 * 60 * 1000).length, tint: 'bg-pink-50 text-pink-600', icon: Sparkles }
+    ],
+    [communities, yourCommunities]
+  )
 
   const isSearchingOrFiltering = searchTerm.trim() || typeFilter !== 'all'
 
+  const initials = getInitials(profile?.displayName || '')
+  const myColorClass = getAvatarColor(auth.currentUser?.uid || profile?.displayName)
+
   return (
-    <div
-      className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
-      style={{ backgroundColor: '#f3f0fb' }}
-    >
+    <>
       <div
-        className="ambient-glow-layer ambient-glow-1"
-        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-2"
-        style={{
-          background:
-            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
-        }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-3"
-        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
-      />
-      <DesktopSidebar profile={profile} />
-      <div className="flex-1 lg:h-screen lg:overflow-y-auto">
-        <SwipeablePage>
-          <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden">
-            <div className="mx-auto max-w-[480px] lg:max-w-[760px] bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl min-h-screen lg:min-h-0 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:border lg:border-white/50 lg:rounded-3xl lg:my-4 pb-24">
-              <header className="sticky top-0 z-40 bg-white/60 backdrop-blur-xl border-b border-white/40 shadow-[0_4px_20px_rgba(91,77,255,0.05)]">
-                <div className="h-14 flex items-center justify-between px-3 lg:px-5">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      aria-label="Back"
-                      onClick={() => navigate(-1)}
-                      className="lg:hidden w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
-                    >
-                      <ArrowLeft className="w-5 h-5" />
-                    </button>
-                    <span className="text-base font-bold tracking-tight text-gray-900">Communities</span>
-                  </div>
+        className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:gap-3 lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]"
+        style={{ backgroundColor: '#f8fafc' }}
+      >
+        <DesktopSidebar unreadNotifications={unreadNotifCount} profile={profile} />
+
+        <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
+          {/* Header — same treatment as the finished Home page (duplicated
+              here rather than extracted, since Home is explicitly final
+              and must not be touched to enable a refactor). */}
+          <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
+            <div className="h-14 flex items-center gap-3 px-4 lg:px-6">
+              <button
+                type="button"
+                onClick={() => navigate('/home')}
+                aria-label="Campinity — go to Home"
+                className="lg:hidden flex items-center flex-shrink-0"
+              >
+                <Logo className="w-7 h-7" withWordmark />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/search')}
+                className="group relative hidden lg:flex flex-1 max-w-md mx-auto items-center text-left"
+                aria-label="Search Campinity"
+              >
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-colors duration-200 group-hover:text-gray-500" />
+                <span className="flex items-center justify-between w-full rounded-full border border-gray-200 bg-gray-50 pl-10 pr-2.5 py-2 text-sm text-gray-400 transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)]">
+                  Search for people, communities, posts...
+                  <kbd className="flex-shrink-0 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">
+                    Ctrl K
+                  </kbd>
+                </span>
+              </button>
+
+              <div className="flex items-center gap-1 ml-auto">
                 <button
                   type="button"
-                  aria-label="Create a community"
-                  onClick={() => navigate('/community/create')}
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-blue-600 hover:bg-blue-50 transition-all duration-300"
+                  aria-label="Radar"
+                  onClick={() => navigate('/radar')}
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Radar className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Messages"
+                  onClick={() => navigate('/messages')}
+                  className="relative hidden lg:flex w-9 h-9 rounded-full items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Notifications"
+                  onClick={() => navigate('/notifications')}
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadNotifCount > 0 && (
+                    <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />
+                  )}
+                </button>
+                {profile && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/profile')}
+                    aria-label="Your profile"
+                    className="hidden lg:flex items-center ml-1 rounded-full hover:bg-gray-100 p-0.5 transition-all duration-200"
+                  >
+                    <Avatar initials={initials} colorClass={myColorClass} size="sm" src={getProfileIdentityImage(profile) || undefined} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </header>
+
+          <div className="mx-auto max-w-[560px] lg:max-w-[820px] px-4 lg:px-6 pt-5 pb-24">
+            {/* Hero */}
+            <div
+              className="relative overflow-hidden rounded-2xl lg:rounded-3xl px-5 py-5 lg:px-7 lg:py-6 mb-4"
+              style={{ background: 'linear-gradient(120deg, #eaf3ff 0%, #dcecff 45%, #e7f7f7 100%)' }}
+            >
+              <div
+                className="absolute -top-10 -right-6 w-40 h-40 rounded-full opacity-60 pointer-events-none"
+                style={{ background: 'radial-gradient(circle, rgba(59,155,255,0.35), transparent 70%)' }}
+                aria-hidden="true"
+              />
+              <div
+                className="absolute -bottom-12 right-10 w-32 h-32 rounded-full opacity-50 pointer-events-none"
+                style={{ background: 'radial-gradient(circle, rgba(45,212,191,0.30), transparent 70%)' }}
+                aria-hidden="true"
+              />
+
+              <div className="relative flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-blue-700/70 uppercase">
+                    <Users className="w-3.5 h-3.5" /> Communities
+                  </p>
+                  <h1 className="mt-1.5 text-2xl lg:text-[28px] font-bold text-gray-900 tracking-tight leading-tight max-w-sm">
+                    Find your people.
+                  </h1>
+                  <p className="mt-2 text-[13px] lg:text-sm text-gray-500 max-w-sm leading-relaxed">
+                    Discover communities, clubs and campus groups that feel like home.
+                  </p>
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() => navigate('/community/create')}
+                      className="flex items-center gap-1.5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 active:scale-[0.98] transition-all duration-200"
+                    >
+                      <Plus className="w-4 h-4" /> Create Community
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative hidden sm:flex flex-shrink-0 items-end gap-2 pb-1">
+                  <span className="w-11 h-11 rounded-2xl bg-white/70 border border-white flex items-center justify-center text-blue-600 shadow-sm -rotate-6">
+                    <Users className="w-5 h-5" />
+                  </span>
+                  <span className="w-14 h-14 rounded-2xl bg-white/80 border border-white flex items-center justify-center text-blue-700 shadow-md">
+                    <Sparkles className="w-6 h-6" />
+                  </span>
+                  <span className="w-11 h-11 rounded-2xl bg-white/70 border border-white flex items-center justify-center text-teal-600 shadow-sm rotate-6">
+                    <TrendingUp className="w-5 h-5" />
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Search */}
+            <div className="relative mb-3">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search communities..."
+                aria-label="Search communities"
+                className="w-full rounded-2xl border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-200"
+              />
+            </div>
+
+            {/* Category filters */}
+            <div className="flex items-center gap-2 mb-4 overflow-x-auto scroll-hidden">
+              {TYPE_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setTypeFilter(f.id)}
+                  className={`flex-shrink-0 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
+                    typeFilter === f.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {loading ? (
+              <div className="py-16 flex justify-center">
+                <Loader size="md" tone="dark" />
+              </div>
+            ) : loadError ? (
+              <div className="py-16 text-center">
+                <p className="text-sm font-semibold text-gray-900">{loadError}</p>
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((k) => k + 1)}
+                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
+                >
+                  Try Again
                 </button>
               </div>
-              <p className="px-4 lg:px-6 pb-2.5 text-xs text-gray-400">Find your people. Join the conversation.</p>
-            </header>
-
-            <div className="px-4 lg:px-6 pt-3">
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search communities"
-                  aria-label="Search communities"
-                  className="w-full rounded-xl border border-white/50 bg-white/40 backdrop-blur-md pl-9 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white/70 focus:border-blue-400/60 focus:ring-4 focus:ring-blue-50/50 transition-all duration-300"
-                />
+            ) : communities.length === 0 && !searchTerm ? (
+              <div className="py-16 text-center">
+                <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-blue-500" />
+                </div>
+                <p className="mt-3 text-sm font-semibold text-gray-900">No communities here yet</p>
+                <p className="mt-1 text-sm text-gray-400 max-w-[280px] mx-auto leading-relaxed">
+                  Be the first to bring people together.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/community/create')}
+                  className="mt-5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
+                >
+                  Create Community
+                </button>
               </div>
+            ) : (
+              <>
+                {!isSearchingOrFiltering && yourCommunities.length > 0 && (
+                  <div className="mb-5">
+                    <p className="mb-2.5 text-sm font-bold text-gray-900">Your Communities</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {yourCommunities.map((community) => (
+                        <CommunityCard key={community.id} community={community} membershipState={membershipStates.get(community.id)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-              <div className="mt-3 flex items-center gap-1.5 overflow-x-auto scroll-hidden pb-0.5">
-                {TYPE_FILTERS.map((f) => (
+                {searching ? (
+                  <div className="py-10 flex justify-center">
+                    <Loader size="sm" tone="dark" />
+                  </div>
+                ) : discoverCommunities.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
+                      <Search className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <p className="mt-3 text-sm font-semibold text-gray-900">
+                      {isSearchingOrFiltering ? 'No communities found' : 'No more communities to discover'}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-400 max-w-[280px] mx-auto leading-relaxed">
+                      {isSearchingOrFiltering ? 'Try a different name or category.' : 'Check back soon, or start your own.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    {!isSearchingOrFiltering && (
+                      <p className="mb-2.5 text-sm font-bold text-gray-900">
+                        {yourCommunities.length > 0 ? 'Popular on Campus' : 'Discover Communities'}
+                      </p>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {discoverCommunities.map((community) => (
+                        <CommunityCard
+                          key={community.id}
+                          community={community}
+                          membershipState={membershipStates.get(community.id) || null}
+                          onStateChange={(id, newState) =>
+                            setMembershipStates((prev) => new Map(prev).set(id, newState))
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Right rail */}
+        <aside className="hidden lg:flex lg:flex-col w-72 flex-shrink-0 h-screen sticky top-0 overflow-y-auto px-4 py-5 gap-4">
+          <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
+            <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-3">
+              <BarChart3 className="w-4 h-4 text-blue-500" /> Quick Stats
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {quickStats.map(({ key, icon: Icon, value, label, tint }) => (
+                <div key={key} className="rounded-xl bg-gray-50/70 px-2 py-3 text-center">
+                  <span className={`inline-flex w-7 h-7 rounded-lg items-center justify-center ${tint}`}>
+                    <Icon className="w-3.5 h-3.5" />
+                  </span>
+                  <p className="mt-1.5 text-base font-bold text-gray-900 leading-none">{value}</p>
+                  <p className="mt-1 text-[10px] text-gray-400 leading-tight">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {trendingCommunities.length > 0 && (
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
+              <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-3">
+                <TrendingUp className="w-4 h-4 text-blue-500" /> Trending on Campus
+              </p>
+              <div className="space-y-1.5">
+                {trendingCommunities.map((community, i) => (
                   <button
-                    key={f.id}
+                    key={community.id}
                     type="button"
-                    onClick={() => setTypeFilter(f.id)}
-                    className={`flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${
-                      typeFilter === f.id
-                        ? 'bg-gradient-to-r from-blue-50/90 to-indigo-50/70 text-blue-700 shadow-[inset_0_0_0_1px_rgba(91,77,255,0.14)]'
-                        : 'bg-white/40 backdrop-blur-sm text-gray-500 hover:bg-white/60'
-                    }`}
+                    onClick={() => navigate(`/community/${community.id}`)}
+                    className="w-full flex items-center gap-2.5 text-left group rounded-xl px-2 py-1.5 -mx-2 hover:bg-gray-50 transition-all duration-200"
                   >
-                    {f.label}
+                    <span className="text-[11px] font-bold text-gray-300 w-3 flex-shrink-0">{i + 1}</span>
+                    <Avatar
+                      initials={getInitials(community.name)}
+                      colorClass={getAvatarColor(community.id)}
+                      size="sm"
+                      src={community.icon || undefined}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">
+                        {community.name}
+                      </p>
+                      <p className="text-xs text-gray-400">{community.membersCount} members</p>
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
+          )}
 
-            <main className="px-4 lg:px-6 py-4">
-              {loading ? (
-                <div className="py-16 flex justify-center">
-                  <Loader size="md" tone="dark" />
-                </div>
-              ) : loadError ? (
-                <div className="py-16 text-center">
-                  <p className="text-sm font-semibold text-gray-900">{loadError}</p>
-                  <button
-                    type="button"
-                    onClick={() => setReloadKey((k) => k + 1)}
-                    className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
-                  >
-                    Try Again
-                  </button>
-                </div>
-              ) : communities.length === 0 && !searchTerm ? (
-                <div className="py-16 text-center">
-                  <div className="mx-auto w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center">
-                    <Users className="w-4.5 h-4.5 text-blue-500" />
-                  </div>
-                  <p className="mt-3 text-sm font-semibold text-gray-900">No communities yet</p>
-                  <p className="mt-1 text-sm text-gray-400">Be the first to create a space for your campus.</p>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/community/create')}
-                    className="mt-4 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
-                  >
-                    Create Community
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {!isSearchingOrFiltering && yourCommunities.length > 0 && (
-                    <div className="mb-5">
-                      <p className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Your Communities</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {yourCommunities.map((community) => (
-                          <CommunityCard key={community.id} community={community} membershipState={membershipStates.get(community.id)} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {searching ? (
-                    <div className="py-10 flex justify-center">
-                      <Loader size="sm" tone="dark" />
-                    </div>
-                  ) : discoverCommunities.length === 0 ? (
-                    <p className="py-10 text-center text-sm text-gray-400">
-                      {isSearchingOrFiltering ? 'No communities found.' : 'No more communities to discover.'}
-                    </p>
-                  ) : (
-                    <div>
-                      {!isSearchingOrFiltering && (
-                        <p className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                          {yourCommunities.length > 0 ? 'Popular on Campus' : 'Discover Communities'}
-                        </p>
-                      )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {discoverCommunities.map((community) => (
-                          <CommunityCard
-                            key={community.id}
-                            community={community}
-                            membershipState={membershipStates.get(community.id) || null}
-                            onStateChange={(id, newState) =>
-                              setMembershipStates((prev) => new Map(prev).set(id, newState))
-                            }
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </main>
+          <div className="rounded-2xl p-4 text-white relative overflow-hidden" style={{ backgroundColor: '#1677ff' }}>
+            <p className="relative flex items-center gap-1.5 text-sm font-bold">
+              <Sparkles className="w-4 h-4" /> Start your own community
+            </p>
+            <p className="relative mt-1.5 text-xs text-blue-100 leading-relaxed">
+              Have a club, project or campus idea? Bring people together.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/community/create')}
+              className="relative mt-3 w-full rounded-full bg-white text-blue-700 text-xs font-semibold py-2.5 hover:bg-blue-50 active:scale-[0.98] transition-all duration-200"
+            >
+              Create Community →
+            </button>
           </div>
-        </div>
-      </SwipeablePage>
+        </aside>
       </div>
 
       <div className="lg:hidden">
         <BottomNav />
       </div>
-    </div>
+    </>
   )
 }

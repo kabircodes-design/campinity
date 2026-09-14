@@ -4,6 +4,7 @@ import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
 import { auth } from '../firebase/firebase.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { isOnline } from '../firebase/presenceService.js'
 
 /**
  * Props match MessagesPage.jsx's usage: <ChatCard chat={chat}
@@ -26,6 +27,7 @@ export default function ChatCard({ chat, profile }) {
   const isPinned = (chat.pinnedBy || []).includes(uid)
   const isMuted = (chat.mutedBy || []).includes(uid)
   const isUnread = chat.lastMessage && chat.lastSenderId !== uid && !(chat.readBy || []).includes(uid)
+  const online = !isGroup && isOnline(profile)
 
   return (
     <button
@@ -33,22 +35,27 @@ export default function ChatCard({ chat, profile }) {
       onClick={() => navigate(`/messages/${chat.id}`)}
       className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-all duration-200"
     >
-      {isGroup ? (
-        chat.groupAvatar ? (
-          <img src={chat.groupAvatar} alt="" className="w-11 h-11 rounded-full object-cover flex-shrink-0" />
+      <div className="relative flex-shrink-0">
+        {isGroup ? (
+          chat.groupAvatar ? (
+            <img src={chat.groupAvatar} alt="" className="w-11 h-11 rounded-full object-cover" />
+          ) : (
+            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
+              <Users className="w-5 h-5 text-white" />
+            </div>
+          )
         ) : (
-          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center flex-shrink-0">
-            <Users className="w-5 h-5 text-white" />
-          </div>
-        )
-      ) : (
-        <Avatar
-          initials={getInitials(displayName)}
-          colorClass={getAvatarColor(chat.otherUid || chat.id)}
-          size="md"
-          src={getProfileIdentityImage(profile) || undefined}
-        />
-      )}
+          <Avatar
+            initials={getInitials(displayName)}
+            colorClass={getAvatarColor(chat.otherUid || chat.id)}
+            size="md"
+            src={getProfileIdentityImage(profile) || undefined}
+          />
+        )}
+        {online && (
+          <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white" aria-label="Online" />
+        )}
+      </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">

@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDoc, getDocs, limit, query, serverTimestamp } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, query, serverTimestamp } from 'firebase/firestore'
 import { db, storage } from './firebase.js'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 
@@ -11,6 +11,18 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
  * feature is functional if it isn't"). Follows the exact same
  * query/mapping pattern already established in communityService.js
  * (getTrendingCommunities) — not a new architecture.
+ *
+ * `collegeId`/`collegeName` are denormalized from the seller's own
+ * profile at creation time (same pattern as `sellerName` — a display
+ * cache, not a live join), enabling a real "From Your Campus" section
+ * with zero fabricated location/distance data.
+ *
+ * `sponsored` is read-only pass-through for a future promoted-listing
+ * feature — nothing in this app writes it yet, so it is always
+ * `null` today and every "Sponsored" UI branch that reads it naturally
+ * renders nothing rather than fake ad content. This is the "advertising
+ * -ready architecture" the brief asks for: the field and its rendering
+ * path exist, but no fake data is ever produced to fill it.
  */
 const COLLECTION = 'products'
 
@@ -25,6 +37,9 @@ function mapProductDoc(docSnap) {
     description: data.description || '',
     category: data.category || 'other',
     imageUrl: data.imageUrl || '',
+    collegeId: data.collegeId || null,
+    collegeName: data.collegeName || null,
+    sponsored: data.sponsored || null,
     createdAtMs: data.createdAt?.toMillis ? data.createdAt.toMillis() : 0
   }
 }
@@ -55,7 +70,7 @@ export async function uploadProductImage(uid, file) {
  * the explicit 'never trust sellerId from client' instruction. This
  * function does not decide who owns a product; the rule does.
  */
-export async function createProduct({ uid, name, price, description, category, imageUrl, sellerName }) {
+export async function createProduct({ uid, name, price, description, category, imageUrl, sellerName, collegeId, collegeName }) {
   const payload = {
     sellerId: uid,
     sellerName: sellerName || 'Student',
@@ -64,10 +79,21 @@ export async function createProduct({ uid, name, price, description, category, i
     description: description?.trim() || '',
     category: category || 'other',
     imageUrl: imageUrl || '',
+    collegeId: collegeId || null,
+    collegeName: collegeName || null,
     createdAt: serverTimestamp()
   }
   const docRef = await addDoc(collection(db, COLLECTION), payload)
   return docRef.id
+}
+
+/**
+ * Ownership is enforced server-side by the existing products/{productId}
+ * rule (`resource.data.sellerId == request.auth.uid`), not trusted from
+ * this call — a non-owner's delete simply fails at the rule.
+ */
+export async function deleteProduct(productId) {
+  await deleteDoc(doc(db, COLLECTION, productId))
 }
 
 export const CATEGORIES = ['Fashion', 'Food', 'Electronics', 'Books', 'Services', 'College Essentials', 'Other']

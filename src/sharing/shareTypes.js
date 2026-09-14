@@ -21,6 +21,7 @@ export const SHARE_TYPES = {
 /** Fallback last-message preview text in the chat list, when a shared payload has no title to show. */
 export const SHARE_TYPE_LABELS = {
   image: 'Sent a photo',
+  file: 'Sent a file',
   shared_post: 'Shared a post',
   shared_profile: 'Shared a profile',
   shared_story: 'Shared a story',

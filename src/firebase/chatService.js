@@ -166,7 +166,7 @@ const PENDING_MESSAGE_LIMIT = 3 // configurable — how many messages the reques
  * per "reuse existing sendMessage(), do not duplicate logic."
  */
 export async function sendMessage(chatId, senderId, text, options = {}) {
-  const { type = 'text', imageUrl = null, sharedPayload = null } = options
+  const { type = 'text', imageUrl = null, sharedPayload = null, fileUrl = null, fileName = null, fileSize = null, mimeType = null } = options
 
   if (!senderId) throw new Error('You need to be signed in to send a message.')
   if (type === 'text' && !text?.trim()) throw new Error('Message cannot be empty.')
@@ -200,6 +200,12 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
     }
     if (imageUrl) messageDoc.imageUrl = imageUrl
     if (sharedPayload) messageDoc.sharedPayload = sharedPayload
+    if (fileUrl) {
+      messageDoc.fileUrl = fileUrl
+      messageDoc.fileName = fileName || 'File'
+      messageDoc.fileSize = fileSize || 0
+      messageDoc.mimeType = mimeType || ''
+    }
 
     transaction.set(newMessageRef, messageDoc)
 
@@ -357,6 +363,22 @@ export async function uploadChatImage(chatId, uid, file) {
   const fileRef = ref(storage, path)
   await uploadBytes(fileRef, file)
   return getDownloadURL(fileRef)
+}
+
+/**
+ * Generic (non-image) file attachment — same chatMedia/{chatId}/{uid}/
+ * path as uploadChatImage, since both are equally "media this
+ * conversation's two participants uploaded," not a new Storage
+ * location or a new rule. Returns url + the file's own name/size so
+ * sendMessage can store a real file card (name, size, type) instead of
+ * a bare URL.
+ */
+export async function uploadChatFile(chatId, uid, file) {
+  const path = `chatMedia/${chatId}/${uid}/${Date.now()}-${file.name}`
+  const fileRef = ref(storage, path)
+  await uploadBytes(fileRef, file)
+  const url = await getDownloadURL(fileRef)
+  return { url, name: file.name, size: file.size, mimeType: file.type }
 }
 
 export async function markChatRead(chatId, uid) {

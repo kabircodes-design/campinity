@@ -60,6 +60,7 @@ function mapPostDoc(docSnap, currentUid) {
     id: docSnap.id,
     userId: data.userId,
     type: 'general',
+    category: data.category || 'general',
     name: data.displayName || 'Student',
     username: data.username || '',
     initials: getInitials(data.displayName),

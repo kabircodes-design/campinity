@@ -4,6 +4,7 @@ import { Sparkles, Users } from 'lucide-react'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import Avatar from './Avatar.jsx'
 import CampusPulse from './CampusPulse.jsx'
+import TrendingTopics from './TrendingTopics.jsx'
 import LastMinutePreview from './LastMinutePreview.jsx'
 import { useMyVerification } from '../access/useMyVerification.js'
 import VerificationGate from '../access/VerificationGate.jsx'
@@ -20,6 +21,8 @@ export default function DesktopRightRail({ communities = [], posts = [], notesCo
       <CampusPulse posts={posts} communities={communities} notesCount={notesCount} />
 
       <LastMinutePreview notes={notesForPreview} onViewAll={onViewNotes} />
+
+      <TrendingTopics posts={posts} />
 
       {topCommunities.length > 0 ? (
         <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">

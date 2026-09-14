@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Bell, Compass, Home, MessageCircle, PackageSearch, Settings, ShoppingBag, User, Users } from 'lucide-react'
 import Avatar from './Avatar.jsx'
+import Logo from './Logo.jsx'
 import VerifiedBadge from './VerifiedBadge.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
@@ -39,22 +40,9 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
         type="button"
         onClick={() => navigate('/home')}
         aria-label="Campinity — go to Home"
-        className="flex items-center gap-2 px-1 mb-8"
+        className="flex items-center px-1 mb-8"
       >
-        <span
-          className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #1677ff, #3b9bff)' }}
-        >
-          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <line x1="6" y1="6" x2="14" y2="6" stroke="#ffffff" strokeWidth="1.6" />
-            <line x1="6" y1="6" x2="10" y2="15" stroke="#ffffff" strokeWidth="1.6" />
-            <line x1="14" y1="6" x2="10" y2="15" stroke="#ffffff" strokeWidth="1.6" />
-            <circle cx="6" cy="6" r="2.75" fill="#ffffff" />
-            <circle cx="14" cy="6" r="2.75" fill="#ffffff" />
-            <circle cx="10" cy="15" r="2.75" fill="#ffffff" />
-          </svg>
-        </span>
-        <span className="text-[17px] font-bold tracking-tight text-gray-900">Campinity</span>
+        <Logo className="w-8 h-8" withWordmark />
       </button>
 
       <div className="flex flex-col gap-0.5 flex-1">

@@ -50,14 +50,13 @@ async function healProfile(uid, data) {
  * write successfully and then read back as undefined forever — a
  * silent data-loss-on-read bug, not a write failure.
  */
-export async function getUserProfile(uid) {
-  const snap = await getDoc(doc(db, COLLECTION, uid))
-  if (!snap.exists()) return null
-
-  const data = snap.data()
-
-  healProfile(uid, data)
-
+/**
+ * Pure mapper, exported so callers that need a LIVE profile (e.g. chat
+ * headers showing presence, which must update in real time, not just
+ * on mount) can subscribe with onSnapshot() directly and reuse this
+ * exact same field whitelist/defaults instead of duplicating it.
+ */
+export function mapProfileDoc(data) {
   return {
     displayName: data.displayName ?? data.fullName ?? '',
     username: data.username ?? '',
@@ -79,8 +78,18 @@ export async function getUserProfile(uid) {
     interests: Array.isArray(data.interests) ? data.interests : [],
     pinnedPostIds: Array.isArray(data.pinnedPostIds) ? data.pinnedPostIds : [],
     createdAt: data.createdAt ?? null,
-    updatedAt: data.updatedAt ?? null
+    updatedAt: data.updatedAt ?? null,
+    lastActiveAt: data.lastActiveAt ?? null
   }
+}
+
+export async function getUserProfile(uid) {
+  const snap = await getDoc(doc(db, COLLECTION, uid))
+  if (!snap.exists()) return null
+
+  const data = snap.data()
+  healProfile(uid, data)
+  return mapProfileDoc(data)
 }
 
 export async function createUserProfile(uid, data = {}) {

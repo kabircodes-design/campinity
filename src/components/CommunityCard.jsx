@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, Clock, Crown, Lock, Users } from 'lucide-react'
+import { Check, Clock, Crown, Lock, Sparkles, Users } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
 import { joinCommunity, requestToJoin } from '../firebase/communityService.js'
 import { useMyVerification } from '../access/useMyVerification.js'
@@ -18,22 +18,18 @@ const typeLabels = {
   custom: 'Community'
 }
 
+const NEW_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
 /**
- * `membershipState` replaces the old boolean `joined` prop — a real
- * state machine now: 'owner' | 'member' | 'pending' | null (not a
- * member). This is what makes "owner sees Manage, never Join" (the
- * task's own "biggest logic issue") and the private-community
- * request flow both actually correct, not just a binary joined/not.
- * Passed down by the caller (fetched once per page, not per card —
- * same N+1-avoidance reasoning as the previous `joined` prop).
+ * Restyled to match the rest of the redesigned app (clean white cards,
+ * blue accent, no glassmorphism) — every piece of business logic below
+ * (membershipState machine, real join()/requestToJoin() wiring,
+ * onStateChange callback) is unchanged from before this pass.
  *
- * The button now performs the REAL action directly — join() for
- * public communities, requestToJoin() for private ones — rather than
- * only ever navigating away. Both existing service functions were
- * already fully built (confirmed by reading them directly); this
- * just wires them to this UI for the first time. onStateChange lets
- * the parent page update its own membership Set immediately, so the
- * button's label updates live without a page reload.
+ * The "New" badge is real, not decorative — derived from the
+ * community's own `createdAt` (created within the last 7 days), the
+ * only "discovery cue" field this schema can honestly support without
+ * fabricating growth/activity metrics.
  */
 export default function CommunityCard({ community, membershipState = null, onStateChange }) {
   const navigate = useNavigate()
@@ -45,6 +41,7 @@ export default function CommunityCard({ community, membershipState = null, onSta
 
   const state = hasOverride ? localState : membershipState
   const goToCommunity = () => navigate(`/community/${community.id}`)
+  const isNew = community.createdAt?.toMillis && Date.now() - community.createdAt.toMillis() < NEW_WINDOW_MS
 
   const handleAction = async (event) => {
     event.stopPropagation()
@@ -75,12 +72,12 @@ export default function CommunityCard({ community, membershipState = null, onSta
   }
 
   const buttonConfig = {
-    owner: { label: 'Manage', className: 'bg-white/60 backdrop-blur-sm text-gray-700 border border-white/50 hover:bg-white/80', icon: <Crown className="w-3 h-3" />, action: goToCommunity },
-    member: { label: 'Open', className: 'bg-white/60 backdrop-blur-sm text-gray-700 border border-white/50 hover:bg-white/80', icon: <Check className="w-3 h-3" strokeWidth={2.5} />, action: goToCommunity },
-    pending: { label: 'Request Sent', className: 'bg-white/35 backdrop-blur-sm text-gray-400 border border-white/40', icon: <Clock className="w-3 h-3" />, action: null }
+    owner: { label: 'Manage', className: 'bg-gray-100 text-gray-700 hover:bg-gray-200', icon: <Crown className="w-3 h-3" />, action: goToCommunity },
+    member: { label: 'Open', className: 'bg-gray-100 text-gray-700 hover:bg-gray-200', icon: <Check className="w-3 h-3" strokeWidth={2.5} />, action: goToCommunity },
+    pending: { label: 'Request Sent', className: 'bg-gray-50 text-gray-400 border border-gray-100', icon: <Clock className="w-3 h-3" />, action: null }
   }[state] || {
     label: community.privacy === 'private' ? 'Request to Join' : 'Join',
-    className: 'bg-blue-600/90 backdrop-blur-sm text-white hover:bg-blue-700/90 shadow-[0_2px_8px_rgba(91,77,255,0.25)]',
+    className: 'bg-blue-600 text-white hover:bg-blue-700',
     icon: null,
     action: handleAction
   }
@@ -96,10 +93,10 @@ export default function CommunityCard({ community, membershipState = null, onSta
           goToCommunity()
         }
       }}
-      className="w-full flex flex-col text-left rounded-2xl border border-white/50 bg-white/55 backdrop-blur-md lg:bg-white/45 lg:backdrop-blur-xl shadow-[inset_1px_1px_0_rgba(255,255,255,0.5),0_4px_20px_rgba(91,77,255,0.07)] hover:border-white/70 hover:bg-white/65 hover:shadow-[inset_1px_1px_0_rgba(255,255,255,0.6),0_8px_28px_rgba(91,77,255,0.11)] active:scale-[0.99] transition-all duration-200 cursor-pointer p-3.5"
+      className="w-full flex flex-col text-left rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:border-gray-200 hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] hover:-translate-y-[1px] active:scale-[0.99] transition-all duration-200 cursor-pointer p-3.5"
     >
       <div className="flex items-start gap-3">
-        <div className="relative w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+        <div className="relative w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden bg-blue-600 flex items-center justify-center">
           {community.coverImage && (
             <img src={community.coverImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
           )}
@@ -118,6 +115,11 @@ export default function CommunityCard({ community, membershipState = null, onSta
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-bold text-gray-900 truncate">{community.name}</p>
             {community.privacy === 'private' && <Lock className="w-3 h-3 text-gray-400 flex-shrink-0" />}
+            {isNew && !state && (
+              <span className="flex-shrink-0 inline-flex items-center gap-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5">
+                <Sparkles className="w-2.5 h-2.5" /> New
+              </span>
+            )}
           </div>
           <p className="text-xs text-gray-400 truncate">@{community.handle}</p>
         </div>
@@ -147,7 +149,7 @@ export default function CommunityCard({ community, membershipState = null, onSta
       )}
 
       <div className="mt-2.5 flex items-center gap-2.5 text-[11px] text-gray-400">
-        <span className="inline-flex items-center gap-1 rounded-full bg-white/50 backdrop-blur-sm border border-white/40 text-blue-600 font-semibold px-2 py-0.5">
+        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-600 font-semibold px-2 py-0.5">
           {typeLabels[community.type] || 'Community'}
         </span>
         <span className="flex items-center gap-1">
