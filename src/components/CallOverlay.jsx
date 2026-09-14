@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Mic, MicOff, Phone, PhoneOff, Video, VideoOff } from 'lucide-react'
+import { Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
@@ -12,24 +12,27 @@ function formatDuration(totalSeconds) {
 }
 
 /**
- * Full-screen overlay for every call phase (incoming / calling /
- * connecting / active). Deliberately minimal — "modern social calling,
- * not Zoom" per the brief — a single centered card for voice, a
- * full-bleed remote video + picture-in-picture local preview for video.
+ * Full-screen overlay for calling / connecting / active / terminal call
+ * states. Deliberately minimal — "modern social calling, not Zoom" per
+ * the brief — a single centered card for voice, a full-bleed remote
+ * video + picture-in-picture local preview for video.
+ *
+ * Incoming calls are handled entirely by IncomingCallToast.jsx (a
+ * compact, non-blocking card) instead — this component is only ever
+ * rendered once callState has moved past 'incoming' (see
+ * CallContext.jsx's conditional), so it never needs to render a ringing
+ * state itself.
  */
 export default function CallOverlay({ call }) {
   const {
     callState,
     activeCall,
-    incomingCall,
     localStream,
     remoteStream,
     muted,
     cameraOff,
     callError,
     durationSec,
-    answerCall,
-    declineCall,
     endCall,
     toggleMute,
     toggleCamera,
@@ -41,8 +44,8 @@ export default function CallOverlay({ call }) {
   const remoteVideoRef = useRef(null)
   const remoteAudioRef = useRef(null)
 
-  const otherUid = activeCall?.otherUid || incomingCall?.callerUid || null
-  const type = activeCall?.type || incomingCall?.type || 'voice'
+  const otherUid = activeCall?.otherUid || null
+  const type = activeCall?.type || 'voice'
 
   useEffect(() => {
     if (!otherUid) {
@@ -69,11 +72,11 @@ export default function CallOverlay({ call }) {
     if (type === 'voice' && remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream || null
   }, [remoteStream, type])
 
-  const isEndedState = ['ended', 'declined', 'failed'].includes(callState)
+  const isEndedState = ['ended', 'declined', 'missed', 'failed'].includes(callState)
 
   // Auto-dismiss a terminal state after a moment, so "Call ended" /
-  // "Call declined" / "Call failed" doesn't sit on screen forever with
-  // no button to clear it.
+  // "Call declined" / "No answer" / "Call failed" doesn't sit on screen
+  // forever with no button to clear it.
   useEffect(() => {
     if (!isEndedState) return undefined
     const timer = window.setTimeout(() => resetCall(), 2000)
@@ -84,17 +87,16 @@ export default function CallOverlay({ call }) {
 
   const displayName = otherProfile?.displayName || 'Student'
   const isVideo = type === 'video'
-  const isRinging = callState === 'incoming'
   const isOutgoing = callState === 'calling'
   const isConnecting = callState === 'connecting'
   const isActive = callState === 'active'
 
   let statusLabel = ''
-  if (isRinging) statusLabel = isVideo ? 'Incoming video call' : 'Incoming voice call'
-  else if (isOutgoing) statusLabel = 'Calling…'
+  if (isOutgoing) statusLabel = 'Calling…'
   else if (isConnecting) statusLabel = 'Connecting…'
   else if (isActive) statusLabel = formatDuration(durationSec)
-  else if (callState === 'declined') statusLabel = 'Call declined'
+  else if (callState === 'declined') statusLabel = callError || 'Call declined'
+  else if (callState === 'missed') statusLabel = 'No answer'
   else if (callState === 'failed') statusLabel = callError || 'Call failed'
   else if (callState === 'ended') statusLabel = 'Call ended'
 
@@ -131,26 +133,7 @@ export default function CallOverlay({ call }) {
       )}
 
       <div className="absolute bottom-10 left-0 right-0 flex items-center justify-center gap-4">
-        {isRinging ? (
-          <>
-            <button
-              type="button"
-              onClick={declineCall}
-              aria-label="Decline call"
-              className="w-14 h-14 rounded-full bg-rose-500 hover:bg-rose-600 flex items-center justify-center active:scale-95 transition-all duration-200"
-            >
-              <PhoneOff className="w-6 h-6" />
-            </button>
-            <button
-              type="button"
-              onClick={answerCall}
-              aria-label="Answer call"
-              className="w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-600 flex items-center justify-center active:scale-95 transition-all duration-200"
-            >
-              <Phone className="w-6 h-6" />
-            </button>
-          </>
-        ) : isEndedState ? null : (
+        {isEndedState ? null : (
           <>
             <button
               type="button"

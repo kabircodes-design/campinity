@@ -6,7 +6,6 @@ import DesktopSidebar from '../components/DesktopSidebar.jsx'
 import Avatar from '../components/Avatar.jsx'
 import Logo from '../components/Logo.jsx'
 import ChatListPanel from '../components/ChatListPanel.jsx'
-import CallOverlay from '../components/CallOverlay.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import CreateGroupFlow from '../messaging/CreateGroupFlow.jsx'
 import { auth } from '../firebase/firebase.js'
@@ -15,7 +14,6 @@ import { getUserProfile } from '../firebase/profileService.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
-import { useCall } from '../hooks/useCall.js'
 
 /**
  * Redesigned to match the finished Home page's design system (clean
@@ -43,7 +41,6 @@ export default function MessagesPage() {
   const [profile, setProfile] = useState(null)
   const [unreadNotifCount, setUnreadNotifCount] = useState(0)
   const fetchedUidsRef = useRef(new Set())
-  const call = useCall()
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
@@ -273,7 +270,6 @@ export default function MessagesPage() {
         <BottomNav />
       </div>
       <CreateGroupFlow open={createGroupOpen} onClose={() => setCreateGroupOpen(false)} />
-      <CallOverlay call={call} />
     </>
   )
 }

@@ -27,6 +27,8 @@ import CampusVerificationModal from '../components/CampusVerificationModal.jsx'
 import CampusVerificationBanner from '../components/CampusVerificationBanner.jsx'
 import PostingStatusPill from '../components/PostingStatusPill.jsx'
 import { usePostingStatus } from '../context/PostingStatusContext.jsx'
+import CampinityIntro from '../components/CampinityIntro.jsx'
+import { consumeJustOnboardedFlag } from '../onboarding/campusIntroFlag.js'
 
 const feedTabs = [
   { label: 'For You', key: 'forYou' },
@@ -38,6 +40,28 @@ const feedTabs = [
 export default function HomePage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(feedTabs[0].key)
+
+  // Captured ONCE via the lazy initializer — this is what makes the
+  // welcome intro + entrance stagger play exactly once, right after
+  // onboarding, and never again: consumeJustOnboardedFlag() both reads
+  // AND clears the flag on this first check, so a refresh, back-nav, or
+  // any later mount of HomePage sees nothing and renders exactly as it
+  // always has (entranceStage stays 'none' — every entranceClass() call
+  // below then returns '', identical to this page's pre-existing
+  // className strings).
+  const [justOnboarded] = useState(() => consumeJustOnboardedFlag())
+  const [entranceStage, setEntranceStage] = useState(justOnboarded ? 'waiting' : 'none')
+
+  const handleIntroComplete = () => {
+    setEntranceStage('playing')
+    window.setTimeout(() => setEntranceStage('none'), 700)
+  }
+
+  const entranceClass = (delayMs) => {
+    if (entranceStage === 'waiting') return 'opacity-0'
+    if (entranceStage === 'playing') return `[animation:campinity-fade-up_0.5s_ease-out_both] [animation-delay:${delayMs}ms]`
+    return ''
+  }
 
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
@@ -249,16 +273,31 @@ export default function HomePage() {
 
   const { showModal, showBanner, closeModal, dismissBanner } = useCampusVerificationReminder(profile)
 
+  // The intro is a sibling of the loading/loaded branch below, not
+  // nested inside it — if it lived inside the `loading` branch, the
+  // instant Home's data finished loading it would switch to a
+  // completely different JSX subtree and React would unmount/remount
+  // CampinityIntro, restarting its animation mid-play. As a stable
+  // sibling here, it keeps its own timers running smoothly straight
+  // through that transition, regardless of when `loading` resolves.
   if (loading) {
     return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
-        <Loader size="lg" tone="dark" />
-      </div>
+      <>
+        {entranceStage === 'waiting' && (
+          <CampinityIntro campusName={profile?.college} onComplete={handleIntroComplete} />
+        )}
+        <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
+          <Loader size="lg" tone="dark" />
+        </div>
+      </>
     )
   }
 
   return (
     <>
+    {entranceStage === 'waiting' && (
+      <CampinityIntro campusName={profile?.college} onComplete={handleIntroComplete} />
+    )}
     <div
       className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:gap-3 lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]"
       style={{ backgroundColor: '#f8fafc' }}
@@ -266,7 +305,7 @@ export default function HomePage() {
     <SwipeablePage>
     <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
       <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-screen lg:min-h-0 bg-white lg:bg-transparent border-x border-gray-100">
-        <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
+        <header className={`sticky top-0 z-40 bg-white border-b border-gray-100 ${entranceClass(0)}`}>
           <div className="h-14 flex items-center gap-3 px-4 lg:px-6">
             <button
               type="button"
@@ -339,7 +378,7 @@ export default function HomePage() {
 
         {showBanner && <CampusVerificationBanner onDismiss={dismissBanner} />}
 
-        <section className="mx-4 lg:mx-6 mt-5 mb-5">
+        <section className={`mx-4 lg:mx-6 mt-5 mb-5 ${entranceClass(80)}`}>
           <div
             className="relative overflow-hidden rounded-2xl lg:rounded-3xl px-5 py-5 lg:px-7 lg:py-6"
             style={{ background: 'linear-gradient(120deg, #eaf3ff 0%, #dcecff 45%, #e7f7f7 100%)' }}
@@ -382,7 +421,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="mx-4 lg:mx-6 mb-5 py-0">
+        <section className={`mx-4 lg:mx-6 mb-5 py-0 ${entranceClass(140)}`}>
           <div className="flex items-start gap-3.5 overflow-x-auto scroll-hidden">
             {storyBubbles.map((story) => {
               const seen =
@@ -408,7 +447,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <nav className="sticky top-14 z-30 bg-white flex items-center gap-6 px-4 lg:px-6 border-b border-gray-100 mb-3">
+        <nav className={`sticky top-14 z-30 bg-white flex items-center gap-6 px-4 lg:px-6 border-b border-gray-100 mb-3 ${entranceClass(200)}`}>
           {feedTabs.map((tab) => {
             const isActive = activeTab === tab.key
             return (
@@ -432,7 +471,7 @@ export default function HomePage() {
           })}
         </nav>
 
-        <main className="pb-24" style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}>
+        <main className={`pb-24 ${entranceClass(200)}`} style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}>
           {activeTab === 'notes' ? (
             <NotesView />
           ) : activeTab === 'following' ? (

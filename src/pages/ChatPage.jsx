@@ -20,7 +20,6 @@ import DesktopSidebar from '../components/DesktopSidebar.jsx'
 import ChatListPanel from '../components/ChatListPanel.jsx'
 import MessageBubble from '../components/MessageBubble.jsx'
 import MessageInput from '../components/MessageInput.jsx'
-import CallOverlay from '../components/CallOverlay.jsx'
 import ReportModal from '../components/ReportModal.jsx'
 import Logo from '../components/Logo.jsx'
 import Loader from '../auth/components/Loader.jsx'
@@ -35,7 +34,7 @@ import { blockUser } from '../firebase/blockService.js'
 import { getCollegeById } from '../data/dummyColleges.js'
 import { useChat } from '../hooks/useChat.js'
 import { useMessages } from '../hooks/useMessages.js'
-import { useCall } from '../hooks/useCall.js'
+import { useCallActions } from '../context/CallContext.jsx'
 
 function dayLabelFor(timestamp) {
   if (!timestamp?.toDate) return ''
@@ -84,7 +83,7 @@ export default function ChatPage() {
     chatId,
     otherUid
   )
-  const call = useCall()
+  const { startCall, isBusy } = useCallActions()
 
   const [listChats, setListChats] = useState([])
   const [listSentPending, setListSentPending] = useState([])
@@ -249,8 +248,12 @@ export default function ChatPage() {
   const otherOnline = !isGroup && isOnline(otherProfile)
 
   const handleCall = (type) => {
-    if (isGroup || !otherUid) return
-    call.startCall(otherUid, chatId, type)
+    // isBusy also guards against rapid double-clicks starting two
+    // overlapping calls — startCall() itself no-ops once already
+    // mid-call, but disabling the button is what stops the SPAM case
+    // (many rapid clicks before the first click's state update lands).
+    if (isGroup || !otherUid || isBusy) return
+    startCall(otherUid, chatId, type)
   }
 
   const handleBlock = async () => {
@@ -411,7 +414,8 @@ export default function ChatPage() {
                         aria-label="Voice call"
                         title="Voice call"
                         onClick={() => handleCall('voice')}
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200"
+                        disabled={isBusy}
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent transition-all duration-200"
                       >
                         <Phone className="w-4.5 h-4.5" />
                       </button>
@@ -420,7 +424,8 @@ export default function ChatPage() {
                         aria-label="Video call"
                         title="Video call"
                         onClick={() => handleCall('video')}
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200"
+                        disabled={isBusy}
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent transition-all duration-200"
                       >
                         <Video className="w-4.5 h-4.5" />
                       </button>
@@ -507,14 +512,16 @@ export default function ChatPage() {
                     <button
                       type="button"
                       onClick={() => handleCall('voice')}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-full bg-blue-600 text-white text-xs font-semibold py-2.5 hover:bg-blue-700 transition-all duration-200"
+                      disabled={isBusy}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-full bg-blue-600 text-white text-xs font-semibold py-2.5 hover:bg-blue-700 disabled:opacity-40 transition-all duration-200"
                     >
                       <Phone className="w-3.5 h-3.5" /> Call
                     </button>
                     <button
                       type="button"
                       onClick={() => handleCall('video')}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-full border border-gray-200 text-gray-900 text-xs font-semibold py-2.5 hover:border-gray-300 transition-all duration-200"
+                      disabled={isBusy}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-full border border-gray-200 text-gray-900 text-xs font-semibold py-2.5 hover:border-gray-300 disabled:opacity-40 transition-all duration-200"
                     >
                       <Video className="w-3.5 h-3.5" /> Video
                     </button>
@@ -621,7 +628,6 @@ export default function ChatPage() {
       </div>
 
       <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} targetType="user" targetId={otherUid} targetOwnerUid={otherUid} />
-      <CallOverlay call={call} />
     </>
   )
 }

@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, CheckCheck, Clock, Download, FileText, X } from 'lucide-react'
+import { Check, CheckCheck, Clock, Download, FileText, Phone, PhoneMissed, Video, X } from 'lucide-react'
 import SharedCard from '../sharing/SharedCard.jsx'
+
+function formatCallDuration(totalSeconds) {
+  const m = Math.floor((totalSeconds || 0) / 60)
+  const s = (totalSeconds || 0) % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
 
 function formatFileSize(bytes) {
   if (!bytes) return ''
@@ -35,6 +41,34 @@ export default function MessageBubble({ message, isMine, currentUid, onRetry }) 
     : message.createdAt?.toDate
     ? message.createdAt.toDate().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
     : ''
+
+  // Call-history entries are system-style rows, not left/right chat
+  // bubbles — matching how a real call log reads (and how the date
+  // separators elsewhere on this page are rendered), not disguised as
+  // something either participant "said."
+  if (type === 'call') {
+    const isMissedOrDeclined = message.callOutcome === 'missed' || message.callOutcome === 'declined'
+    const CallIcon = isMissedOrDeclined ? PhoneMissed : message.callType === 'video' ? Video : Phone
+    const label =
+      message.callOutcome === 'missed'
+        ? `Missed ${message.callType === 'video' ? 'video' : 'voice'} call`
+        : message.callOutcome === 'declined'
+          ? `Declined ${message.callType === 'video' ? 'video' : 'voice'} call`
+          : `${message.callType === 'video' ? 'Video' : 'Voice'} call · ${formatCallDuration(message.callDurationSec)}`
+    return (
+      <div className="flex justify-center my-1">
+        <div
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${
+            isMissedOrDeclined ? 'bg-rose-50 text-rose-600' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          <CallIcon className="w-3.5 h-3.5" />
+          {label}
+          {time && <span className="text-gray-400">· {time}</span>}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>

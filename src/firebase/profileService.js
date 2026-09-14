@@ -61,6 +61,16 @@ export function mapProfileDoc(data) {
     displayName: data.displayName ?? data.fullName ?? '',
     username: data.username ?? '',
     bio: data.bio ?? '',
+    // Real, pre-existing gap found while wiring the post-onboarding
+    // intro's "Welcome to [Campus Name]" text: CreateProfilePage.jsx's
+    // onboarding form has always written a plain `college` string via
+    // saveUserProfile(), but this whitelist never included it — every
+    // read of a profile silently dropped it, so `profile.college` was
+    // always undefined everywhere in the app despite the write
+    // succeeding. One-line additive fix; doesn't touch collegeId (the
+    // separate, real Firestore-college-document field other features
+    // use) or change any other field's behavior.
+    college: data.college ?? '',
     collegeId: data.collegeId ?? null,
     course: data.course ?? '',
     year: data.year ?? '',

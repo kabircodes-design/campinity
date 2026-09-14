@@ -165,8 +165,29 @@ const PENDING_MESSAGE_LIMIT = 3 // configurable — how many messages the reques
  * is completely unaffected; this is the same function, not a new one,
  * per "reuse existing sendMessage(), do not duplicate logic."
  */
+function formatCallPreview(callType, callOutcome, callDurationSec) {
+  const icon = callType === 'video' ? '📹' : '📞'
+  const label = callType === 'video' ? 'Video call' : 'Voice call'
+  if (callOutcome === 'missed') return `${icon} Missed ${label.toLowerCase()}`
+  if (callOutcome === 'declined') return `${icon} Declined ${label.toLowerCase()}`
+  const m = Math.floor((callDurationSec || 0) / 60)
+  const s = (callDurationSec || 0) % 60
+  return `${icon} ${label} · ${m}:${String(s).padStart(2, '0')}`
+}
+
 export async function sendMessage(chatId, senderId, text, options = {}) {
-  const { type = 'text', imageUrl = null, sharedPayload = null, fileUrl = null, fileName = null, fileSize = null, mimeType = null } = options
+  const {
+    type = 'text',
+    imageUrl = null,
+    sharedPayload = null,
+    fileUrl = null,
+    fileName = null,
+    fileSize = null,
+    mimeType = null,
+    callType = null,
+    callDurationSec = null,
+    callOutcome = null
+  } = options
 
   if (!senderId) throw new Error('You need to be signed in to send a message.')
   if (type === 'text' && !text?.trim()) throw new Error('Message cannot be empty.')
@@ -206,6 +227,11 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
       messageDoc.fileSize = fileSize || 0
       messageDoc.mimeType = mimeType || ''
     }
+    if (type === 'call') {
+      messageDoc.callType = callType || 'voice'
+      messageDoc.callDurationSec = callDurationSec || 0
+      messageDoc.callOutcome = callOutcome || 'completed'
+    }
 
     transaction.set(newMessageRef, messageDoc)
 
@@ -213,7 +239,13 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
     // raw payload data — "Shared a post" reads correctly in the inbox
     // instead of an empty string or a JSON blob.
     const lastMessagePreview =
-      type === 'text' ? text.trim().slice(0, 120) : sharedPayload?.preview?.title ? `Shared: ${sharedPayload.preview.title}` : SHARE_TYPE_LABELS[type] || 'Sent a message'
+      type === 'text'
+        ? text.trim().slice(0, 120)
+        : type === 'call'
+          ? formatCallPreview(callType, callOutcome, callDurationSec)
+          : sharedPayload?.preview?.title
+            ? `Shared: ${sharedPayload.preview.title}`
+            : SHARE_TYPE_LABELS[type] || 'Sent a message'
 
     const chatUpdate = {
       lastMessage: lastMessagePreview,
@@ -239,6 +271,18 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
   }
 
   return newMessageRef.id
+}
+
+/**
+ * Lightweight call-history entry — reuses sendMessage/the existing
+ * message architecture (per the explicit "use the existing message
+ * architecture if possible" instruction) rather than a separate
+ * call-log system. Called exactly once per finished call, from
+ * useCall.js's teardown(), caller-side only (see that file's comment
+ * for why only one side ever posts this).
+ */
+export async function sendCallSummaryMessage(chatId, senderId, { callType, callDurationSec, callOutcome }) {
+  return sendMessage(chatId, senderId, '', { type: 'call', callType, callDurationSec, callOutcome })
 }
 
 /* ============================================================

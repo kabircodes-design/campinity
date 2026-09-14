@@ -53,7 +53,7 @@ export async function createCallDoc({ callerUid, calleeUid, chatId, type }) {
     calleeUid,
     chatId,
     type, // 'voice' | 'video'
-    status: 'ringing', // 'ringing' | 'active' | 'ended' | 'declined' | 'missed' | 'failed'
+    status: 'ringing', // 'ringing' | 'active' | 'ended' | 'declined' | 'missed' | 'failed' | 'busy'
     offer: null,
     answer: null,
     createdAt: serverTimestamp(),
@@ -76,7 +76,7 @@ export async function setCallAnswer(callId, answer) {
 }
 
 export async function setCallStatus(callId, status) {
-  const terminal = status === 'ended' || status === 'declined' || status === 'missed' || status === 'failed'
+  const terminal = status === 'ended' || status === 'declined' || status === 'missed' || status === 'failed' || status === 'busy'
   await updateDoc(callDoc(callId), {
     status,
     updatedAt: serverTimestamp(),

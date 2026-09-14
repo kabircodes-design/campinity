@@ -14,16 +14,23 @@ const AVATAR_COLORS = [
 ]
 
 export function getInitials(name = '') {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
+  // `= ''` only covers an omitted/undefined argument — an explicit
+  // `null` (a real value seen in practice, e.g. a call target whose
+  // profile hasn't loaded yet) skips the default and previously
+  // crashed here on `.trim()`, taking down the whole render tree with
+  // no error boundary to catch it. `?? ''` catches both.
+  const safeName = name ?? ''
+  const parts = safeName.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return '?'
   return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
 }
 
 /** Deterministic so the same author always gets the same avatar color. */
 export function getAvatarColor(seed = '') {
+  const safeSeed = seed ?? ''
   let hash = 0
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) % AVATAR_COLORS.length
+  for (let i = 0; i < safeSeed.length; i += 1) {
+    hash = (hash * 31 + safeSeed.charCodeAt(i)) % AVATAR_COLORS.length
   }
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 }

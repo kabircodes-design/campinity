@@ -79,3 +79,29 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Campinity intro (post-onboarding welcome moment) + the Home entrance
+   it hands off to. The global prefers-reduced-motion rule above already
+   collapses every animation-duration here to ~0ms for reduced-motion
+   users — elements still reach their end state, just without visible
+   motion, so nothing gets stuck. */
+@keyframes campinity-logo-in {
+  from { opacity: 0; transform: scale(0.92) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes campinity-ripple {
+  from { opacity: 0.45; transform: scale(0.75); }
+  to { opacity: 0; transform: scale(1.5); }
+}
+@keyframes campinity-text-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes campinity-curtain-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.03); }
+}
+@keyframes campinity-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

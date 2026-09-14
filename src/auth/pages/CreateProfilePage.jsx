@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, X } from 'lucide-react'
+import { Camera, Check, X } from 'lucide-react'
 import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
@@ -9,6 +9,7 @@ import { saveUserProfile } from '../utils/userProfile.js'
 import { uploadProfileImage } from '../utils/storage.js'
 import { reserveUsername } from '../../firebase/usernameService.js'
 import { useUsernameAvailability } from '../../hooks/useUsernameAvailability.js'
+import { markJustOnboarded } from '../../onboarding/campusIntroFlag.js'
 
 const years = ['FYJC', 'SYJC', 'FY', 'SY', 'TY', 'Final Year']
 
@@ -77,6 +78,7 @@ export default function CreateProfilePage() {
   const [errors, setErrors] = useState({})
   const [submitError, setSubmitError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
 
   // A brand-new profile has no existing username yet, so there is
   // nothing to compare against or release — pass '' as currentUsername.
@@ -144,7 +146,14 @@ export default function CreateProfilePage() {
         profileCompleted: true
       })
 
-      navigate('/home')
+      // Brief, satisfying success moment on the button itself before
+      // handing off to the full-screen welcome intro — markJustOnboarded()
+      // is what makes HomePage.jsx show that intro exactly once, right
+      // after this specific transition (see campusIntroFlag.js).
+      setJustSaved(true)
+      markJustOnboarded()
+      window.setTimeout(() => navigate('/home'), 350)
+      return
     } catch (err) {
       if (err?.code === 'username-taken') {
         setErrors((prev) => ({ ...prev, username: 'Username already taken' }))
@@ -270,8 +279,13 @@ export default function CreateProfilePage() {
           </p>
         )}
 
-        <Button type="submit" disabled={isSubmitting || usernameCheck.status === 'checking'}>
-          {isSubmitting ? 'Saving…' : 'Continue'}
+        <Button
+          type="submit"
+          disabled={isSubmitting || justSaved || usernameCheck.status === 'checking'}
+          loading={isSubmitting}
+          icon={justSaved ? <Check className="w-4 h-4" strokeWidth={2.6} /> : null}
+        >
+          {justSaved ? 'Welcome!' : isSubmitting ? 'Saving…' : 'Continue'}
         </Button>
       </form>
     </AuthLayout>

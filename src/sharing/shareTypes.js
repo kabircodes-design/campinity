@@ -22,6 +22,7 @@ export const SHARE_TYPES = {
 export const SHARE_TYPE_LABELS = {
   image: 'Sent a photo',
   file: 'Sent a file',
+  call: '📞 Call',
   shared_post: 'Shared a post',
   shared_profile: 'Shared a profile',
   shared_story: 'Shared a story',

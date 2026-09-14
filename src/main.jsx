@@ -5,6 +5,7 @@ import App from './App.jsx'
 import { PostsProvider } from './hooks/usePosts.jsx'
 import { ThemeProvider } from './theme/ThemeProvider.jsx'
 import { PostingStatusProvider } from './context/PostingStatusContext.jsx'
+import { CallProvider } from './context/CallContext.jsx'
 import { getThemeById } from './theme/themes.js'
 import './index.css'
 import './theme/theme-tokens.css'
@@ -49,7 +50,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <ThemeProvider>
         <PostsProvider>
           <PostingStatusProvider>
-            <App />
+            <CallProvider>
+              <App />
+            </CallProvider>
           </PostingStatusProvider>
         </PostsProvider>
       </ThemeProvider>
