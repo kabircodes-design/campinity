@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BadgeCheck, Calendar, Camera, Link as LinkIcon, MessageCircle, MoreVertical, Share2 } from 'lucide-react'
+import { BadgeCheck, Calendar, Camera, Link as LinkIcon, MessageCircle, MoreVertical, Pencil, Share2 } from 'lucide-react'
 import ProfilePhotoEditor from '../avatar/ProfilePhotoEditor.jsx'
 import Avatar from './Avatar.jsx'
 import VerifiedBadge from './VerifiedBadge.jsx'
@@ -97,14 +97,20 @@ export default function ProfileHeader({
 
   return (
     <div className="pb-4">
-      <div className="relative h-24 lg:h-28 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 overflow-hidden">
-        <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-        <div className="absolute -bottom-8 left-1/3 w-40 h-40 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+      <div className="relative h-40 lg:h-48 bg-gradient-to-br from-blue-500 via-indigo-500 to-blue-600 overflow-hidden">
+        {profile.coverPhoto ? (
+          <img src={profile.coverPhoto} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <>
+            <div className="absolute -top-10 -right-10 w-56 h-56 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-12 left-1/4 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+          </>
+        )}
       </div>
-      <div className="px-4 -mt-8">
-      <div className="flex items-start gap-4">
+      <div className="px-4 -mt-12">
+      <div className="flex items-end justify-between gap-3">
         <div
-          className={`flex-shrink-0 rounded-full ring-4 ring-white relative group ${isOwnProfile ? 'cursor-pointer' : ''}`}
+          className={`flex-shrink-0 rounded-full ring-4 ring-white dark:ring-[#11131a] relative group ${isOwnProfile ? 'cursor-pointer' : ''}`}
           onClick={() => isOwnProfile && setPhotoEditorOpen(true)}
         >
           <Avatar
@@ -118,21 +124,24 @@ export default function ProfileHeader({
               <div className="hidden lg:flex absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/40 items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200">
                 <Camera className="w-5 h-5 text-white" />
               </div>
-              <div className="lg:hidden absolute bottom-0 right-0 w-6 h-6 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center">
+              <div className="lg:hidden absolute bottom-0 right-0 w-6 h-6 rounded-full bg-blue-600 border-2 border-white dark:border-[#11131a] flex items-center justify-center">
                 <Camera className="w-3 h-3 text-white" />
               </div>
             </>
           )}
         </div>
+      </div>
 
-        <div className="flex-1 min-w-0 pt-1">
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-lg font-bold text-gray-900 truncate">{profile.displayName}</h1>
-            <VerifiedBadge verified={profile.verifiedCampus} size="lg" />
-          </div>
-          <p className="text-sm text-gray-400">@{profile.username}</p>
+      <div className="mt-3">
+        <div className="flex items-center gap-1.5">
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 truncate">{profile.displayName}</h1>
+          <VerifiedBadge verified={profile.verifiedCampus} size="lg" />
+        </div>
+        <p className="text-sm text-gray-400 dark:text-gray-500">@{profile.username}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {courseYearLabel && <p className="text-[13px] text-gray-500 dark:text-gray-400">{courseYearLabel}</p>}
           {profile.verifiedCampus && (
-            <span className="inline-flex items-center gap-1 mt-1.5 rounded-full bg-blue-50 text-blue-600 text-[11px] font-semibold px-2.5 py-1">
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400 text-[11px] font-semibold px-2.5 py-1">
               <BadgeCheck className="w-3 h-3" />
               Verified Campus Member
             </span>
@@ -140,13 +149,22 @@ export default function ProfileHeader({
         </div>
       </div>
 
-      {profile.bio && <p className="mt-3 text-sm text-gray-700 leading-relaxed">{profile.bio}</p>}
+      {profile.bio && <p className="mt-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{profile.bio}</p>}
+
+      {Array.isArray(profile.interests) && profile.interests.length > 0 && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {profile.interests.slice(0, 6).map((interest) => (
+            <span key={interest} className="rounded-full bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400 text-[11px] font-semibold px-2.5 py-1">
+              #{interest.replace(/\s+/g, '')}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="mt-2.5 space-y-1">
-        {profile.college && <p className="text-[13px] text-gray-500">{profile.college}</p>}
-        {courseYearLabel && <p className="text-[13px] text-gray-500">{courseYearLabel}</p>}
+        {profile.college && <p className="text-[13px] text-gray-500 dark:text-gray-400">{profile.college}</p>}
         {joinedLabel && (
-          <p className="flex items-center gap-1.5 text-[13px] text-gray-400">
+          <p className="flex items-center gap-1.5 text-[13px] text-gray-400 dark:text-gray-500">
             <Calendar className="w-3.5 h-3.5" />
             Joined {joinedLabel}
           </p>
@@ -166,34 +184,34 @@ export default function ProfileHeader({
 
       <div className="mt-4 grid grid-cols-4 gap-2 text-center">
         <div>
-          <p className="text-[15px] font-bold text-gray-900">{profile.postsCount}</p>
-          <p className="text-[11px] text-gray-400">Posts</p>
+          <p className="text-[15px] font-bold text-gray-900 dark:text-gray-50">{profile.postsCount}</p>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">Posts</p>
         </div>
         <button type="button" onClick={onOpenFollowers} className="hover:opacity-70 transition-opacity duration-200">
-          <p className="text-[15px] font-bold text-gray-900">{profile.followers}</p>
-          <p className="text-[11px] text-gray-400">Followers</p>
+          <p className="text-[15px] font-bold text-gray-900 dark:text-gray-50">{profile.followers}</p>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">Followers</p>
         </button>
         <button type="button" onClick={onOpenFollowing} className="hover:opacity-70 transition-opacity duration-200">
-          <p className="text-[15px] font-bold text-gray-900">{profile.following}</p>
-          <p className="text-[11px] text-gray-400">Following</p>
+          <p className="text-[15px] font-bold text-gray-900 dark:text-gray-50">{profile.following}</p>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">Following</p>
         </button>
         <div>
-          <p className="text-[15px] font-bold text-gray-900">{profile.communitiesCount ?? '—'}</p>
-          <p className="text-[11px] text-gray-400">Communities</p>
+          <p className="text-[15px] font-bold text-gray-900 dark:text-gray-50">{profile.communitiesCount ?? '—'}</p>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">Communities</p>
         </div>
       </div>
 
       {!isOwnProfile && mutualFollowers.length > 0 && (
-        <p className="mt-3 text-[12.5px] text-gray-500">
+        <p className="mt-3 text-[12.5px] text-gray-500 dark:text-gray-400">
           Followed by{' '}
-          <span className="font-semibold text-gray-700">
+          <span className="font-semibold text-gray-700 dark:text-gray-300">
             {mutualFollowers
               .slice(0, 2)
               .map((u) => u.displayName)
               .join(', ')}
           </span>
           {mutualFollowers.length > 2 && (
-            <span className="font-semibold text-gray-700"> and {mutualFollowers.length - 2} others</span>
+            <span className="font-semibold text-gray-700 dark:text-gray-300"> and {mutualFollowers.length - 2} others</span>
           )}
         </p>
       )}
@@ -203,8 +221,9 @@ export default function ProfileHeader({
           <button
             type="button"
             onClick={onEdit}
-            className="flex-1 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold py-2.5 hover:border-gray-300 transition-all duration-300"
+            className="flex items-center justify-center gap-1.5 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2.5 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:text-gray-300 dark:hover:border-white/20 dark:hover:bg-white/5 transition-all duration-300"
           >
+            <Pencil className="w-3.5 h-3.5" />
             Edit Profile
           </button>
         ) : (
@@ -215,7 +234,7 @@ export default function ProfileHeader({
               disabled={followBusy}
               className={`flex-1 rounded-full text-sm font-semibold py-2.5 transition-all duration-300 disabled:opacity-50 ${
                 isFollowing
-                  ? 'border border-gray-200 text-gray-700 hover:border-red-200 hover:text-red-500'
+                  ? 'border border-gray-200 text-gray-700 hover:border-red-200 hover:text-red-500 dark:border-white/10 dark:text-gray-300 dark:hover:border-red-500/30 dark:hover:text-red-400'
                   : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
             >
@@ -245,8 +264,8 @@ export default function ProfileHeader({
               }
               className={`flex-shrink-0 rounded-full border flex items-center justify-center transition-all duration-300 ${
                 messageState === 'pending_outgoing' || messageState === 'pending_incoming'
-                  ? 'h-11 px-3.5 gap-1.5 border-blue-100 bg-blue-50 text-blue-600'
-                  : 'w-11 h-11 border-gray-200 text-gray-600 hover:border-gray-300'
+                  ? 'h-11 px-3.5 gap-1.5 border-blue-100 bg-blue-50 text-blue-600 dark:border-blue-500/20 dark:bg-blue-500/15 dark:text-blue-400'
+                  : 'w-11 h-11 border-gray-200 text-gray-600 hover:border-gray-300 dark:border-white/10 dark:text-gray-400 dark:hover:border-white/20'
               } ${blocked ? 'opacity-40 cursor-not-allowed' : ''}`}
             >
               <MessageCircle className="w-4 h-4 flex-shrink-0" />
@@ -259,7 +278,7 @@ export default function ProfileHeader({
           type="button"
           onClick={onShare}
           aria-label="Share profile"
-          className="w-11 h-11 flex-shrink-0 rounded-full border border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 transition-all duration-300"
+          className="w-11 h-11 flex-shrink-0 rounded-full border border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 dark:border-white/10 dark:text-gray-400 dark:hover:border-white/20 transition-all duration-300"
         >
           <Share2 className="w-4 h-4" />
         </button>
@@ -269,19 +288,19 @@ export default function ProfileHeader({
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
               aria-label="More options"
-              className="w-11 h-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 transition-all duration-300"
+              className="w-11 h-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 dark:border-white/10 dark:text-gray-400 dark:hover:border-white/20 transition-all duration-300"
             >
               <MoreVertical className="w-4 h-4" />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-12 w-40 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30">
+              <div className="absolute right-0 top-12 w-40 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30 dark:border-white/10 dark:bg-[#181b24]">
                 <button
                   type="button"
                   onClick={() => {
                     setMenuOpen(false)
                     setReportOpen(true)
                   }}
-                  className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                  className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5 transition-all duration-150"
                 >
                   Report
                 </button>
@@ -289,7 +308,7 @@ export default function ProfileHeader({
                   type="button"
                   onClick={handleToggleBlock}
                   disabled={blockBusy}
-                  className="w-full text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-all duration-150 disabled:opacity-50"
+                  className="w-full text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 transition-all duration-150 disabled:opacity-50"
                 >
                   {blocked ? 'Unblock' : 'Block'}
                 </button>

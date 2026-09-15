@@ -73,13 +73,13 @@ export const feedTabs = [
  * entry here, or PostCard's badge rendering throws on an unknown type.
  */
 export const postTypeConfig = {
-  general: { label: 'General', color: 'text-gray-600 bg-gray-100' },
-  study: { label: 'Study', color: 'text-purple-600 bg-purple-50' },
-  notes: { label: 'Notes', color: 'text-blue-600 bg-blue-50' },
-  event: { label: 'Event', color: 'text-orange-600 bg-orange-50' },
-  club: { label: 'Club update', color: 'text-indigo-600 bg-indigo-50' },
-  marketplace: { label: 'Marketplace', color: 'text-emerald-600 bg-emerald-50' },
-  lostfound: { label: 'Lost & Found', color: 'text-pink-600 bg-pink-50' }
+  general: { label: 'General', color: 'text-gray-600 bg-gray-100 dark:text-gray-300 dark:bg-white/10' },
+  study: { label: 'Study', color: 'text-purple-600 bg-purple-50 dark:text-purple-300 dark:bg-purple-500/15' },
+  notes: { label: 'Notes', color: 'text-blue-600 bg-blue-50 dark:text-blue-300 dark:bg-blue-500/15' },
+  event: { label: 'Event', color: 'text-orange-600 bg-orange-50 dark:text-orange-300 dark:bg-orange-500/15' },
+  club: { label: 'Club update', color: 'text-indigo-600 bg-indigo-50 dark:text-indigo-300 dark:bg-indigo-500/15' },
+  marketplace: { label: 'Marketplace', color: 'text-emerald-600 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-500/15' },
+  lostfound: { label: 'Lost & Found', color: 'text-pink-600 bg-pink-50 dark:text-pink-300 dark:bg-pink-500/15' }
 }
 
 export const posts = [

@@ -12,7 +12,6 @@ const CampusVerificationPage = lazy(() => import('./auth/pages/CampusVerificatio
 const CreateProfilePage = lazy(() => import('./auth/pages/CreateProfilePage.jsx'))
 const HomePage = lazy(() => import('./pages/HomePage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
-const ComingSoon = lazy(() => import('./pages/ComingSoon.jsx'))
 const MarketplacePage = lazy(() => import('./marketplace/MarketplacePage.jsx'))
 const CreateProductPage = lazy(() => import('./marketplace/CreateProductPage.jsx'))
 const ProductDetailPage = lazy(() => import('./marketplace/ProductDetailPage.jsx'))
@@ -136,30 +135,29 @@ export default function App() {
         />
 
         {/* Persistent shell — sidebar/header/bottom-nav mount ONCE here
-            (AppShell.jsx) and never remount navigating between these 5
-            pages; only <Outlet/>'s content changes. This is what fixes
-            "navigation feels like a fresh page load" for the app's
-            highest-traffic destinations. See AppShell.jsx's own comment
-            for why Search/Notifications/Profile/Settings aren't part of
-            this group (still on an older, structurally different
-            layout that predates this pass — they still benefit from
-            the shared AuthContext fix below, just not this shell). */}
+            (AppShell.jsx) and never remount navigating between these
+            pages; only <Outlet/>'s content changes. This is the actual
+            fix for "navigation feels like a fresh page load": these are
+            every primary tab-bar/nav destination in the app. Detail/
+            drill-down pages (chat threads, post detail, community
+            detail, followers lists, etc.) intentionally stay outside
+            this group — they're not primary nav destinations, and
+            forcing them into the shared shell would be a much larger,
+            riskier change than this task asked for. Radar is also
+            deliberately excluded — RadarPage.jsx is architected as its
+            own full-screen takeover (its own back button, no sidebar
+            usage at all even before this pass), not a shell-nested tab. */}
         <Route element={<ProtectedRoute stage="home"><AppShell /></ProtectedRoute>}>
           <Route path="/home" element={<HomePage />} />
           <Route path="/communities" element={<DiscoverCommunitiesPage />} />
           <Route path="/marketplace" element={<MarketplacePage />} />
           <Route path="/lost-found" element={<LostFoundPage />} />
           <Route path="/messages" element={<MessagesPage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
-
-        <Route
-          path="/search"
-          element={
-            <ProtectedRoute stage="home">
-              <SearchPage />
-            </ProtectedRoute>
-          }
-        />
 
         {/* Create Post — now a real page (Feature 4B). */}
         <Route
@@ -192,14 +190,6 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <ChatPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/notifications"
-          element={
-            <ProtectedRoute stage="home">
-              <NotificationsPage />
             </ProtectedRoute>
           }
         />
@@ -262,14 +252,6 @@ export default function App() {
         />
 
         <Route
-          path="/profile"
-          element={
-            <ProtectedRoute stage="home">
-              <ProfilePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/leaderboard"
           element={
             <ProtectedRoute stage="home">
@@ -285,15 +267,6 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute stage="home">
-              <SettingsPage />
-            </ProtectedRoute>
-          }
-        />
-
         <Route
           path="/marketplace/create"
           element={

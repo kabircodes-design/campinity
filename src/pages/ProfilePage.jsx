@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Grid3x3, List, Settings } from 'lucide-react'
-import BottomNav from '../components/BottomNav.jsx'
-import DesktopSidebar from '../components/DesktopSidebar.jsx'
+import { Calendar, Grid3x3, LinkIcon, List, Settings } from 'lucide-react'
 import ProfileHeader from '../components/ProfileHeader.jsx'
+import ProfileRightRail from '../components/ProfileRightRail.jsx'
 import ProgressCard from '../gamification/ProgressCard.jsx'
+import PostComposer from '../components/PostComposer.jsx'
 import PostCard from '../components/PostCard.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
 import Loader from '../auth/components/Loader.jsx'
@@ -18,43 +18,43 @@ const GRID_LAYOUT_KEY = 'campinity:profileGridLayout'
 
 const tabs = [
   { key: 'posts', label: 'Posts' },
-  { key: 'pinned', label: 'Pinned' },
+  { key: 'about', label: 'About' },
   { key: 'communities', label: 'Communities' },
+  { key: 'photos', label: 'Photos' },
+  { key: 'pinned', label: 'Pinned' },
   { key: 'activity', label: 'Activity' }
 ]
 
 /**
- * Complete replacement of the old tab content — the previous version's
- * notes/events/marketplace tabs pulled from dummySearch.js/dummyFeed.js
- * (hardcoded sample data, never connected to real Firestore data for
- * THIS user at all — filtering dummy `notes` by
- * `note.uploader === profile.displayName` could never return anything
-  * for a real signed-in user). Replaced with tabs backed by real
- * data: Posts (unchanged, already real), Pinned (profile.pinnedPostIds,
- * now correctly returned by profileService.js), Communities
- * (communityService.js's getUserCommunityMemberships, already fully
- * real and working).
+ * Visual redesign pass (reference-image match) — removes the heavy
+ * glassmorphism this page had accumulated (ambient radial-gradient
+ * glow layers, bg-white/40 + backdrop-blur-2xl panels, a lavender
+ * #f3f0fb page background) in favor of the same plain white/gray-50 +
+ * subtle-border + soft-shadow language HomePage.jsx and
+ * DiscoverCommunitiesPage.jsx already use — confirmed by reading both
+ * directly, neither uses backdrop-blur or translucent surfaces
+ * anywhere. DesktopSidebar.jsx (left nav, including the real Campinity
+ * Logo component) was already rebuilt to this exact reference in an
+ * earlier pass and is reused completely untouched here.
  *
- * Saved was removed from here entirely (moved to Settings > Saved,
- * per the Saved Library System's explicit instruction — Instagram
- * puts Saved in settings, not the profile tab row).
+ * "About" and "Photos" are the two genuinely NEW tabs — About surfaces
+ * the same real profile fields (bio/college/course/year/website/joined)
+ * ProfileHeader.jsx already has, just with more room; Photos is a real
+ * derived view (images already present in myPosts, no new query) —
+ * see photoPosts below. "Saved" from the reference is deliberately NOT
+ * a tab here: it already has its own real entry point (Settings >
+ * Saved, per the Saved Library System's own instruction that Saved
+ * lives in Settings, not the profile tab row) — adding a second one
+ * would be a UI duplicate of an existing route, not a new feature.
  *
- * "Tagged" from the brief is not here — no tagging concept exists
- * anywhere in this project's schema; a fake empty tab for a feature
- * with zero backing data isn't a real tab, it's a decoration.
- * "Activity" shows a real "coming soon" empty state rather than faked
- * history — no activity-log collection exists yet; building one means
- * writing an activity-log entry at every like/comment/join/create
- * action across the app, a change to many existing write paths this
- * page alone can't safely make.
+ * The post composer (PostComposer.jsx, already used on Home) is now
+ * also shown here on the user's own profile, matching the reference —
+ * same real component, same real posting logic, not a second composer.
  *
- * "Comment Karma" / "Likes Received" / "Events Joined" stats from the
- * brief are not shown — computing them live means scanning every post/
- * comment a user has ever made on every profile view (real N+1 risk);
- * showing them for real needs denormalized counters incremented at
- * write time, a separate, larger change. Not faked with a live scan,
- * not silently dropped without explanation either — see this
- * feature's own chat summary.
+ * Communities now load on mount (not lazily on first tab visit) since
+ * ProfileRightRail's "My Communities" card needs them immediately,
+ * without requiring the visitor to click into the Communities tab
+ * first just to populate the sidebar.
  */
 export default function ProfilePage() {
   const navigate = useNavigate()
@@ -77,7 +77,7 @@ export default function ProfilePage() {
   const [pinnedPosts, setPinnedPosts] = useState([])
   const [pinnedLoading, setPinnedLoading] = useState(false)
   const [communities, setCommunities] = useState([])
-  const [communitiesLoading, setCommunitiesLoading] = useState(false)
+  const [communitiesLoading, setCommunitiesLoading] = useState(true)
   const [communitiesLoadedOnce, setCommunitiesLoadedOnce] = useState(false)
   const [communitiesError, setCommunitiesError] = useState(false)
   const [pinnedLoadedOnce, setPinnedLoadedOnce] = useState(false)
@@ -157,7 +157,7 @@ export default function ProfilePage() {
   }, [activeTab, profile, currentUid, pinnedLoadedOnce])
 
   useEffect(() => {
-    if (activeTab !== 'communities' || communitiesLoadedOnce || !currentUid) return
+    if (communitiesLoadedOnce || !currentUid) return
     let cancelled = false
     setCommunitiesLoading(true)
     setCommunitiesError(false)
@@ -219,7 +219,7 @@ export default function ProfilePage() {
     return () => {
       cancelled = true
     }
-  }, [activeTab, currentUid, communitiesLoadedOnce])
+  }, [currentUid, communitiesLoadedOnce])
 
   const [college, setCollege] = useState(null)
   useEffect(() => {
@@ -242,9 +242,14 @@ export default function ProfilePage() {
     localStorage.setItem(GRID_LAYOUT_KEY, next)
   }
 
+  // Real derived data, not a new query — every post here was already
+  // fetched for the Posts tab; this just filters to the ones with an
+  // actual image.
+  const photoPosts = useMemo(() => myPosts.filter((post) => post.imagePreviewUrl), [myPosts])
+
   if (loading) {
     return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
+      <div className="h-full w-full max-w-[100vw] overflow-x-hidden bg-gray-50 dark:bg-[#09090f] flex items-center justify-center">
         <Loader size="lg" tone="dark" />
       </div>
     )
@@ -252,11 +257,10 @@ export default function ProfilePage() {
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-        <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm flex items-center justify-center px-6 text-center">
-          <p className="text-sm text-gray-400">{error || 'Profile not found.'}</p>
+      <div className="h-full w-full max-w-[100vw] overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
+        <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white dark:bg-[#11131a] h-full lg:shadow-sm flex items-center justify-center px-6 text-center">
+          <p className="text-sm text-gray-400 dark:text-gray-500">{error || 'Profile not found.'}</p>
         </div>
-        <BottomNav />
       </div>
     )
   }
@@ -293,210 +297,266 @@ export default function ProfilePage() {
     }
   }
 
+  const firstName = (displayProfile.displayName || '').split(' ')[0] || 'there'
+
   return (
-    <div
-      className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
-      style={{ backgroundColor: '#f3f0fb' }}
-    >
-      <div
-        className="ambient-glow-layer ambient-glow-1"
-        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-2"
-        style={{
-          background:
-            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
-        }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-3"
-        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
-      />
-    <DesktopSidebar profile={displayProfile} />
-    <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden">
-      <div className="mx-auto max-w-[480px] lg:max-w-[600px] min-h-screen lg:min-h-0 bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:border lg:border-white/50 lg:rounded-3xl lg:my-4">
-        <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40">
-          <div className="h-14 flex items-center justify-between px-4 lg:px-6">
-            <span className="text-base font-bold tracking-tight text-gray-900">Profile</span>
-            <button
-              type="button"
-              aria-label="Settings"
-              onClick={() => navigate('/settings')}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-          </div>
-        </header>
-
-        <ProfileHeader
-          profile={displayProfile}
-          isOwnProfile
-          onEdit={() => navigate('/profile/edit')}
-          onShare={handleShare}
-          onOpenFollowers={() => navigate('/followers')}
-          onOpenFollowing={() => navigate('/following')}
-        />
-
-        <ProgressCard uid={currentUid} />
-
-        <nav className="sticky top-14 z-30 flex items-center bg-white/50 backdrop-blur-xl border-b border-white/40 overflow-x-auto scroll-hidden">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex-shrink-0 px-4 py-3 text-[13px] font-semibold text-center border-b-2 transition-all duration-300 ${
-                activeTab === tab.key
-                  ? 'text-blue-700 border-blue-600 bg-gradient-to-b from-blue-50/60 to-transparent'
-                  : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-white/30'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-          {activeTab === 'posts' && (
-            <button
-              type="button"
-              onClick={toggleGridLayout}
-              aria-label={gridLayout === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
-              className="ml-auto mr-3 flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-all duration-300"
-            >
-              {gridLayout === 'grid' ? <List className="w-4 h-4" /> : <Grid3x3 className="w-4 h-4" />}
-            </button>
-          )}
-        </nav>
-
-        <main className="pb-24">
-          {activeTab === 'posts' &&
-            (myPosts.length === 0 ? (
-              <div className="px-6 py-16 text-center">
-                <p className="text-sm text-gray-400">{postsError || "You haven't posted anything yet."}</p>
-              </div>
-            ) : gridLayout === 'grid' ? (
-              <div className="grid grid-cols-3 gap-0.5 p-0.5">
-                {myPosts.map((post) =>
-                  post.imagePreviewUrl ? (
-                    <button
-                      key={post.id}
-                      type="button"
-                      onClick={() => navigate(`/post/${post.id}`)}
-                      className="aspect-square overflow-hidden bg-gray-100"
-                    >
-                      <img src={post.imagePreviewUrl} alt="" className="w-full h-full object-cover" />
-                    </button>
-                  ) : (
-                    <button
-                      key={post.id}
-                      type="button"
-                      onClick={() => navigate(`/post/${post.id}`)}
-                      className="aspect-square bg-gray-50 flex items-center justify-center p-2"
-                    >
-                      <span className="text-[10px] text-gray-400 line-clamp-4 text-center">{post.text}</span>
-                    </button>
-                  )
-                )}
-              </div>
-            ) : (
-              <div>
-                {myPosts.map((post) => (
-                  <PostCard
-                    key={post.id}
-                    post={post}
-                    onDeleted={handlePostDeleted}
-                  />
-                ))}
-              </div>
-            ))}
-
-          {activeTab === 'pinned' &&
-            (pinnedLoading ? (
-              <div className="py-16 flex justify-center">
-                <Loader size="md" tone="dark" />
-              </div>
-            ) : pinnedPosts.length === 0 ? (
-              <div className="px-6 py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">No pinned posts</p>
-                <p className="mt-1 text-sm text-gray-400">Pin up to 3 posts to feature them here.</p>
-              </div>
-            ) : (
-              <div>
-                {pinnedPosts.map((post) => (
-                  <PostCard
-                    key={post.id}
-                    post={post}
-                    onDeleted={handlePostDeleted}
-                  />
-                ))}
-              </div>
-            ))}
-
-          {activeTab === 'communities' &&
-            (communitiesLoading ? (
-              <div className="py-16 flex justify-center">
-                <Loader size="md" tone="dark" />
-              </div>
-            ) : communitiesError ? (
-              <div className="px-6 py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">Couldn't load communities</p>
+    <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
+        <div className="lg:flex lg:items-start lg:gap-5 lg:px-6 lg:py-4 lg:max-w-[1180px]">
+          <div className="mx-auto max-w-[480px] lg:mx-0 lg:max-w-[680px] lg:flex-1 lg:min-w-0 bg-white dark:bg-[#11131a] min-h-full lg:min-h-0 lg:rounded-2xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
+            <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#11131a]/95 backdrop-blur-md border-b border-gray-100 dark:border-white/10 lg:rounded-t-2xl">
+              <div className="h-14 flex items-center justify-between px-4 lg:px-6">
+                <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">Profile</span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setCommunitiesLoadedOnce(false)
-                  }}
-                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
+                  aria-label="Settings"
+                  onClick={() => navigate('/settings')}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10 transition-all duration-300"
                 >
-                  Try Again
+                  <Settings className="w-5 h-5" />
                 </button>
               </div>
-            ) : communities.length === 0 ? (
-              <div className="px-6 py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">No communities yet</p>
-                <p className="mt-1 text-sm text-gray-400">Join a community or create your own.</p>
-              </div>
-            ) : (
-              <div className="px-4 lg:px-6 py-4 space-y-5">
-                {communities.some((c) => c.role === 'owner') && (
-                  <div>
-                    <p className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Owned by you</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {communities
-                        .filter((c) => c.role === 'owner')
-                        .map((community) => (
-                          <CommunityCard key={community.id} community={community} membershipState="owner" />
-                        ))}
-                    </div>
-                  </div>
-                )}
-                {communities.some((c) => c.role !== 'owner') && (
-                  <div>
-                    <p className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Joined</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {communities
-                        .filter((c) => c.role !== 'owner')
-                        .map((community) => (
-                          <CommunityCard key={community.id} community={community} membershipState="member" />
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+            </header>
 
-          {activeTab === 'activity' && (
-            <div className="px-6 py-16 text-center">
-              <p className="text-sm font-semibold text-gray-900">Activity history coming soon</p>
-              <p className="mt-1 text-sm text-gray-400">This needs a bit more backend work — not faked here.</p>
-            </div>
-          )}
-        </main>
-      </div>
-    </div>
+            <ProfileHeader
+              profile={displayProfile}
+              isOwnProfile
+              onEdit={() => navigate('/profile/edit')}
+              onShare={handleShare}
+              onOpenFollowers={() => navigate('/followers')}
+              onOpenFollowing={() => navigate('/following')}
+            />
 
-      <div className="lg:hidden">
-        <BottomNav />
-      </div>
+            <ProgressCard uid={currentUid} />
+
+            <nav className="sticky top-14 z-30 flex items-center bg-white dark:bg-[#11131a] border-b border-gray-100 dark:border-white/10 overflow-x-auto scroll-hidden">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex-shrink-0 px-4 py-3 text-[13px] font-semibold text-center border-b-2 transition-all duration-200 ${
+                    activeTab === tab.key
+                      ? 'text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400'
+                      : 'text-gray-400 border-transparent hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+              {activeTab === 'posts' && (
+                <button
+                  type="button"
+                  onClick={toggleGridLayout}
+                  aria-label={gridLayout === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+                  className="ml-auto mr-3 flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:text-gray-500 dark:hover:bg-white/10 transition-all duration-300"
+                >
+                  {gridLayout === 'grid' ? <List className="w-4 h-4" /> : <Grid3x3 className="w-4 h-4" />}
+                </button>
+              )}
+            </nav>
+
+            <main className="pb-24">
+              {activeTab === 'posts' && (
+                <>
+                  <div className="px-4 lg:px-6 pt-4">
+                    <PostComposer profile={profile} initials={displayProfile.initials} colorClass={displayProfile.colorClass} firstName={firstName} />
+                  </div>
+                  {myPosts.length === 0 ? (
+                    <div className="px-6 py-16 text-center">
+                      <p className="text-sm text-gray-400 dark:text-gray-500">{postsError || "You haven't posted anything yet."}</p>
+                    </div>
+                  ) : gridLayout === 'grid' ? (
+                    <div className="grid grid-cols-3 gap-0.5 p-0.5 mt-2">
+                      {myPosts.map((post) =>
+                        post.imagePreviewUrl ? (
+                          <button
+                            key={post.id}
+                            type="button"
+                            onClick={() => navigate(`/post/${post.id}`)}
+                            className="aspect-square overflow-hidden bg-gray-100 dark:bg-white/10"
+                          >
+                            <img src={post.imagePreviewUrl} alt="" className="w-full h-full object-cover" />
+                          </button>
+                        ) : (
+                          <button
+                            key={post.id}
+                            type="button"
+                            onClick={() => navigate(`/post/${post.id}`)}
+                            className="aspect-square bg-gray-50 dark:bg-white/5 flex items-center justify-center p-2"
+                          >
+                            <span className="text-[10px] text-gray-400 dark:text-gray-500 line-clamp-4 text-center">{post.text}</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-2">
+                      {myPosts.map((post) => (
+                        <PostCard key={post.id} post={post} onDeleted={handlePostDeleted} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {activeTab === 'about' && (
+                <div className="px-4 lg:px-6 py-5 space-y-4">
+                  {profile.bio && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">Bio</p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{profile.bio}</p>
+                    </div>
+                  )}
+                  {(displayProfile.college || profile.course || profile.year) && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">Campus</p>
+                      {displayProfile.college && <p className="text-sm text-gray-700 dark:text-gray-300">{displayProfile.college}</p>}
+                      {(profile.course || profile.year) && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{[profile.course, profile.year].filter(Boolean).join(' · ')}</p>
+                      )}
+                    </div>
+                  )}
+                  {profile.website && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">Website</p>
+                      <a
+                        href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline w-fit"
+                      >
+                        <LinkIcon className="w-3.5 h-3.5" />
+                        {profile.website.replace(/^https?:\/\//, '')}
+                      </a>
+                    </div>
+                  )}
+                  {profile.createdAt?.toDate && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">Joined</p>
+                      <p className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
+                        <Calendar className="w-3.5 h-3.5" />
+                        {profile.createdAt.toDate().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                      </p>
+                    </div>
+                  )}
+                  {!profile.bio && !displayProfile.college && !profile.course && !profile.website && (
+                    <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">Nothing added yet — head to Edit Profile to fill this in.</p>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'photos' &&
+                (photoPosts.length === 0 ? (
+                  <div className="px-6 py-16 text-center">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">No photos yet</p>
+                    <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Photos from your posts will show up here.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-0.5 p-0.5">
+                    {photoPosts.map((post) => (
+                      <button
+                        key={post.id}
+                        type="button"
+                        onClick={() => navigate(`/post/${post.id}`)}
+                        className="aspect-square overflow-hidden bg-gray-100 dark:bg-white/10"
+                      >
+                        <img src={post.imagePreviewUrl} alt="" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                ))}
+
+              {activeTab === 'pinned' &&
+                (pinnedLoading ? (
+                  <div className="py-16 flex justify-center">
+                    <Loader size="md" tone="dark" />
+                  </div>
+                ) : pinnedPosts.length === 0 ? (
+                  <div className="px-6 py-16 text-center">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">No pinned posts</p>
+                    <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Pin up to 3 posts to feature them here.</p>
+                  </div>
+                ) : (
+                  <div>
+                    {pinnedPosts.map((post) => (
+                      <PostCard key={post.id} post={post} onDeleted={handlePostDeleted} />
+                    ))}
+                  </div>
+                ))}
+
+              {activeTab === 'communities' &&
+                (communitiesLoading ? (
+                  <div className="py-16 flex justify-center">
+                    <Loader size="md" tone="dark" />
+                  </div>
+                ) : communitiesError ? (
+                  <div className="px-6 py-16 text-center">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">Couldn't load communities</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCommunitiesLoadedOnce(false)
+                      }}
+                      className="mt-3 rounded-full border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 text-sm font-semibold px-5 py-2 hover:border-gray-300 dark:hover:border-white/20 transition-all duration-300"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                ) : communities.length === 0 ? (
+                  <div className="px-6 py-16 text-center">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">No communities yet</p>
+                    <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Join a community or create your own.</p>
+                  </div>
+                ) : (
+                  <div className="px-4 lg:px-6 py-4 space-y-5">
+                    {communities.some((c) => c.role === 'owner') && (
+                      <div>
+                        <p className="mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Owned by you</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {communities
+                            .filter((c) => c.role === 'owner')
+                            .map((community) => (
+                              <CommunityCard key={community.id} community={community} membershipState="owner" />
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                    {communities.some((c) => c.role !== 'owner') && (
+                      <div>
+                        <p className="mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Joined</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {communities
+                            .filter((c) => c.role !== 'owner')
+                            .map((community) => (
+                              <CommunityCard key={community.id} community={community} membershipState="member" />
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+              {activeTab === 'activity' && (
+                <div className="px-6 py-16 text-center">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">Activity history coming soon</p>
+                  <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">This needs a bit more backend work — not faked here.</p>
+                </div>
+              )}
+            </main>
+          </div>
+
+          <ProfileRightRail
+            profile={displayProfile}
+            postsCount={displayProfile.postsCount}
+            followers={displayProfile.followers}
+            following={displayProfile.following}
+            communities={communities}
+            communitiesLoading={communitiesLoading}
+            photos={photoPosts}
+            isOwnProfile
+            onEditAbout={() => navigate('/profile/edit')}
+          />
+        </div>
     </div>
   )
 }

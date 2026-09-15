@@ -67,19 +67,19 @@ export default function NotificationSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white min-h-screen lg:shadow-sm">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
+      <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white dark:bg-[#11131a] min-h-screen lg:shadow-sm dark:lg:shadow-none">
+        <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#11131a]/95 backdrop-blur-md border-b border-gray-100 dark:border-white/10">
           <div className="h-14 flex items-center gap-2 px-3">
             <button
               type="button"
               aria-label="Back"
               onClick={() => navigate('/settings')}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10 transition-all duration-300"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900">Notifications</span>
+            <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">Notifications</span>
           </div>
         </header>
 
@@ -89,14 +89,14 @@ export default function NotificationSettingsPage() {
               <Loader size="md" tone="dark" />
             </div>
           ) : error ? (
-            <p className="py-16 text-center text-sm text-gray-400">{error}</p>
+            <p className="py-16 text-center text-sm text-gray-400 dark:text-gray-500">{error}</p>
           ) : (
-            <div className="rounded-2xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
+            <div className="rounded-2xl border border-gray-100 divide-y divide-gray-100 dark:border-white/10 dark:divide-white/10 overflow-hidden">
               {OPTIONS.map((option) => (
                 <div key={option.key} className="flex items-center gap-3 px-4 py-3.5">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{option.label}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{option.description}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-50">{option.label}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{option.description}</p>
                   </div>
                   <button
                     type="button"
@@ -106,7 +106,7 @@ export default function NotificationSettingsPage() {
                     disabled={busyKey === option.key}
                     onClick={() => handleToggle(option.key)}
                     className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-300 disabled:opacity-60 ${
-                      prefs[option.key] !== false ? 'bg-blue-600' : 'bg-gray-200'
+                      prefs[option.key] !== false ? 'bg-blue-600' : 'bg-gray-200 dark:bg-white/15'
                     }`}
                   >
                     <span

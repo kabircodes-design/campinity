@@ -67,12 +67,13 @@ export default function SwipeablePage({ children }) {
   if (reducedMotion) {
     // No slide-in, no drag transform — route changes are instant,
     // exactly what prefers-reduced-motion asks for.
-    return <>{children}</>
+    return <div className="h-full min-h-0">{children}</div>
   }
 
   return (
     <motion.div
       key={location.pathname}
+      className="h-full min-h-0"
       initial={{ x: direction === 0 ? 0 : `${direction * 100}%`, opacity: direction === 0 ? 1 : 0.4 }}
       animate={{ x: dragX, opacity: 1 }}
       transition={

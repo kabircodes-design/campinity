@@ -6,9 +6,9 @@ const ease = [0.16, 1, 0.3, 1]
 
 export default function AuthLayout({ eyebrow, title, subtitle, children, footer }) {
   return (
-    <div className="min-h-screen bg-bg relative overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-bg dark:bg-[#09090f] relative overflow-hidden flex flex-col">
       <div
-        className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[560px] h-[560px] rounded-full bg-accent-tint blur-3xl opacity-70"
+        className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[560px] h-[560px] rounded-full bg-accent-tint dark:bg-blue-500/10 blur-3xl opacity-70"
         aria-hidden="true"
       />
 
@@ -30,27 +30,27 @@ export default function AuthLayout({ eyebrow, title, subtitle, children, footer 
             {title}
           </h1>
           {subtitle && (
-            <p className="mt-2 text-center text-[14.5px] text-ink-soft leading-relaxed text-balance">
+            <p className="mt-2 text-center text-[14.5px] text-ink-soft dark:text-gray-400 leading-relaxed text-balance">
               {subtitle}
             </p>
           )}
 
-          <div className="mt-8 rounded-xl3 border border-line bg-surface shadow-card p-6 sm:p-8">
+          <div className="mt-8 rounded-xl3 border border-line dark:border-white/10 bg-surface dark:bg-[#11131a] shadow-card dark:shadow-none p-6 sm:p-8">
             {children}
           </div>
 
-          {footer && <div className="mt-6 text-center text-[14px] text-ink-soft">{footer}</div>}
+          {footer && <div className="mt-6 text-center text-[14px] text-ink-soft dark:text-gray-400">{footer}</div>}
         </motion.div>
       </main>
 
       <footer className="relative container-px pb-8">
-        <p className="text-center text-2xs text-ink-faint">
+        <p className="text-center text-2xs text-ink-faint dark:text-gray-500">
           By continuing you agree to Campinity's{' '}
-          <a href="#" className="text-ink-soft hover:text-accent transition-colors duration-200">
+          <a href="#" className="text-ink-soft hover:text-accent dark:text-gray-400 dark:hover:text-blue-400 transition-colors duration-200">
             Terms
           </a>{' '}
           and{' '}
-          <a href="#" className="text-ink-soft hover:text-accent transition-colors duration-200">
+          <a href="#" className="text-ink-soft hover:text-accent dark:text-gray-400 dark:hover:text-blue-400 transition-colors duration-200">
             Privacy Policy
           </a>
           .

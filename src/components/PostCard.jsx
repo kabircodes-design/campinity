@@ -177,7 +177,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
 
   return (
     <>
-    <article className="mx-3 mb-3 rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] active:bg-gray-50/60 lg:mb-4 lg:hover:border-gray-200 lg:hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] transition-all duration-300">
+    <article className="mx-3 mb-3 rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#11131a] shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:shadow-none active:bg-gray-50/60 dark:active:bg-white/5 lg:mb-4 lg:hover:border-gray-200 dark:lg:hover:border-white/20 lg:hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:lg:hover:shadow-none transition-all duration-300">
       {/* "Posted in X" — only when this post has a communityId (community
           posts now live in the same posts/ collection as everything
           else, distinguished only by this field). Deliberately placed
@@ -188,7 +188,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         <button
           type="button"
           onClick={goToCommunity}
-          className="flex items-center gap-1.5 px-4 lg:px-6 pt-3 text-[12px] font-medium text-blue-600 hover:text-blue-700 transition-all duration-300"
+          className="flex items-center gap-1.5 px-4 lg:px-6 pt-3 text-[12px] font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-all duration-300"
         >
           <Users className="w-3.5 h-3.5" />
           Posted in {post.communityName || 'a community'}
@@ -203,11 +203,11 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <button type="button" onClick={goToProfile} className="min-w-0 text-left">
-              <p className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+              <p className="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-50">
                 <span className="truncate min-w-0">{post.name}</span>
                 <VerifiedBadge verified={post.verified} size="sm" />
               </p>
-              <p className="text-xs text-gray-400 truncate">
+              <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
                 {post.department}
                 {post.year && ` · ${post.year}`} · {post.college}
               </p>
@@ -217,12 +217,12 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
                   type="button"
                   aria-label="Post options"
                   onClick={() => setMenuOpen((v) => !v)}
-                  className="text-gray-300 hover:text-gray-500 transition-all duration-300"
+                  className="text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 transition-all duration-300"
                 >
                   <MoreHorizontal className="w-[18px] h-[18px]" />
                 </button>
                 {menuOpen && (
-                  <div className="absolute right-0 top-6 w-36 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30">
+                  <div className="absolute right-0 top-6 w-36 rounded-xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#181b24] shadow-lg py-1 z-30">
                     {isOwner && (
                       <button
                         type="button"
@@ -232,7 +232,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
                           setEditError('')
                           setIsEditing(true)
                         }}
-                        className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                        className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5 transition-all duration-150"
                       >
                         Edit post
                       </button>
@@ -244,7 +244,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
                           setMenuOpen(false)
                           setConfirmingDelete(true)
                         }}
-                        className="w-full text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-all duration-150"
+                        className="w-full text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 transition-all duration-150"
                       >
                         Delete post
                       </button>
@@ -256,7 +256,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
                           setMenuOpen(false)
                           setReportOpen(true)
                         }}
-                        className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                        className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5 transition-all duration-150"
                       >
                         Report post
                       </button>
@@ -273,7 +273,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
               <TypeIcon className="w-3 h-3" />
               {config.label}
             </span>
-            <span className="text-[11px] text-gray-400">{post.time}</span>
+            <span className="text-[11px] text-gray-400 dark:text-gray-500">{post.time}</span>
           </div>
         </div>
       </div>
@@ -285,9 +285,9 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
             onChange={(event) => setEditText(event.target.value)}
             rows={3}
             autoFocus
-            className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-[14.5px] text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+            className="w-full resize-none rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3.5 py-2.5 text-[14.5px] text-gray-900 dark:text-gray-50 outline-none focus:bg-white dark:focus:bg-white/10 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 dark:focus:ring-blue-500/15 transition-all duration-300"
           />
-          {editError && <p className="mt-1.5 text-xs text-red-500">{editError}</p>}
+          {editError && <p className="mt-1.5 text-xs text-red-500 dark:text-red-400">{editError}</p>}
           <div className="mt-2 flex items-center gap-2">
             <button
               type="button"
@@ -297,7 +297,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
                 setEditError('')
               }}
               disabled={editSaving}
-              className="rounded-full border border-gray-200 text-gray-700 text-xs font-semibold px-4 py-1.5 disabled:opacity-50"
+              className="rounded-full border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold px-4 py-1.5 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -313,9 +313,9 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         </div>
       ) : (
         <button type="button" onClick={goToPost} className="block w-full text-left">
-          <p className="px-4 lg:px-6 mt-3 text-[14.5px] text-gray-700 leading-relaxed">
+          <p className="px-4 lg:px-6 mt-3 text-[14.5px] text-gray-700 dark:text-gray-300 leading-relaxed">
             {currentText}
-            {isEdited && <span className="ml-1.5 text-xs text-gray-400 font-normal">· Edited</span>}
+            {isEdited && <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500 font-normal">· Edited</span>}
           </p>
           {post.imageUrl && <PostImage src={post.imageUrl} />}
         </button>
@@ -335,17 +335,17 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
               goToPost()
             }
           }}
-          className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left hover:border-blue-100 hover:bg-gray-100/70 transition-all duration-300"
+          className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-3 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left hover:border-blue-100 dark:hover:border-blue-500/30 hover:bg-gray-100/70 dark:hover:bg-white/10 transition-all duration-300"
         >
           <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
             <FileText className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{post.file.name}</p>
-            <p className="text-xs text-gray-400">PDF{post.file.size ? ` · ${post.file.size}` : ''}</p>
-            {verified === false && <p className="text-[11px] text-blue-600 font-medium mt-0.5">🔒 Verified members · Verify to open →</p>}
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-50 truncate">{post.file.name}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">PDF{post.file.size ? ` · ${post.file.size}` : ''}</p>
+            {verified === false && <p className="text-[11px] text-blue-600 dark:text-blue-400 font-medium mt-0.5">🔒 Verified members · Verify to open →</p>}
           </div>
-          <Download className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <Download className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
         </button>
       )}
 
@@ -356,21 +356,21 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
       />
 
       {expiryBadgeText && (
-        <p className="mx-4 lg:mx-6 mt-2 text-[11px] text-gray-400">⏳ {expiryBadgeText}</p>
+        <p className="mx-4 lg:mx-6 mt-2 text-[11px] text-gray-400 dark:text-gray-500">⏳ {expiryBadgeText}</p>
       )}
 
       {post.type === 'event' && post.event && (
         <button
           type="button"
           onClick={goToPost}
-          className="mx-4 lg:mx-6 mt-3 rounded-xl overflow-hidden border border-gray-100 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left"
+          className="mx-4 lg:mx-6 mt-3 rounded-xl overflow-hidden border border-gray-100 dark:border-white/10 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left"
         >
           <div className="h-28 bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center">
             <CalendarDays className="w-8 h-8 text-white/80" />
           </div>
-          <div className="p-3 bg-white">
-            <p className="text-sm font-semibold text-gray-900">{post.event.title}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400">
+          <div className="p-3 bg-white dark:bg-[#151721]">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">{post.event.title}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400 dark:text-gray-500">
               <span className="flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5" />
                 {post.event.date}
@@ -388,22 +388,22 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         <button
           type="button"
           onClick={goToPost}
-          className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 p-3 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left hover:border-blue-100 transition-all duration-300"
+          className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 dark:border-white/10 p-3 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left hover:border-blue-100 dark:hover:border-blue-500/30 transition-all duration-300"
         >
-          <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-            <ShoppingBag className="w-6 h-6 text-gray-400" />
+          <div className="w-14 h-14 rounded-lg bg-gray-100 dark:bg-white/10 flex items-center justify-center flex-shrink-0">
+            <ShoppingBag className="w-6 h-6 text-gray-400 dark:text-gray-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{post.marketplace.item}</p>
-            <p className="text-sm font-bold text-emerald-600 mt-0.5">{post.marketplace.price}</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-50 truncate">{post.marketplace.item}</p>
+            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{post.marketplace.price}</p>
           </div>
         </button>
       )}
 
       {post.type === 'lostfound' && post.lostFound && (
-        <div className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-pink-100 bg-pink-50/50 p-3">
-          <PackageSearch className="w-5 h-5 text-pink-500 flex-shrink-0" />
-          <p className="text-sm font-medium text-gray-900 min-w-0">
+        <div className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-pink-100 dark:border-pink-500/20 bg-pink-50/50 dark:bg-pink-500/10 p-3">
+          <PackageSearch className="w-5 h-5 text-pink-500 dark:text-pink-400 flex-shrink-0" />
+          <p className="text-sm font-medium text-gray-900 dark:text-gray-50 min-w-0">
             {post.lostFound.status} near {post.lostFound.location}
           </p>
         </div>
@@ -415,7 +415,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
           onClick={toggleLike}
           aria-pressed={liked}
           className={`flex items-center gap-1.5 text-xs font-medium transition-all duration-300 ${
-            liked ? 'text-red-500' : 'text-gray-500 hover:text-blue-600'
+            liked ? 'text-red-500 dark:text-red-400' : 'text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400'
           }`}
         >
           <Heart
@@ -427,7 +427,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         <button
           type="button"
           onClick={goToPost}
-          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 transition-all duration-300"
+          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-all duration-300"
         >
           <MessageCircle className="w-[18px] h-[18px]" />
           {post.comments}
@@ -435,18 +435,18 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         <button
           type="button"
           onClick={handleShare}
-          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 transition-all duration-300 ml-auto"
+          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-all duration-300 ml-auto"
         >
           <Share className="w-[18px] h-[18px]" />
           Share
-          {isOwner && shareCount > 0 && <span className="text-gray-400">· {shareCount}</span>}
+          {isOwner && shareCount > 0 && <span className="text-gray-400 dark:text-gray-500">· {shareCount}</span>}
         </button>
         <button
           type="button"
           onClick={() => setSaveSheetOpen(true)}
           aria-label={isSaved ? 'Saved' : 'Save'}
           aria-pressed={isSaved}
-          className={`flex items-center transition-all duration-300 ${isSaved ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'}`}
+          className={`flex items-center transition-all duration-300 ${isSaved ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400'}`}
         >
           <Bookmark className="w-[18px] h-[18px]" fill={isSaved ? 'currentColor' : 'none'} />
         </button>
@@ -488,18 +488,18 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
             onClick={() => !deleting && setConfirmingDelete(false)}
             className="absolute inset-0 bg-black/40"
           />
-          <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5 shadow-xl">
-            <p className="text-base font-bold text-gray-900">Delete post?</p>
-            <p className="mt-1.5 text-sm text-gray-500 leading-relaxed">
+          <div className="relative w-full max-w-[340px] rounded-2xl bg-white dark:bg-[#15171f] p-5 shadow-xl">
+            <p className="text-base font-bold text-gray-900 dark:text-gray-50">Delete post?</p>
+            <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
               This will permanently remove your post and its comments. This action cannot be undone.
             </p>
-            {deleteError && <p className="mt-2 text-xs text-red-500">{deleteError}</p>}
+            {deleteError && <p className="mt-2 text-xs text-red-500 dark:text-red-400">{deleteError}</p>}
             <div className="mt-5 flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setConfirmingDelete(false)}
                 disabled={deleting}
-                className="flex-1 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold py-2.5 hover:border-gray-300 disabled:opacity-50 transition-all duration-300"
+                className="flex-1 rounded-full border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 text-sm font-semibold py-2.5 hover:border-gray-300 dark:hover:border-white/20 disabled:opacity-50 transition-all duration-300"
               >
                 Cancel
               </button>
@@ -545,15 +545,15 @@ function PostImage({ src }) {
 
   if (status === 'error') {
     return (
-      <div className="mx-4 lg:mx-6 mt-3 rounded-2xl bg-gray-100 h-40 flex items-center justify-center">
-        <span className="text-xs text-gray-400">Couldn't load image</span>
+      <div className="mx-4 lg:mx-6 mt-3 rounded-2xl bg-gray-100 dark:bg-white/10 h-40 flex items-center justify-center">
+        <span className="text-xs text-gray-400 dark:text-gray-500">Couldn't load image</span>
       </div>
     )
   }
 
   return (
-    <div className="mx-4 lg:mx-6 mt-3 rounded-2xl overflow-hidden bg-gray-100 relative">
-      {status === 'loading' && <div className="absolute inset-0 animate-pulse bg-gray-100" />}
+    <div className="mx-4 lg:mx-6 mt-3 rounded-2xl overflow-hidden bg-gray-100 dark:bg-white/10 relative">
+      {status === 'loading' && <div className="absolute inset-0 animate-pulse bg-gray-100 dark:bg-white/10" />}
       <img
         src={src}
         alt=""

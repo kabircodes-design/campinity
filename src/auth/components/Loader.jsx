@@ -9,7 +9,16 @@ const sizes = {
 
 export default function Loader({ size = 'md', tone = 'light', className = '' }) {
   const reduced = useReducedMotion()
-  const toneClass = tone === 'light' ? 'border-white/30 border-t-white' : 'border-line border-t-accent'
+  // 'invert' is for buttons whose own background flips with the theme
+  // (Button.jsx's primary variant: near-black in light mode, white in
+  // dark mode) — the spinner has to flip the opposite way to stay
+  // visible against that background in both modes.
+  const toneClass =
+    tone === 'light'
+      ? 'border-white/30 border-t-white'
+      : tone === 'invert'
+        ? 'border-white/30 border-t-white dark:border-ink/20 dark:border-t-ink'
+        : 'border-line border-t-accent dark:border-white/15 dark:border-t-accent'
 
   return (
     <motion.span

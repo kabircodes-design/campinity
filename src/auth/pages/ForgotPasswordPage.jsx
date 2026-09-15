@@ -40,10 +40,10 @@ export default function ForgotPasswordPage() {
     >
       {submitSuccess ? (
         <div className="text-center py-2">
-          <div className="mx-auto w-11 h-11 rounded-full bg-accent-tint flex items-center justify-center text-accent">
+          <div className="mx-auto w-11 h-11 rounded-full bg-accent-tint dark:bg-blue-500/15 flex items-center justify-center text-accent">
             <Icon name="check" className="w-5 h-5" strokeWidth={2.2} />
           </div>
-          <p className="mt-4 text-[14.5px] text-ink leading-relaxed">
+          <p className="mt-4 text-[14.5px] text-ink dark:text-gray-50 leading-relaxed">
             Check your inbox — a reset link is on its way to{' '}
             <span className="font-semibold">{values.email}</span>.
           </p>
@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
           />
 
           {submitError && (
-            <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+            <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
               {submitError}
             </p>
           )}

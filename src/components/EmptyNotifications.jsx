@@ -1,22 +1,23 @@
 import { Bell } from 'lucide-react'
 
 /**
- * Redesigned empty state — matches the same visual language already
- * used across this project's other empty states (icon in a soft
- * tinted circle, bold title, muted subtitle — same pattern as
- * CommunityDetailPage.jsx's "No posts yet" and HomePage's Following
- * empty state), just with a dedicated icon instead of reusing plain
- * text-only versions.
+ * Redesign pass — removed the bg-white/35 backdrop-blur-md glass
+ * treatment (same root cause as ProfilePage.jsx/SearchPage.jsx had
+ * before their own redesigns) in favor of the plain white/gray-100
+ * border+shadow language HomePage.jsx and DiscoverCommunitiesPage.jsx
+ * already use. Layout (icon in a soft tinted circle, bold title, muted
+ * subtitle) is unchanged — that part already matched the rest of the
+ * app's empty-state pattern.
  */
 export default function EmptyNotifications() {
   return (
-    <div className="mx-4 mt-4 px-6 py-16 text-center rounded-2xl bg-white/35 backdrop-blur-md border border-white/50 shadow-[inset_1px_1px_0_rgba(255,255,255,0.5),0_4px_16px_rgba(91,77,255,0.06)]">
-      <div className="w-14 h-14 rounded-2xl bg-white/50 backdrop-blur-sm border border-white/40 flex items-center justify-center mx-auto">
-        <Bell className="w-6 h-6 text-blue-600" strokeWidth={1.7} />
+    <div className="mx-4 mt-4 px-6 py-16 text-center rounded-2xl bg-white dark:bg-[#11131a] border border-gray-100 dark:border-white/10 shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:shadow-none">
+      <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center mx-auto">
+        <Bell className="w-6 h-6 text-blue-600 dark:text-blue-400" strokeWidth={1.7} />
       </div>
-      <p className="mt-4 text-sm font-semibold text-gray-900">🌱 Your campus is quiet</p>
-      <p className="mt-1 text-sm text-gray-400 max-w-[240px] mx-auto leading-relaxed">
-        Once something happens, you'll see it here.
+      <p className="mt-4 text-sm font-semibold text-gray-900 dark:text-gray-50">You're all caught up!</p>
+      <p className="mt-1 text-sm text-gray-400 dark:text-gray-500 max-w-[240px] mx-auto leading-relaxed">
+        Nothing new here. We'll let you know when something happens.
       </p>
     </div>
   )

@@ -1,8 +1,8 @@
 import Loader from './Loader.jsx'
 
 const variants = {
-  primary: 'bg-ink text-white hover:bg-accent-deep',
-  secondary: 'border border-line bg-surface text-ink hover:border-ink/30'
+  primary: 'bg-ink text-white hover:bg-accent-deep dark:bg-white dark:text-gray-900 dark:hover:bg-blue-500 dark:hover:text-white',
+  secondary: 'border border-line bg-surface text-ink hover:border-ink/30 dark:border-white/10 dark:bg-white/5 dark:text-gray-50 dark:hover:border-white/20'
 }
 
 export default function Button({
@@ -26,7 +26,7 @@ export default function Button({
       {...props}
     >
       {loading ? (
-        <Loader size="sm" tone={variant === 'primary' ? 'light' : 'dark'} />
+        <Loader size="sm" tone={variant === 'primary' ? 'invert' : 'dark'} />
       ) : (
         icon
       )}

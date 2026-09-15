@@ -61,19 +61,19 @@ export default function PrivacySettingsPage() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white min-h-screen lg:shadow-sm">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
+      <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white dark:bg-[#11131a] min-h-screen lg:shadow-sm dark:lg:shadow-none">
+        <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#11131a]/95 backdrop-blur-md border-b border-gray-100 dark:border-white/10">
           <div className="h-14 flex items-center gap-2 px-3">
             <button
               type="button"
               aria-label="Back"
               onClick={() => navigate('/settings')}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10 transition-all duration-300"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900">Privacy</span>
+            <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">Privacy</span>
           </div>
         </header>
 
@@ -83,11 +83,11 @@ export default function PrivacySettingsPage() {
               <Loader size="md" tone="dark" />
             </div>
           ) : error ? (
-            <p className="py-16 text-center text-sm text-gray-400">{error}</p>
+            <p className="py-16 text-center text-sm text-gray-400 dark:text-gray-500">{error}</p>
           ) : (
             <>
-              <p className="px-1 pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Who can message me</p>
-              <div className="rounded-2xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
+              <p className="px-1 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Who can message me</p>
+              <div className="rounded-2xl border border-gray-100 divide-y divide-gray-100 dark:border-white/10 dark:divide-white/10 overflow-hidden">
                 {MESSAGE_OPTIONS.map((option) => (
                   <button
                     key={option.value}
@@ -95,11 +95,11 @@ export default function PrivacySettingsPage() {
                     onClick={() => handleSelect(option.value)}
                     disabled={saving}
                     aria-pressed={messagePrivacy === option.value}
-                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-gray-50 transition-all duration-200 disabled:opacity-60"
+                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-gray-50 dark:hover:bg-white/5 transition-all duration-200 disabled:opacity-60"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">{option.label}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{option.description}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-50">{option.label}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{option.description}</p>
                     </div>
                     {messagePrivacy === option.value && (
                       <span className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
@@ -110,20 +110,20 @@ export default function PrivacySettingsPage() {
                 ))}
               </div>
 
-              <p className="px-1 pt-6 pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Blocking</p>
+              <p className="px-1 pt-6 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Blocking</p>
               <button
                 type="button"
                 onClick={() => navigate('/settings/blocked-users')}
-                className="w-full flex items-center gap-3 rounded-2xl border border-gray-100 px-4 py-3.5 text-left hover:bg-gray-50 transition-all duration-200"
+                className="w-full flex items-center gap-3 rounded-2xl border border-gray-100 px-4 py-3.5 text-left hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5 transition-all duration-200"
               >
-                <div className="w-9 h-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-red-50 text-red-500 dark:bg-red-500/15 dark:text-red-400 flex items-center justify-center flex-shrink-0">
                   <UserX className="w-[18px] h-[18px]" strokeWidth={1.8} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900">Blocked users</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Manage accounts you've blocked</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-50">Blocked users</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Manage accounts you've blocked</p>
                 </div>
-                <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
               </button>
             </>
           )}

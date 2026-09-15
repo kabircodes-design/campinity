@@ -147,7 +147,7 @@ export default function LoginPage() {
           </Button>
 
           {googleError && (
-            <p role="alert" className="mt-3 rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+            <p role="alert" className="mt-3 rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
               {googleError}
             </p>
           )}
@@ -203,7 +203,7 @@ export default function LoginPage() {
             </div>
 
             {submitError && (
-              <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+              <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
                 {submitError}
               </p>
             )}
@@ -211,7 +211,7 @@ export default function LoginPage() {
             {submitSuccess && (
               <p
                 role="status"
-                className="flex items-center gap-2 rounded-xl2 bg-accent-tint text-accent text-[13px] font-medium px-4 py-3"
+                className="flex items-center gap-2 rounded-xl2 bg-accent-tint dark:bg-blue-500/15 text-accent text-[13px] font-medium px-4 py-3"
               >
                 <Icon name="check" className="w-4 h-4" strokeWidth={2.2} />
                 Logged in — redirecting…

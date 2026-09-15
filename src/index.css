@@ -3,8 +3,19 @@
 @tailwind utilities;
 
 @layer base {
+  /* These three rules set the DEFAULT color/background/border for every
+     unstyled or inherited element in the app (Tailwind's own preflight
+     resets border-color to this value, so `* { border-line }` is what
+     any element with a border but no explicit border color utility
+     falls back to). This was the actual root cause of the auth pages
+     (and any other markup relying on inherited color) rendering
+     unreadable in dark mode: `text-ink`/`bg-bg`/`border-line` are
+     static hex values from tailwind.config.js, so they never changed
+     when `.dark` was toggled on <html>. Adding dark: here, once, fixes
+     every inheriting descendant at the source instead of patching each
+     consuming component. */
   * {
-    @apply border-line;
+    @apply border-line dark:border-white/10;
   }
 
   html {
@@ -19,7 +30,7 @@
   }
 
   body {
-    @apply bg-bg text-ink font-sans antialiased;
+    @apply bg-bg text-ink dark:bg-[#09090f] dark:text-gray-50 font-sans antialiased;
     font-feature-settings: 'ss01' on, 'cv11' on;
     text-rendering: optimizeLegibility;
   }
@@ -41,7 +52,7 @@
   }
 
   h1, h2, h3, h4 {
-    @apply font-display text-ink;
+    @apply font-display text-ink dark:text-gray-50;
     letter-spacing: -0.02em;
   }
 

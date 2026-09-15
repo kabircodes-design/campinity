@@ -14,31 +14,31 @@ export default function HelpSettingsPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white min-h-screen lg:shadow-sm">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
+      <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white dark:bg-[#11131a] min-h-screen lg:shadow-sm dark:lg:shadow-none">
+        <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#11131a]/95 backdrop-blur-md border-b border-gray-100 dark:border-white/10">
           <div className="h-14 flex items-center gap-2 px-3">
             <button
               type="button"
               aria-label="Back"
               onClick={() => navigate('/settings')}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10 transition-all duration-300"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900">Help &amp; Support</span>
+            <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">Help &amp; Support</span>
           </div>
         </header>
 
         <main className="px-4 py-4">
-          <div className="rounded-2xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
+          <div className="rounded-2xl border border-gray-100 divide-y divide-gray-100 dark:border-white/10 dark:divide-white/10 overflow-hidden">
             {FAQS.map((item) => (
               <details key={item.q} className="group px-4 py-3.5">
-                <summary className="text-sm font-medium text-gray-900 cursor-pointer list-none flex items-center justify-between gap-2">
+                <summary className="text-sm font-medium text-gray-900 dark:text-gray-50 cursor-pointer list-none flex items-center justify-between gap-2">
                   {item.q}
-                  <span className="text-gray-300 group-open:rotate-45 transition-transform duration-200 text-lg leading-none">+</span>
+                  <span className="text-gray-300 dark:text-gray-600 group-open:rotate-45 transition-transform duration-200 text-lg leading-none">+</span>
                 </summary>
-                <p className="mt-2 text-sm text-gray-500 leading-relaxed">{item.a}</p>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{item.a}</p>
               </details>
             ))}
           </div>

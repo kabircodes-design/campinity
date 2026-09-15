@@ -5,7 +5,7 @@ import Loader from './Loader.jsx'
 
 export function FullScreenLoader() {
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center">
+    <div className="min-h-screen bg-bg dark:bg-[#09090f] flex items-center justify-center">
       <Loader size="lg" tone="dark" />
     </div>
   )
@@ -42,7 +42,10 @@ export default function ProtectedRoute({ stage, children }) {
   // spinner flashed on every page change. Now `loading` only matters
   // once, at initial app load.
   const { user, profile, loading } = useAuth()
-  const { isAdmin, loading: adminLoading } = useIsAdmin()
+  // Only actually calls the checkAdminStatus Cloud Function for the
+  // stage that reads its result — see useIsAdmin.js's own comment for
+  // why this was previously firing on every single protected route.
+  const { isAdmin, loading: adminLoading } = useIsAdmin(stage === 'admin')
   const location = useLocation()
 
   if (loading) return <FullScreenLoader />
@@ -99,8 +102,8 @@ export default function ProtectedRoute({ stage, children }) {
     if (adminLoading) return <FullScreenLoader />
     if (!isAdmin) {
       return (
-        <div className="min-h-screen bg-bg flex items-center justify-center px-6 text-center">
-          <p className="text-sm text-ink-soft">Access denied — admin only.</p>
+        <div className="min-h-screen bg-bg dark:bg-[#09090f] flex items-center justify-center px-6 text-center">
+          <p className="text-sm text-ink-soft dark:text-gray-400">Access denied — admin only.</p>
         </div>
       )
     }

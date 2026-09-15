@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import BottomNav from '../components/BottomNav.jsx'
-import DesktopSidebar from '../components/DesktopSidebar.jsx'
+import { Bell, Check, ChevronRight, Compass, Settings2, User, Users } from 'lucide-react'
 import NotificationCard from '../components/NotificationCard.jsx'
 import EmptyNotifications from '../components/EmptyNotifications.jsx'
 import NotificationBadge from '../components/NotificationBadge.jsx'
 import NotificationSkeleton from '../components/NotificationSkeleton.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { useAuth } from '../context/AuthContext.jsx'
 import {
   deleteNotification,
   getNotifications,
@@ -73,12 +70,31 @@ function applySmartGrouping(notifications) {
   return result
 }
 
+/**
+ * Visual redesign pass — same root cause as ProfilePage.jsx/SearchPage.jsx
+ * had before their own redesigns: the #f3f0fb page background, three
+ * ambient-glow-layer blobs, and bg-white/40 backdrop-blur-2xl container
+ * were the same older glass-heavy template, not unique to this page.
+ * Replaced with the same plain white/gray-50 + subtle-border + soft-
+ * shadow language every other redesigned page now uses. All real
+ * functionality below — Firestore load, live author enrichment,
+ * Today/Yesterday/Earlier grouping, smart like-grouping, optimistic
+ * mark-read/mark-all-read/delete with rollback on failure — is
+ * completely untouched, same functions, same logic.
+ *
+ * New: a right rail (desktop only, and deliberately light per the
+ * explicit "don't overdesign, content-first" instruction) — a real
+ * unread-count summary (no new data, same unreadCount already
+ * computed below), Quick Actions to real existing routes, and a real
+ * link to Settings > Notifications (built in an earlier pass — the
+ * actual notification-preferences feature this page's own header
+ * button now points to, not an invented one).
+ */
 export default function NotificationsPage() {
   const navigate = useNavigate()
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const { profile } = useAuth()
 
   useEffect(() => {
     let cancelled = false
@@ -180,138 +196,135 @@ export default function NotificationsPage() {
     deleteNotification(uid, id).catch(() => setNotifications(previous))
   }
 
-  if (loading) {
-    return (
-      <div
-        className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
-        style={{ backgroundColor: '#f3f0fb' }}
-      >
-        <div
-          className="ambient-glow-layer ambient-glow-1"
-          style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
-        />
-        <div
-          className="ambient-glow-layer ambient-glow-2"
-          style={{
-            background:
-              'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
-          }}
-        />
-        <div
-          className="ambient-glow-layer ambient-glow-3"
-          style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
-        />
-        <DesktopSidebar profile={profile} />
-        <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl min-h-screen lg:min-h-0 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:border lg:border-white/50 lg:rounded-3xl lg:my-4">
-            <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40">
-              <div className="h-14 flex items-center gap-2 px-3">
-                <button
-                  type="button"
-                  aria-label="Back"
-                  onClick={() => navigate('/home')}
-                  className="lg:hidden w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-                <span className="text-base font-bold tracking-tight text-gray-900">Notifications</span>
-              </div>
-            </header>
-            <NotificationSkeleton />
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const quickActions = [
+    { label: 'View Profile', to: '/profile', icon: User },
+    { label: 'Explore Communities', to: '/communities', icon: Users },
+    { label: 'Explore Campinity', to: '/search', icon: Compass }
+  ]
 
   return (
-    <div
-      className="relative overflow-x-hidden lg:flex lg:h-screen lg:overflow-hidden lg:gap-3"
-      style={{ backgroundColor: '#f3f0fb' }}
-    >
-      <div
-        className="ambient-glow-layer ambient-glow-1"
-        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-2"
-        style={{
-          background:
-            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
-        }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-3"
-        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
-      />
-      <DesktopSidebar profile={profile} />
-      <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto overflow-x-hidden">
-        <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white/85 backdrop-blur-md lg:bg-white/40 lg:backdrop-blur-2xl min-h-screen lg:min-h-0 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] lg:border lg:border-white/50 lg:rounded-3xl lg:my-4">
-        <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40">
-          <div className="h-14 flex items-center gap-2 px-3">
+    <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
+        <div className="lg:flex lg:items-start lg:gap-5 lg:px-6 lg:py-4 lg:max-w-[1180px]">
+          <div className="mx-auto max-w-[480px] lg:mx-0 lg:max-w-[680px] lg:flex-1 lg:min-w-0 bg-white dark:bg-[#11131a] min-h-full lg:min-h-0 lg:rounded-2xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
+            <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#11131a]/95 backdrop-blur-md border-b border-gray-100 dark:border-white/10 lg:rounded-t-2xl">
+              <div className="h-14 flex items-center gap-2 px-3 lg:px-6">
+                <div className="flex-1 flex items-center gap-2 min-w-0">
+                  <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">Notifications</span>
+                  <NotificationBadge count={unreadCount} />
+                </div>
+                <button
+                  type="button"
+                  aria-label="Notification settings"
+                  onClick={() => navigate('/settings/notifications')}
+                  className="hidden lg:flex flex-shrink-0 w-9 h-9 rounded-full items-center justify-center text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10 transition-all duration-300"
+                >
+                  <Settings2 className="w-[18px] h-[18px]" />
+                </button>
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllAsRead}
+                    className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold text-blue-600 border border-blue-100 bg-blue-50 rounded-full px-3.5 py-1.5 hover:bg-blue-100 dark:text-blue-400 dark:border-blue-500/20 dark:bg-blue-500/15 dark:hover:bg-blue-500/25 transition-all duration-300"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Mark all read
+                  </button>
+                )}
+              </div>
+              <p className="hidden lg:block px-6 pb-3 text-xs text-gray-400 dark:text-gray-500">Stay up to date with what's happening around your campus.</p>
+            </header>
+
+            <main className="pb-24">
+              {loading ? (
+                <NotificationSkeleton />
+              ) : error ? (
+                <div className="px-6 py-16 text-center">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">Couldn't load notifications</p>
+                  <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">{error}</p>
+                </div>
+              ) : notifications.length === 0 ? (
+                <EmptyNotifications />
+              ) : (
+                <>
+                  {unreadCount === 0 && (
+                    <div className="mx-4 lg:mx-6 mt-4 rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3 flex items-center gap-2.5 dark:bg-emerald-500/10 dark:border-emerald-500/20">
+                      <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                      <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">You're all caught up. Nothing important slipped past you.</p>
+                    </div>
+                  )}
+                  {groupedNotifications.map(([label, items]) => (
+                    <section key={label}>
+                      <p className="px-4 lg:px-6 pt-4 pb-1.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+                        {label}
+                      </p>
+                      {items.map((notification) => (
+                        <NotificationCard
+                          key={notification.id}
+                          notification={notification}
+                          onRead={markAsRead}
+                          onDelete={handleDeleteNotification}
+                        />
+                      ))}
+                    </section>
+                  ))}
+                </>
+              )}
+            </main>
+          </div>
+
+          <aside className="hidden lg:flex lg:flex-col w-[300px] flex-shrink-0 gap-4 py-4">
+            <section className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#11131a] p-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <Bell className="w-4 h-4 text-blue-600" />
+                <p className="text-sm font-bold text-gray-900 dark:text-gray-50">Summary</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-50">{unreadCount}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Unread</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-50">{notifications.length}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Total</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#11131a] p-4">
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-50 mb-3">Quick Actions</p>
+              <div className="space-y-1">
+                {quickActions.map((action) => (
+                  <button
+                    key={action.to}
+                    type="button"
+                    onClick={() => navigate(action.to)}
+                    className="w-full flex items-center gap-2.5 rounded-xl px-2 py-2 -mx-2 hover:bg-gray-50 dark:hover:bg-white/5 transition-all duration-200 text-left"
+                  >
+                    <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
+                      <action.icon className="w-4 h-4" />
+                    </span>
+                    <span className="text-[13px] font-semibold text-gray-900 dark:text-gray-50">{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
             <button
               type="button"
-              aria-label="Back"
-              onClick={() => navigate('/home')}
-              className="lg:hidden w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+              onClick={() => navigate('/settings/notifications')}
+              className="w-full flex items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-3.5 text-left hover:bg-gray-50 dark:border-white/10 dark:bg-[#11131a] dark:hover:bg-white/5 transition-all duration-200"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
+                <Settings2 className="w-[18px] h-[18px]" strokeWidth={1.8} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-50">Notification settings</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Choose what you get notified about</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
             </button>
-            <div className="flex-1 flex items-center gap-2 min-w-0">
-              <span className="text-base font-bold tracking-tight text-gray-900">Notifications</span>
-              <NotificationBadge count={unreadCount} />
-            </div>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={markAllAsRead}
-                className="flex-shrink-0 text-xs font-semibold text-blue-700 bg-white/40 backdrop-blur-sm border border-white/40 rounded-full px-3 py-1.5 hover:bg-white/60 transition-all duration-300"
-              >
-                Mark all read
-              </button>
-            )}
-          </div>
-        </header>
-
-        <main className="pb-24">
-          {error ? (
-            <div className="px-6 py-16 text-center">
-              <p className="text-sm text-gray-400">{error}</p>
-            </div>
-          ) : notifications.length === 0 ? (
-            <EmptyNotifications />
-          ) : (
-            <>
-              {unreadCount === 0 && (
-                <div className="mx-4 mt-4 rounded-2xl bg-emerald-50/50 backdrop-blur-sm border border-emerald-100/60 px-4 py-3 flex items-center gap-2.5">
-                  <span className="text-base">✨</span>
-                  <p className="text-xs font-medium text-emerald-700">You're all caught up. Nothing important slipped past you.</p>
-                </div>
-              )}
-              {groupedNotifications.map(([label, items]) => (
-                <section key={label}>
-                  <p className="px-4 pt-4 pb-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                    {label}
-                  </p>
-                  {items.map((notification) => (
-                    <NotificationCard
-                      key={notification.id}
-                      notification={notification}
-                      onRead={markAsRead}
-                      onDelete={handleDeleteNotification}
-                    />
-                  ))}
-                </section>
-              ))}
-            </>
-          )}
-        </main>
-      </div>
-      </div>
-
-      <div className="lg:hidden">
-        <BottomNav />
-      </div>
+          </aside>
+        </div>
     </div>
   )
 }

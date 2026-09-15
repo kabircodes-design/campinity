@@ -19,7 +19,7 @@ export default function ThemePackCard({ theme, active, onSelect }) {
           ? 'border-blue-600 shadow-md shadow-blue-100'
           : theme.locked
           ? 'theme-border cursor-not-allowed'
-          : 'theme-border hover:border-gray-300'
+          : 'theme-border hover:border-gray-300 dark:hover:border-white/20'
       }`}
     >
       <div className="relative">
@@ -49,7 +49,7 @@ export default function ThemePackCard({ theme, active, onSelect }) {
           </span>
         )}
         {theme.locked && (
-          <span className="flex-shrink-0 rounded-full bg-gray-100 text-gray-500 text-[10px] font-semibold px-2 py-0.5">
+          <span className="flex-shrink-0 rounded-full bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400 text-[10px] font-semibold px-2 py-0.5">
             Coming Soon
           </span>
         )}

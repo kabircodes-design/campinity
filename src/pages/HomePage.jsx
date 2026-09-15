@@ -323,31 +323,30 @@ export default function HomePage() {
     <div className="h-full lg:grid lg:gap-3 lg:[grid-template-columns:minmax(0,1fr)_minmax(260px,320px)] lg:overflow-hidden">
     <SwipeablePage>
     <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
-      <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-full lg:min-h-0 bg-white lg:bg-transparent border-x border-gray-100">
+      <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-full lg:min-h-0 bg-white dark:bg-[#11131a] border-x border-gray-100 dark:border-white/10 lg:my-4 lg:rounded-2xl lg:border lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
         {showBanner && <CampusVerificationBanner onDismiss={dismissBanner} />}
 
         <section className={`mx-4 lg:mx-6 mt-5 mb-5 ${entranceClass(0)}`}>
           <div
-            className="relative overflow-hidden rounded-2xl lg:rounded-3xl px-5 py-5 lg:px-7 lg:py-6"
-            style={{ background: 'linear-gradient(120deg, #eaf3ff 0%, #dcecff 45%, #e7f7f7 100%)' }}
+            className="relative overflow-hidden rounded-2xl lg:rounded-3xl px-5 py-5 lg:px-7 lg:py-6 bg-gradient-to-br from-[#eaf3ff] via-[#dcecff] to-[#e7f7f7] dark:from-[#141a2e] dark:via-[#121629] dark:to-[#101f21]"
           >
             <div
-              className="absolute -top-10 -right-6 w-40 h-40 rounded-full opacity-60 pointer-events-none"
+              className="absolute -top-10 -right-6 w-40 h-40 rounded-full opacity-60 dark:opacity-25 pointer-events-none"
               style={{ background: 'radial-gradient(circle, rgba(59,155,255,0.35), transparent 70%)' }}
               aria-hidden="true"
             />
             <div
-              className="absolute -bottom-12 right-8 w-32 h-32 rounded-full opacity-50 pointer-events-none"
+              className="absolute -bottom-12 right-8 w-32 h-32 rounded-full opacity-50 dark:opacity-20 pointer-events-none"
               style={{ background: 'radial-gradient(circle, rgba(45,212,191,0.30), transparent 70%)' }}
               aria-hidden="true"
             />
-            <p className="relative text-[11px] font-bold tracking-wide text-blue-700/70 uppercase">
+            <p className="relative text-[11px] font-bold tracking-wide text-blue-700/70 dark:text-blue-300/80 uppercase">
               {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}
             </p>
-            <h1 className="relative mt-1 text-2xl lg:text-[28px] font-bold text-gray-900 tracking-tight leading-tight">
+            <h1 className="relative mt-1 text-2xl lg:text-[28px] font-bold text-gray-900 dark:text-gray-50 tracking-tight leading-tight">
               {firstName} 👋
             </h1>
-            <p className="relative mt-1.5 text-[13px] lg:text-sm text-gray-500 max-w-xs leading-relaxed">
+            <p className="relative mt-1.5 text-[13px] lg:text-sm text-gray-500 dark:text-gray-400 max-w-xs leading-relaxed">
               Great things happen across campus. Stay connected, stay updated.
             </p>
           </div>
@@ -358,8 +357,8 @@ export default function HomePage() {
             className="group relative mt-4 w-full text-left lg:hidden"
             aria-label="Search Campinity"
           >
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-colors duration-200 group-hover:text-gray-500" />
-            <span className="block w-full rounded-2xl border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-400 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)]">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 transition-colors duration-200 group-hover:text-gray-500 dark:group-hover:text-gray-400" />
+            <span className="block w-full rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 pl-10 pr-4 py-2.5 text-sm text-gray-400 dark:text-gray-500 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:shadow-none transition-all duration-200 group-hover:bg-white dark:group-hover:bg-white/10 group-hover:border-gray-300 dark:group-hover:border-white/20 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:group-hover:shadow-none">
               Search Campinity
             </span>
           </button>
@@ -381,8 +380,8 @@ export default function HomePage() {
               // Home's own render.
               Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="flex flex-col items-center gap-1.5 w-16 flex-shrink-0">
-                  <div className="w-[60px] h-[60px] rounded-full bg-gray-100 animate-pulse" />
-                  <div className="h-2 w-10 rounded bg-gray-100 animate-pulse" />
+                  <div className="w-[60px] h-[60px] rounded-full bg-gray-100 dark:bg-white/10 animate-pulse" />
+                  <div className="h-2 w-10 rounded bg-gray-100 dark:bg-white/10 animate-pulse" />
                 </div>
               ))
             ) : (
@@ -418,7 +417,7 @@ export default function HomePage() {
           />
         )}
 
-        <nav className={`sticky top-14 z-30 bg-white flex items-center gap-6 px-4 lg:px-6 border-b border-gray-100 mb-3 ${entranceClass(140)}`}>
+        <nav className={`sticky top-14 z-30 bg-white dark:bg-[#09090f] flex items-center gap-6 px-4 lg:px-6 border-b border-gray-100 dark:border-white/10 mb-3 ${entranceClass(140)}`}>
           {feedTabs.map((tab) => {
             const isActive = activeTab === tab.key
             return (
@@ -427,7 +426,7 @@ export default function HomePage() {
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
                 className={`relative py-3 text-[14px] font-semibold transition-colors duration-200 ${
-                  isActive ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
+                  isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
                 }`}
               >
                 {tab.label}
@@ -448,7 +447,7 @@ export default function HomePage() {
           ) : activeTab === 'following' ? (
             followingError ? (
               <div className="px-6 py-16 text-center">
-                <p className="text-sm text-gray-400">{followingError}</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500">{followingError}</p>
               </div>
             ) : followingLoading ? (
               <div className="py-16 flex justify-center">
@@ -456,8 +455,8 @@ export default function HomePage() {
               </div>
             ) : !isFollowingAnyone ? (
               <div className="px-6 py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">Nothing here yet</p>
-                <p className="mt-1 text-sm text-gray-400 max-w-[260px] mx-auto leading-relaxed">
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">Nothing here yet</p>
+                <p className="mt-1 text-sm text-gray-400 dark:text-gray-500 max-w-[260px] mx-auto leading-relaxed">
                   Follow students from your campus to see their latest posts.
                 </p>
                 <button
@@ -470,11 +469,11 @@ export default function HomePage() {
               </div>
             ) : followingPosts.length === 0 ? (
               <div className="px-6 py-16 text-center">
-                <div className="mx-auto w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center">
-                  <UserPlus className="w-4.5 h-4.5 text-blue-500" />
+                <div className="mx-auto w-11 h-11 rounded-full bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center">
+                  <UserPlus className="w-4.5 h-4.5 text-blue-500 dark:text-blue-400" />
                 </div>
-                <p className="mt-3 text-sm font-semibold text-gray-900">Your feed is waiting.</p>
-                <p className="mt-1 text-sm text-gray-400">Follow people to see what they're sharing.</p>
+                <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-50">Your feed is waiting.</p>
+                <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Follow people to see what they're sharing.</p>
               </div>
             ) : (
               followingPosts.map((post) => <PostCard key={post.id} post={post} />)
@@ -482,7 +481,7 @@ export default function HomePage() {
           ) : activeTab === 'forYou' ? (
             forYouError ? (
               <div className="px-6 py-16 text-center">
-                <p className="text-sm text-gray-400">{forYouError}</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500">{forYouError}</p>
               </div>
             ) : forYouLoading ? (
               <div className="py-16 flex justify-center">
@@ -490,11 +489,11 @@ export default function HomePage() {
               </div>
             ) : forYouPosts.length === 0 ? (
               <div className="px-6 py-16 text-center">
-                <div className="mx-auto w-11 h-11 rounded-full bg-amber-50 flex items-center justify-center">
-                  <Sparkles className="w-4.5 h-4.5 text-amber-500" />
+                <div className="mx-auto w-11 h-11 rounded-full bg-amber-50 dark:bg-amber-500/15 flex items-center justify-center">
+                  <Sparkles className="w-4.5 h-4.5 text-amber-500 dark:text-amber-400" />
                 </div>
-                <p className="mt-3 text-sm font-semibold text-gray-900">Your campus is quiet... for now.</p>
-                <p className="mt-1 text-sm text-gray-400">Be the first to share something.</p>
+                <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-50">Your campus is quiet... for now.</p>
+                <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Be the first to share something.</p>
               </div>
             ) : (
               <>
@@ -508,21 +507,21 @@ export default function HomePage() {
                   </div>
                 )}
                 {!forYouHasMore && forYouPosts.length > 0 && (
-                  <p className="py-8 text-center text-xs text-gray-400">You're all caught up.</p>
+                  <p className="py-8 text-center text-xs text-gray-400 dark:text-gray-500">You're all caught up.</p>
                 )}
               </>
             )
           ) : error ? (
             <div className="px-6 py-16 text-center">
-              <p className="text-sm text-gray-400">{error}</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500">{error}</p>
             </div>
           ) : visiblePosts.length === 0 ? (
             <div className="px-6 py-16 text-center">
               <div className="mx-auto w-11 h-11 rounded-full bg-amber-50 flex items-center justify-center">
                 <Sparkles className="w-4.5 h-4.5 text-amber-500" />
               </div>
-              <p className="mt-3 text-sm font-semibold text-gray-900">Your campus is quiet... for now.</p>
-              <p className="mt-1 text-sm text-gray-400">Be the first to share something.</p>
+              <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-50">Your campus is quiet... for now.</p>
+              <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Be the first to share something.</p>
             </div>
           ) : (
             visiblePosts.map((post) => (

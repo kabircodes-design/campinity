@@ -12,7 +12,7 @@ export default function PasswordStrengthMeter({ password }) {
   return (
     <div className="mt-3" aria-live="polite">
       <div className="flex items-center justify-between mb-2">
-        <div className="flex-1 h-1.5 rounded-full bg-lineSoft overflow-hidden mr-3">
+        <div className="flex-1 h-1.5 rounded-full bg-lineSoft dark:bg-white/10 overflow-hidden mr-3">
           <motion.div
             className={`h-full rounded-full ${barColors[Math.max(score - 1, 0)]}`}
             initial={false}
@@ -21,7 +21,7 @@ export default function PasswordStrengthMeter({ password }) {
             style={{ willChange: 'width' }}
           />
         </div>
-        <span className="font-mono text-2xs text-ink-faint whitespace-nowrap">{label}</span>
+        <span className="font-mono text-2xs text-ink-faint dark:text-gray-500 whitespace-nowrap">{label}</span>
       </div>
 
       <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
@@ -29,12 +29,12 @@ export default function PasswordStrengthMeter({ password }) {
           <li
             key={check.id}
             className={`flex items-center gap-1.5 text-[12px] transition-colors duration-200 ${
-              check.passed ? 'text-ink' : 'text-ink-faint'
+              check.passed ? 'text-ink dark:text-gray-50' : 'text-ink-faint dark:text-gray-500'
             }`}
           >
             <span
               className={`flex-shrink-0 w-3.5 h-3.5 rounded-full flex items-center justify-center transition-colors duration-200 ${
-                check.passed ? 'bg-emerald-500 text-white' : 'bg-lineSoft text-transparent'
+                check.passed ? 'bg-emerald-500 text-white' : 'bg-lineSoft dark:bg-white/10 text-transparent'
               }`}
             >
               <Icon name="check" className="w-2.5 h-2.5" strokeWidth={2.4} />

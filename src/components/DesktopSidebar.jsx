@@ -36,7 +36,7 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
   const navigate = useNavigate()
 
   return (
-    <div className="hidden lg:flex lg:flex-col w-64 flex-shrink-0 h-screen sticky top-0 px-4 py-5 border-r border-gray-100">
+    <div className="hidden lg:flex lg:flex-col w-64 flex-shrink-0 h-screen sticky top-0 px-4 py-5 border-r border-gray-100 dark:border-white/10">
       <button
         type="button"
         onClick={() => navigate('/home')}
@@ -55,7 +55,9 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
             onFocus={() => prefetchRoute(to)}
             className={({ isActive }) =>
               `relative flex items-center gap-3 rounded-lg pl-3.5 pr-3 py-2.5 text-[14px] font-medium transition-all duration-200 ${
-                isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-50'
+                isActive
+                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400'
+                  : 'text-gray-500 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-white/5'
               }`
             }
           >
@@ -91,7 +93,7 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
         <button
           type="button"
           onClick={() => navigate('/profile')}
-          className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 cursor-pointer text-left transition-all duration-150 bg-white border border-gray-100 hover:border-gray-200"
+          className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 cursor-pointer text-left transition-all duration-150 bg-white border border-gray-100 hover:border-gray-200 dark:bg-white/5 dark:border-white/10 dark:hover:border-white/20"
         >
           <Avatar
             initials={getInitials(profile.displayName)}
@@ -101,10 +103,10 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
           />
           <div className="min-w-0">
             <div className="flex items-center gap-1">
-              <p className="text-sm font-semibold text-gray-900 truncate">{profile.displayName}</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-50 truncate">{profile.displayName}</p>
               <VerifiedBadge verified={profile.verifiedCampus} size="sm" />
             </div>
-            {profile.username && <p className="text-xs text-gray-400 truncate">@{profile.username}</p>}
+            {profile.username && <p className="text-xs text-gray-400 dark:text-gray-500 truncate">@{profile.username}</p>}
           </div>
         </button>
       )}

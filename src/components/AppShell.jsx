@@ -54,8 +54,7 @@ export default function AppShell() {
   return (
     <>
       <div
-        className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_1fr]"
-        style={{ backgroundColor: '#f8fafc' }}
+        className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_1fr] bg-[#f8fafc] dark:bg-[#09090f]"
       >
         <DesktopSidebar unreadNotifications={unreadNotifCount} profile={profile} />
 
@@ -72,7 +71,7 @@ export default function AppShell() {
             correctly against both this conditional wrapper on desktop
             and no wrapper constraint at all on mobile. */}
         <div className="flex flex-col lg:h-screen lg:overflow-hidden overflow-x-hidden min-w-0">
-          <header className="sticky top-0 z-40 bg-white border-b border-gray-100 flex-shrink-0">
+          <header className="sticky top-0 z-40 bg-white dark:bg-[#11131a] border-b border-gray-100 dark:border-white/10 flex-shrink-0">
             <div className="h-14 flex items-center gap-3 px-4 lg:px-6">
               <button
                 type="button"
@@ -89,10 +88,10 @@ export default function AppShell() {
                 className="group relative hidden lg:flex flex-1 max-w-md mx-auto items-center text-left"
                 aria-label="Search Campinity"
               >
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-colors duration-200 group-hover:text-gray-500" />
-                <span className="flex items-center justify-between w-full rounded-full border border-gray-200 bg-gray-50 pl-10 pr-2.5 py-2 text-sm text-gray-400 transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)]">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 transition-colors duration-200 group-hover:text-gray-500 dark:group-hover:text-gray-400" />
+                <span className="flex items-center justify-between w-full rounded-full border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 pl-10 pr-2.5 py-2 text-sm text-gray-400 dark:text-gray-500 transition-all duration-200 group-hover:bg-white dark:group-hover:bg-white/10 group-hover:border-gray-300 dark:group-hover:border-white/20 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:group-hover:shadow-none">
                   Search for people, communities, posts...
-                  <kbd className="flex-shrink-0 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">
+                  <kbd className="flex-shrink-0 rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-400">
                     Ctrl K
                   </kbd>
                 </span>
@@ -103,7 +102,7 @@ export default function AppShell() {
                   type="button"
                   aria-label="Radar"
                   onClick={() => navigate('/radar')}
-                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
                 >
                   <Radar className="w-5 h-5" />
                 </button>
@@ -112,7 +111,9 @@ export default function AppShell() {
                   aria-label="Messages"
                   onClick={() => navigate('/messages')}
                   className={`relative hidden lg:flex w-9 h-9 rounded-full items-center justify-center transition-all duration-200 ${
-                    isMessagesActive ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-100 active:scale-95'
+                    isMessagesActive
+                      ? 'text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-500/15'
+                      : 'text-gray-500 hover:bg-gray-100 active:scale-95 dark:text-gray-400 dark:hover:bg-white/10'
                   }`}
                 >
                   <MessageCircle className="w-5 h-5" />
@@ -121,11 +122,11 @@ export default function AppShell() {
                   type="button"
                   aria-label="Notifications"
                   onClick={() => navigate('/notifications')}
-                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
                 >
                   <Bell className="w-5 h-5" />
                   {unreadNotifCount > 0 && (
-                    <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />
+                    <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white dark:ring-[#11131a]" />
                   )}
                 </button>
                 {profile && (
@@ -133,7 +134,7 @@ export default function AppShell() {
                     type="button"
                     onClick={() => navigate('/profile')}
                     aria-label="Your profile"
-                    className="hidden lg:flex items-center ml-1 rounded-full hover:bg-gray-100 p-0.5 transition-all duration-200"
+                    className="hidden lg:flex items-center ml-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 p-0.5 transition-all duration-200"
                   >
                     <Avatar initials={initials} colorClass={myColorClass} size="sm" src={getProfileIdentityImage(profile) || undefined} />
                   </button>

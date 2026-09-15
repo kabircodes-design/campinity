@@ -1,5 +1,16 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  // ROOT CAUSE of app-wide dark mode failure: this was never set, so
+  // Tailwind defaulted to `media` strategy (raw prefers-color-scheme,
+  // ignoring any class on <html> entirely). ThemeProvider.jsx already
+  // correctly toggles a real `.dark` class on <html> — with working
+  // persistence and system-preference detection — but no `dark:`
+  // Tailwind utility anywhere in the app could ever have responded to
+  // it without this. theme-tokens.css's CSS-variable system (the
+  // separate mechanism legacy theme-* / bg-white/NN components use)
+  // is unaffected either way — it works via its own `html.dark`
+  // selector, not Tailwind's variant generation.
+  darkMode: 'class',
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     screens: {

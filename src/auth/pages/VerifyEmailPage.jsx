@@ -110,7 +110,7 @@ function TokenVerificationView({ token }) {
   return (
     <AuthLayout eyebrow="One last step" title={title} subtitle={subtitle}>
       <div className="flex flex-col items-center text-center">
-        <div className="w-16 h-16 rounded-2xl bg-accent-tint flex items-center justify-center">
+        <div className="w-16 h-16 rounded-2xl bg-accent-tint dark:bg-blue-500/15 flex items-center justify-center">
           <StatusIcon className={`w-8 h-8 ${iconClassName}`} strokeWidth={1.6} />
         </div>
 
@@ -190,14 +190,14 @@ function WaitingView() {
       }
     >
       <div className="flex flex-col items-center text-center">
-        <div className="w-16 h-16 rounded-2xl bg-accent-tint flex items-center justify-center">
+        <div className="w-16 h-16 rounded-2xl bg-accent-tint dark:bg-blue-500/15 flex items-center justify-center">
           <MailCheck className="w-8 h-8 text-accent" strokeWidth={1.6} />
         </div>
 
         {resendMessage && (
           <p
             role="status"
-            className="mt-5 w-full rounded-xl2 bg-accent-tint text-accent text-[13px] font-medium px-4 py-3"
+            className="mt-5 w-full rounded-xl2 bg-accent-tint dark:bg-blue-500/15 text-accent text-[13px] font-medium px-4 py-3"
           >
             {resendMessage}
           </p>
@@ -206,7 +206,7 @@ function WaitingView() {
         {error && (
           <p
             role="alert"
-            className="mt-5 w-full rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3"
+            className="mt-5 w-full rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3"
           >
             {error}
           </p>

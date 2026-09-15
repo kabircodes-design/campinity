@@ -81,8 +81,8 @@ export default function NotificationCard({ notification, onRead, onDelete }) {
           handleClick()
         }
       }}
-      className={`w-full flex items-start gap-3 px-4 py-3.5 text-left relative transition-all duration-200 active:scale-[0.99] hover:bg-gray-50 cursor-pointer ${
-        !notification.read ? 'bg-blue-50/40' : 'bg-white'
+      className={`w-full flex items-start gap-3 px-4 py-3.5 text-left relative transition-all duration-200 active:scale-[0.99] hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer ${
+        !notification.read ? 'bg-blue-50/40 dark:bg-blue-500/10' : 'bg-white dark:bg-[#11131a]'
       }`}
     >
       {!notification.read && (
@@ -97,7 +97,7 @@ export default function NotificationCard({ notification, onRead, onDelete }) {
           src={notification.actorAvatar || undefined}
         />
         <span
-          className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full ${style.bg} flex items-center justify-center ring-2 ring-white`}
+          className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full ${style.bg} flex items-center justify-center ring-2 ring-white dark:ring-[#11131a]`}
           aria-hidden="true"
         >
           <Icon className="w-3 h-3 text-white" fill={style.fill ? 'currentColor' : 'none'} strokeWidth={2.2} />
@@ -105,14 +105,14 @@ export default function NotificationCard({ notification, onRead, onDelete }) {
       </div>
 
       <div className="flex-1 min-w-0 pt-0.5">
-        <p className="text-[13.5px] text-gray-900 leading-snug">
-          <span className="font-semibold">{lead}</span> <span className="text-gray-700">{action}</span>
+        <p className="text-[13.5px] text-gray-900 dark:text-gray-50 leading-snug">
+          <span className="font-semibold">{lead}</span> <span className="text-gray-700 dark:text-gray-300">{action}</span>
         </p>
         {preview && (
-          <p className="mt-0.5 text-[13px] text-gray-500 italic truncate">&ldquo;{preview}&rdquo;</p>
+          <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400 italic truncate">&ldquo;{preview}&rdquo;</p>
         )}
         <div className="mt-1 flex items-center gap-2">
-          <span className="text-[11.5px] text-gray-400">{formatTimeAgo(notification.createdAt)}</span>
+          <span className="text-[11.5px] text-gray-400 dark:text-gray-500">{formatTimeAgo(notification.createdAt)}</span>
           {!notification.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-600" aria-hidden="true" />}
         </div>
       </div>
@@ -121,7 +121,7 @@ export default function NotificationCard({ notification, onRead, onDelete }) {
         type="button"
         aria-label="Delete notification"
         onClick={handleDelete}
-        className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all duration-200"
+        className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 dark:text-gray-600 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all duration-200"
       >
         <Trash2 className="w-4 h-4" />
       </button>

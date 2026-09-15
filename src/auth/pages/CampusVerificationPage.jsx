@@ -48,14 +48,14 @@ export default function CampusVerificationPage() {
           type="button"
           onClick={handleSkip}
           disabled={skipping}
-          className="font-semibold text-ink-soft hover:text-ink transition-colors duration-200 disabled:opacity-50"
+          className="font-semibold text-ink-soft hover:text-ink dark:text-gray-400 dark:hover:text-gray-50 transition-colors duration-200 disabled:opacity-50"
         >
           {skipping ? 'Skipping…' : 'Skip for now'}
         </button>
       }
     >
       {skipError && (
-        <p role="alert" className="mb-5 rounded-xl2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+        <p role="alert" className="mb-5 rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
           {skipError}
         </p>
       )}
