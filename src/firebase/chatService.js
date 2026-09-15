@@ -26,6 +26,8 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { SHARE_TYPE_LABELS } from '../sharing/shareTypes.js'
 import { awardXP, hasReachedDailyCap } from '../gamification/xpService.js'
 
+const DEBUG_CHAT_FLOW = import.meta.env.DEV
+
 /**
  * Correctly named this time — MessagesPage.jsx and ChatPage.jsx
  * (pasted just now) both confirm the real file is chatService.js, not
@@ -99,9 +101,14 @@ export function subscribeToUserChats(uid, onData, onError) {
 export async function getExistingChatStatus(currentUid, otherUid) {
   if (!currentUid || !otherUid) return null
   const chatId = chatDocId(currentUid, otherUid)
+  if (DEBUG_CHAT_FLOW) console.debug('[CHAT ID] getExistingChatStatus', { currentUid, otherUid, chatId })
   const snap = await getDoc(chatDoc(chatId))
-  if (!snap.exists()) return null
+  if (!snap.exists()) {
+    if (DEBUG_CHAT_FLOW) console.debug('[CHAT STATUS] no existing chat', { chatId })
+    return null
+  }
   const data = snap.data()
+  if (DEBUG_CHAT_FLOW) console.debug('[CHAT STATUS] existing chat found', { chatId, status: data.status, requestedBy: data.requestedBy })
   return { chatId, status: data.status, requestedBy: data.requestedBy || null }
 }
 
@@ -152,26 +159,56 @@ async function assertNotBlockedByMe(currentUid, otherUid) {
   if (blocked) throw new Error("You've blocked this person. Unblock them to send a message.")
 }
 
+/**
+ * "Who can message me" (Settings > Privacy) — real enforcement, not a
+ * cosmetic toggle: when otherUid has restricted messages to people
+ * they follow, a brand-new chat is refused outright before any
+ * document is created. Client-side only, same disclosed limitation as
+ * the follow-based pending/accepted decision just below (shouldStartAsRequest)
+ * — proving "does X follow Y" server-side inside firestore.rules would
+ * need to read the follows collection from within the chats rule,
+ * more complexity than this pass takes on; noted, not hidden.
+ */
+async function assertMessagingAllowed(currentUid, otherUid) {
+  const targetProfile = await getUserProfile(otherUid).catch(() => null)
+  if (targetProfile?.messagePrivacy !== 'following') return
+  const targetFollowsSender = await checkIsFollowing(otherUid, currentUid).catch(() => false)
+  if (!targetFollowsSender) {
+    throw new Error('This person only accepts messages from people they follow.')
+  }
+}
+
 /** Gets an existing chat or creates one, deciding pending/accepted. Returns { chatId, status, isNew }. */
 export async function getOrCreateChat(currentUid, otherUid) {
   if (!currentUid || !otherUid) throw new Error('Both participants are required.')
   if (currentUid === otherUid) throw new Error("You can't message yourself.")
 
   const chatId = chatDocId(currentUid, otherUid)
+  if (DEBUG_CHAT_FLOW) console.debug('[CHAT FLOW] getOrCreateChat start', { currentUid, otherUid })
+  if (DEBUG_CHAT_FLOW) console.debug('[CHAT ID] resolved', { chatId })
+
   const existingSnap = await getDoc(chatDoc(chatId))
   if (existingSnap.exists()) {
-    return { chatId, status: existingSnap.data().status, isNew: false }
+    const existingData = existingSnap.data()
+    if (DEBUG_CHAT_FLOW) console.debug('[CHAT STATUS] reusing existing chat (Case 1/4)', { chatId, status: existingData.status, requestedBy: existingData.requestedBy, participants: existingData.participants, pendingMessageCount: existingData.pendingMessageCount })
+    return { chatId, status: existingData.status, isNew: false }
   }
+  if (DEBUG_CHAT_FLOW) console.debug('[CHAT STATUS] no existing chat — will create', { chatId })
 
   await assertNotBlockedByMe(currentUid, otherUid)
+  await assertMessagingAllowed(currentUid, otherUid)
 
   const startAsRequest = await shouldStartAsRequest(currentUid, otherUid)
   const status = startAsRequest ? 'pending' : 'accepted'
+  if (DEBUG_CHAT_FLOW) console.debug('[CHAT REQUEST] follow-based decision', { chatId, startAsRequest, status })
 
   try {
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(chatDoc(chatId))
-      if (snap.exists()) return
+      if (snap.exists()) {
+        if (DEBUG_CHAT_FLOW) console.debug('[CHAT CREATE] doc appeared mid-transaction (concurrent creation) — skipping create', { chatId })
+        return
+      }
       transaction.set(chatDoc(chatId), {
         participants: [currentUid, otherUid],
         status,
@@ -187,7 +224,9 @@ export async function getOrCreateChat(currentUid, otherUid) {
         createdAt: serverTimestamp()
       })
     })
+    if (DEBUG_CHAT_FLOW) console.debug('[CHAT CREATE] transaction committed', { chatId, status })
   } catch (err) {
+    console.error('[CHAT CREATE] transaction failed', { chatId, code: err?.code, message: err?.message })
     // The one case a client-side check can't catch: the OTHER user has
     // blocked ME. firestore.rules' chatIsBlocked() rejects the create
     // with permission-denied — surfaced as a generic message, never
@@ -217,6 +256,7 @@ export async function getOrCreateChat(currentUid, otherUid) {
       .catch(() => {})
   }
 
+  if (DEBUG_CHAT_FLOW) console.debug('[CHAT FLOW] getOrCreateChat done', { chatId, status, isNew: true })
   return { chatId, status, isNew: true }
 }
 

@@ -1,4 +1,4 @@
-import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, setDoc, Timestamp, where } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getCountFromServer, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc, Timestamp, where } from 'firebase/firestore'
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { db, storage } from './firebase.js'
 import { getUserProfile } from './profileService.js'
@@ -43,6 +43,26 @@ export async function createStory({ uid, mediaUrl, storagePath, mediaType, autho
   }
   const docRef = await addDoc(collection(db, COLLECTION), payload)
   return docRef.id
+}
+
+/**
+ * Single-story lookup — what SharedCard.jsx's shared_story registry
+ * entry needs to render a "shared a story" preview inside a chat
+ * message, mirroring the exact shape shared_post's entry already uses
+ * (getPostById). Returns null for a deleted/expired story (expired
+ * stories are never deleted, per getFeedStories' own comment, but a
+ * shared link to one should still gracefully report "gone," not throw)
+ * so SharedCard's existing UnavailableCard state handles it for free.
+ */
+export async function getStoryById(storyId) {
+  if (!storyId) return null
+  const snap = await getDoc(doc(db, COLLECTION, storyId))
+  if (!snap.exists()) return null
+  const data = snap.data()
+  const now = Date.now()
+  const expiresAtMs = data.expiresAt?.toMillis?.() ?? 0
+  if (expiresAtMs && expiresAtMs <= now) return null
+  return { id: snap.id, ...data }
 }
 
 /**
@@ -148,6 +168,42 @@ export async function getStoryViewers(storyId) {
     })
   )
   return enriched.sort((a, b) => (b.viewedAt?.toMillis?.() ?? 0) - (a.viewedAt?.toMillis?.() ?? 0))
+}
+
+/* ============================================================
+   STORY LIKES — same idempotent-by-id pattern as storyViews above
+   ({storyId}_{viewerUid}), so liking twice never creates a second
+   document and "has this user already liked this story" is a single
+   getDoc by a deterministic id, never a query. Count uses Firestore's
+   count() aggregation (same approach as postService.js's
+   getUserPostCount) — one cheap server-side read, never downloading
+   every like document just to show a number.
+   ============================================================ */
+
+function storyLikeDoc(storyId, uid) {
+  return doc(db, 'storyLikes', `${storyId}_${uid}`)
+}
+
+export async function likeStory(storyId, uid) {
+  if (!storyId || !uid) return
+  await setDoc(storyLikeDoc(storyId, uid), { storyId, uid, createdAt: serverTimestamp() })
+}
+
+export async function unlikeStory(storyId, uid) {
+  if (!storyId || !uid) return
+  await deleteDoc(storyLikeDoc(storyId, uid))
+}
+
+export async function hasLikedStory(storyId, uid) {
+  if (!storyId || !uid) return false
+  const snap = await getDoc(storyLikeDoc(storyId, uid))
+  return snap.exists()
+}
+
+export async function getStoryLikeCount(storyId) {
+  if (!storyId) return 0
+  const snap = await getCountFromServer(query(collection(db, 'storyLikes'), where('storyId', '==', storyId)))
+  return snap.data().count
 }
 
 /**

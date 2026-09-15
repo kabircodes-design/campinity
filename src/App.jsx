@@ -21,6 +21,11 @@ const AdsDashboardPage = lazy(() => import('./ads/AdsDashboardPage.jsx'))
 const CreateCampaignPage = lazy(() => import('./ads/CreateCampaignPage.jsx'))
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage.jsx'))
 const DeleteAccountPage = lazy(() => import('./pages/DeleteAccountPage.jsx'))
+const BlockedUsersPage = lazy(() => import('./pages/BlockedUsersPage.jsx'))
+const NotificationSettingsPage = lazy(() => import('./pages/NotificationSettingsPage.jsx'))
+const PrivacySettingsPage = lazy(() => import('./pages/PrivacySettingsPage.jsx'))
+const HelpSettingsPage = lazy(() => import('./pages/HelpSettingsPage.jsx'))
+const AboutSettingsPage = lazy(() => import('./pages/AboutSettingsPage.jsx'))
 const StudentProfilePlaceholder = lazy(() => import('./pages/StudentProfilePlaceholder.jsx'))
 const SearchPage = lazy(() => import('./pages/SearchPage.jsx'))
 const ClubDetailPlaceholder = lazy(() => import('./pages/ClubDetailPlaceholder.jsx'))
@@ -389,7 +394,7 @@ export default function App() {
           path="/settings/notifications"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="Notification Settings" />
+              <NotificationSettingsPage />
             </ProtectedRoute>
           }
         />
@@ -413,7 +418,7 @@ export default function App() {
           path="/settings/privacy"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="Privacy" />
+              <PrivacySettingsPage />
             </ProtectedRoute>
           }
         />
@@ -421,7 +426,7 @@ export default function App() {
           path="/settings/blocked-users"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="Blocked Users" />
+              <BlockedUsersPage />
             </ProtectedRoute>
           }
         />
@@ -429,7 +434,7 @@ export default function App() {
           path="/settings/help"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="Help & Support" />
+              <HelpSettingsPage />
             </ProtectedRoute>
           }
         />
@@ -437,7 +442,7 @@ export default function App() {
           path="/settings/about"
           element={
             <ProtectedRoute stage="home">
-              <ComingSoon title="About Campinity" />
+              <AboutSettingsPage />
             </ProtectedRoute>
           }
         />

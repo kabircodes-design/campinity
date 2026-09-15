@@ -239,7 +239,27 @@ export async function deleteAccount(password) {
     await deleteDoc(doc(db, 'usernames', username)).catch(() => {})
   }
 
-  // 2i. Delete the Firestore profile document itself.
+  // 2i. Radar location + this user's own blockedUsers subcollection —
+  // both added after this function was first written (radarLocations
+  // per radarLocationService.js, blockedUsers per blockService.js);
+  // neither was cleaned up before this pass, which would have left
+  // real data behind for a "deleted" account.
+  await deleteDoc(doc(db, 'radarLocations', uid)).catch(() => {})
+  const ownBlockedSnap = await getDocs(collection(db, 'users', uid, 'blockedUsers')).catch(() => ({ docs: [] }))
+  await commitInChunks(ownBlockedSnap.docs.map((b) => (batch) => batch.delete(b.ref)))
+
+  // 2j. Stories this user authored, and this user's own story likes.
+  // storyViews is deliberately excluded — firestore.rules makes that
+  // collection permanently undeletable, even by the viewer who
+  // created the record (allow update, delete: if false, by design —
+  // see storyViews' rule comment), so attempting it here would fail
+  // the whole batch atomically and break account deletion outright.
+  const ownStoriesSnap = await getDocs(query(collection(db, 'stories'), where('userId', '==', uid))).catch(() => ({ docs: [] }))
+  await commitInChunks(ownStoriesSnap.docs.map((s) => (batch) => batch.delete(s.ref)))
+  const ownStoryLikesSnap = await getDocs(query(collection(db, 'storyLikes'), where('uid', '==', uid))).catch(() => ({ docs: [] }))
+  await commitInChunks(ownStoryLikesSnap.docs.map((l) => (batch) => batch.delete(l.ref)))
+
+  // 2k. Delete the Firestore profile document itself.
   await deleteDoc(doc(db, 'users', uid)).catch(() => {})
 
   // 3. Delete Storage files: profile photo, cover photo, any student-id

@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, Timestamp, where } from 'firebase/firestore'
+import { addDoc, collection, doc, getCountFromServer, getDoc, getDocs, limit, orderBy, query, serverTimestamp, Timestamp, where } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { db, storage } from './firebase.js'
 
@@ -132,6 +132,26 @@ export async function getFeedPosts(currentUid, maxResults = 50) {
  * client-side below rather than via orderBy, for the same reason noted
  * on the composite-index issue this replaced.
  */
+/**
+ * Root-cause fix for "Profile shows 50 posts even after 80 were
+ * created": getUserPosts caps at maxResults=50 (correctly — the grid
+ * shouldn't download every post a user has ever made just to render a
+ * page), and both profile pages were computing postsCount from
+ * that SAME capped array's .length, conflating "posts loaded for
+ * display" with "total posts that exist." This is the real total,
+ * via Firestore's count() aggregation — one server-side count read
+ * regardless of whether the user has 3 posts or 3,000, never
+ * downloading the documents themselves. Same where() clauses as
+ * getUserPosts (own public posts), so this counts exactly what that
+ * grid would show if fully paginated — not a different definition of
+ * "post."
+ */
+export async function getUserPostCount(userId) {
+  const countQuery = query(collection(db, COLLECTION), where('userId', '==', userId), where('visibility', '==', 'public'))
+  const snap = await getCountFromServer(countQuery)
+  return snap.data().count
+}
+
 export async function getUserPosts(userId, currentUid, maxResults = 50) {
   const postsQuery = query(
     collection(db, COLLECTION),

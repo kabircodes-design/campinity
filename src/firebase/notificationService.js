@@ -16,6 +16,7 @@ import {
   writeBatch
 } from 'firebase/firestore'
 import { db } from './firebase.js'
+import { isBlockedByMe } from './blockService.js'
 
 /**
  * Schema, already established by this project's real security rules
@@ -57,12 +58,76 @@ function notificationsCollection(uid) {
   return collection(db, 'users', uid, 'notifications')
 }
 
+/**
+ * Real notification preferences (Settings > Notifications), enforced
+ * in exactly ONE place — createNotification below — rather than at
+ * each of the dozen+ call sites scattered across postService.js,
+ * profileService.js, chatService.js, communityService.js, etc. Every
+ * one of those already funnels through this single function, so this
+ * is the one change that makes every toggle genuinely real without
+ * touching any of them. Only the categories with an actual, existing
+ * notification type are exposed — no toggle invents a category this
+ * app doesn't otherwise produce.
+ */
+const NOTIFICATION_CATEGORY = {
+  like: 'likes',
+  comment_like: 'likes',
+  comment: 'comments',
+  reply: 'comments',
+  mention: 'comments',
+  pin: 'comments',
+  follow: 'follows',
+  message_request: 'messages',
+  message_request_accepted: 'messages',
+  announcement: 'communities'
+}
+
+export const NOTIFICATION_PREFERENCE_DEFAULTS = {
+  likes: true,
+  comments: true,
+  follows: true,
+  messages: true,
+  communities: true
+}
+
+export async function getNotificationPreferences(uid) {
+  if (!uid) return { ...NOTIFICATION_PREFERENCE_DEFAULTS }
+  const snap = await getDoc(doc(db, 'users', uid))
+  const stored = snap.exists() ? snap.data().notificationPreferences : null
+  return { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...(stored || {}) }
+}
+
+export async function updateNotificationPreferences(uid, preferences) {
+  if (!uid) throw new Error('You need to be signed in.')
+  await updateDoc(doc(db, 'users', uid), { notificationPreferences: preferences })
+}
+
 async function createNotification(targetUid, data) {
   // No self-notifications — mirrors the security rule's own
   // actorUid != uid requirement, checked client-side too so a caller
   // gets a clear no-op instead of a rules rejection for the common
   // case (e.g. liking your own post).
   if (data.actorUid === targetUid) return null
+
+  // Blocked-user notifications never reach the blocker (Settings task
+  // Part 3 — "notifications should respect block state") — checked
+  // centrally here rather than at every like/comment/follow call
+  // site, same reasoning as the category check just below.
+  if (data.actorUid) {
+    const blocked = await isBlockedByMe(targetUid, data.actorUid).catch(() => false)
+    if (blocked) return null
+  }
+
+  // Real enforcement, not a cosmetic toggle: a category the recipient
+  // has turned off never gets written at all, not just hidden client
+  // side. Uncategorized types (badge, level_up, share, invite — no
+  // corresponding Settings toggle) always send, matching "don't
+  // invent a control for something that isn't a real category."
+  const category = NOTIFICATION_CATEGORY[data.type]
+  if (category) {
+    const prefs = await getNotificationPreferences(targetUid).catch(() => NOTIFICATION_PREFERENCE_DEFAULTS)
+    if (prefs[category] === false) return null
+  }
 
   const notifRef = doc(notificationsCollection(targetUid))
   await setDoc(notifRef, {

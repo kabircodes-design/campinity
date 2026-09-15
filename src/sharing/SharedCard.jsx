@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, ImageOff } from 'lucide-react'
+import { Heart, ImageOff, Play } from 'lucide-react'
 import { getPostById } from '../firebase/postService.js'
+import { getStoryById } from '../firebase/storyService.js'
 import { getCanonicalUrl } from './shareTypes.js'
 
 /**
@@ -68,7 +69,38 @@ const SHARE_REGISTRY = {
   },
 
   shared_profile: { fetch: null, render: null, placeholderLabel: 'Shared profile' },
-  shared_story: { fetch: null, render: null, placeholderLabel: 'Shared story' },
+  shared_story: {
+    fetch: (referenceId) => getStoryById(referenceId),
+    // No standalone /story/:id viewer route exists in this app (only a
+    // canonical URL string in shareTypes.js, for Copy Link) — routing
+    // into the story owner's profile instead of a 404 is the correct,
+    // always-valid destination, matching "no broken route" (Part 20).
+    render: (story, preview, navigate) => (
+      <button
+        type="button"
+        onClick={() => story.username && navigate(`/student/${story.username}`)}
+        className="w-full text-left rounded-xl border border-gray-100 overflow-hidden hover:border-gray-200 transition-all duration-200"
+      >
+        <div className="relative w-full h-32 bg-gray-900">
+          {story.mediaType === 'image' ? (
+            <img src={story.mediaUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <>
+              <video src={story.mediaUrl} muted playsInline className="w-full h-full object-cover" />
+              <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+                <Play className="w-6 h-6 text-white" fill="white" />
+              </span>
+            </>
+          )}
+        </div>
+        <div className="p-3">
+          <p className="text-xs font-semibold text-gray-900 truncate">{story.displayName || 'Story'}</p>
+          <span className="text-[11px] font-semibold text-blue-600">View Story</span>
+        </div>
+      </button>
+    ),
+    unavailableMessage: 'This story is no longer available.'
+  },
   shared_event: { fetch: null, render: null, placeholderLabel: 'Shared event' },
   shared_community: { fetch: null, render: null, placeholderLabel: 'Shared community' },
   shared_club: { fetch: null, render: null, placeholderLabel: 'Shared club' },

@@ -157,6 +157,19 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // storyLikes/{storyId}_{uid} — idempotent per-user like record
+    // (storyService.js), same id-format convention as storyViews just
+    // above. Unlike a view, a like can be removed (unlike), so delete
+    // is allowed for the like's own owner; no update — a like is a
+    // binary exists/doesn't-exist relationship, same reasoning as
+    // follows/{followId} elsewhere in this file.
+    match /storyLikes/{likeId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
     // usernames/{username} — reservation collection. Unchanged from the
     // previous incident fix.
     match /usernames/{username} {
@@ -188,7 +201,18 @@ service cloud.firestore {
     // chatService.js's own MIN_GROUP_MEMBERS comment) a group chat must
     // list at least 3 participants at creation.
     match /chats/{chatId} {
-      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
+      // `resource == null` guard: getOrCreateChat()'s very first step
+      // (and getExistingChatStatus()) reads this exact path to check
+      // whether a chat ALREADY exists, for a pair of users who may be
+      // messaging each other for the very first time — i.e. the
+      // document legitimately does not exist yet. Without this guard,
+      // `resource.data.participants` is evaluated on a null resource
+      // for that get(), which Firestore treats as a rule-evaluation
+      // failure (permission-denied) rather than "not found" — so no
+      // brand-new 1:1 conversation could ever be started. Once the
+      // document exists, behavior is unchanged: only an actual
+      // participant may read it.
+      allow read: if isSignedIn() && (resource == null || request.auth.uid in resource.data.participants);
 
       // Message Request system: a pending chat's requestedBy must be
       // the actual creator (can't frame someone else as the requester),

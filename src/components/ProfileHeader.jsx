@@ -36,6 +36,7 @@ export default function ProfileHeader({
   onMessage,
   onOpenMessageRequest,
   messageState = 'none', // 'none' | 'pending_outgoing' | 'pending_incoming' | 'accepted' — see item 10, resolved from real chat data by the caller (StudentProfilePlaceholder.jsx), never guessed here
+  messageBusy = false, // true while getOrCreateChat() is in flight — disables the button so a double-click can't race two chat-creation attempts
   onShare,
   onOpenFollowers,
   onOpenFollowing,
@@ -222,8 +223,8 @@ export default function ProfileHeader({
             </button>
             <button
               type="button"
-              onClick={blocked ? undefined : messageState === 'pending_incoming' ? onOpenMessageRequest : onMessage}
-              disabled={blocked}
+              onClick={blocked || messageBusy ? undefined : messageState === 'pending_incoming' ? onOpenMessageRequest : onMessage}
+              disabled={blocked || messageBusy}
               aria-label={
                 blocked
                   ? 'Blocked'

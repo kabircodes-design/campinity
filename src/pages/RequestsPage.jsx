@@ -21,6 +21,7 @@ export default function RequestsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [actionBusyId, setActionBusyId] = useState(null)
+  const [actionError, setActionError] = useState('')
   const fetchedUidsRef = useRef(new Set())
 
   useEffect(() => {
@@ -54,11 +55,18 @@ export default function RequestsPage() {
     const uid = auth.currentUser?.uid
     if (!uid) return
     setActionBusyId(chatId)
+    setActionError('')
+    if (import.meta.env.DEV) console.debug('[CHAT REQUEST] accepting', { chatId, uid })
     try {
       await acceptMessageRequest(chatId, uid)
+      // Accepting only flips status on the SAME chat document (see
+      // acceptMessageRequest in chatService.js) — this is the exact
+      // same chatId the request was created under, never a new one.
+      if (import.meta.env.DEV) console.debug('[CHAT NAVIGATION] accepted, navigating to same chat', { chatId })
       navigate(`/messages/${chatId}`)
     } catch (err) {
-      console.error('Could not accept this request:', err)
+      console.error('[CHAT REQUEST] accept failed', { chatId, code: err?.code, message: err?.message })
+      setActionError(err?.message || 'Could not accept this request. Please try again.')
       setActionBusyId(null)
     }
   }
@@ -159,6 +167,17 @@ export default function RequestsPage() {
           )}
         </main>
       </div>
+
+      {actionError && (
+        <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-[999] w-[calc(100%-2rem)] max-w-[360px]">
+          <div className="flex items-center gap-2.5 rounded-xl bg-gray-900 text-white text-sm px-4 py-3 shadow-lg">
+            <p className="flex-1">{actionError}</p>
+            <button type="button" onClick={() => setActionError('')} className="text-gray-400 hover:text-white text-xs font-semibold">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

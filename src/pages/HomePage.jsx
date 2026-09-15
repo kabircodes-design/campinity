@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Sparkles, UserPlus } from 'lucide-react'
 import StoryBubble from '../components/StoryBubble.jsx'
+import StoryViewer from '../components/StoryViewer.jsx'
 import PostCard from '../components/PostCard.jsx'
 import PostComposer from '../components/PostComposer.jsx'
 import DesktopRightRail from '../components/DesktopRightRail.jsx'
@@ -66,6 +67,7 @@ export default function HomePage() {
   const { profile } = useAuth()
   const [posts, setPosts] = useState([])
   const [stories, setStories] = useState([])
+  const [storiesLoading, setStoriesLoading] = useState(true)
   const [viewedStoryIds, setViewedStoryIds] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -80,28 +82,56 @@ export default function HomePage() {
     let cancelled = false
     const uid = auth.currentUser?.uid
 
-    const loadFeed = async () => {
+    // Split from stories deliberately (Stories 2.0, Part 13) — Home's
+    // own loading gate previously awaited getFeedStories() and
+    // getViewedStoryIds() in the SAME Promise.all as the post feed,
+    // meaning the entire page stayed on a full-screen spinner until
+    // both stories queries resolved too. Posts now drive `loading`
+    // alone; stories load independently below and populate the tray
+    // progressively whenever they're ready, never blocking the feed.
+    const loadPosts = async () => {
       try {
-        const [postsData, storiesData, viewedIds] = await Promise.all([
-          getFeedPosts(uid),
-          getFeedStories(),
-          getViewedStoryIds(uid)
-        ])
+        const postsData = await getFeedPosts(uid)
         if (!cancelled) {
           const now = Date.now()
           const activePosts = postsData.filter((p) => !p.expiresAtMs || p.expiresAtMs > now)
           setPosts(activePosts)
-          setStories(storiesData)
-          setViewedStoryIds(viewedIds)
         }
       } catch (err) {
         if (!cancelled) setError(err?.message || 'Could not load the feed.')
       }
     }
 
-    loadFeed().finally(() => {
+    loadPosts().finally(() => {
       if (!cancelled) setLoading(false)
     })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const uid = auth.currentUser?.uid
+
+    const loadStories = async () => {
+      try {
+        const [storiesData, viewedIds] = await Promise.all([getFeedStories(), getViewedStoryIds(uid)])
+        if (!cancelled) {
+          setStories(storiesData)
+          setViewedStoryIds(viewedIds)
+        }
+      } catch {
+        // Stories failing to load is never fatal to Home — the tray
+        // just stays at "Your Story" only; no error banner for a
+        // secondary feature failing independently of the main feed.
+      } finally {
+        if (!cancelled) setStoriesLoading(false)
+      }
+    }
+
+    loadStories()
 
     return () => {
       cancelled = true
@@ -254,6 +284,15 @@ export default function HomePage() {
     return [addStory, ...otherGroups, moreStory]
   }, [stories, initials, myColorClass, profile])
 
+  // The subset of storyBubbles that actually have something to view —
+  // excludes "More" (never viewable) and "Your Story" when the user
+  // has no active stories yet (opens the composer instead, handled in
+  // StoryBubble.jsx). This is what the shared viewer's cross-group
+  // navigation (Part 11) steps through — index i's Next at its last
+  // story goes to index i+1 here, skipping bubbles with nothing to show.
+  const viewableGroups = useMemo(() => storyBubbles.filter((s) => !s.isMore && s.stories?.length > 0), [storyBubbles])
+  const [openGroupIndex, setOpenGroupIndex] = useState(null)
+
   const { showModal, showBanner, closeModal, dismissBanner } = useCampusVerificationReminder(profile)
 
   // The intro is a sibling of the loading/loaded branch below, not
@@ -332,29 +371,52 @@ export default function HomePage() {
 
         <section className={`mx-4 lg:mx-6 mb-5 py-0 ${entranceClass(80)}`}>
           <div className="flex items-start gap-3.5 overflow-x-auto scroll-hidden">
-            {storyBubbles.map((story) => {
-              const seen =
-                !story.isAdd && !story.isMore && story.stories?.length > 0
-                  ? story.stories.every((s) => viewedStoryIds.has(s.id))
-                  : false
-              return (
-                <StoryBubble
-                  key={story.id}
-                  story={story}
-                  seen={seen}
-                  onViewed={(storyId) => setViewedStoryIds((prev) => new Set(prev).add(storyId))}
-                  onDeleted={(storyId) => {
-                    setStories((prev) =>
-                      prev
-                        .map((group) => ({ ...group, stories: group.stories.filter((s) => s.id !== storyId) }))
-                        .filter((group) => group.stories.length > 0)
-                    )
-                  }}
-                />
-              )
-            })}
+            {/* "Your Story" never waits on the stories fetch — it only
+                needs `profile`, already loaded by the time Home renders. */}
+            <StoryBubble story={storyBubbles[0]} seen={false} onOpen={() => setOpenGroupIndex(viewableGroups.findIndex((g) => g.id === storyBubbles[0].id))} />
+
+            {storiesLoading ? (
+              // Lightweight skeleton (Part 13) — everyone else's
+              // stories populate progressively without ever blocking
+              // Home's own render.
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-1.5 w-16 flex-shrink-0">
+                  <div className="w-[60px] h-[60px] rounded-full bg-gray-100 animate-pulse" />
+                  <div className="h-2 w-10 rounded bg-gray-100 animate-pulse" />
+                </div>
+              ))
+            ) : (
+              storyBubbles.slice(1).map((story) => {
+                const seen = story.stories?.length > 0 ? story.stories.every((s) => viewedStoryIds.has(s.id)) : false
+                return (
+                  <StoryBubble
+                    key={story.id}
+                    story={story}
+                    seen={seen}
+                    onOpen={() => setOpenGroupIndex(viewableGroups.findIndex((g) => g.id === story.id))}
+                  />
+                )
+              })
+            )}
           </div>
         </section>
+
+        {openGroupIndex !== null && viewableGroups[openGroupIndex] && (
+          <StoryViewer
+            groups={viewableGroups}
+            groupIndex={openGroupIndex}
+            onClose={() => setOpenGroupIndex(null)}
+            onChangeGroup={setOpenGroupIndex}
+            onViewed={(storyId) => setViewedStoryIds((prev) => new Set(prev).add(storyId))}
+            onDeleted={(storyId) => {
+              setStories((prev) =>
+                prev
+                  .map((group) => ({ ...group, stories: group.stories.filter((s) => s.id !== storyId) }))
+                  .filter((group) => group.stories.length > 0)
+              )
+            }}
+          />
+        )}
 
         <nav className={`sticky top-14 z-30 bg-white flex items-center gap-6 px-4 lg:px-6 border-b border-gray-100 mb-3 ${entranceClass(140)}`}>
           {feedTabs.map((tab) => {

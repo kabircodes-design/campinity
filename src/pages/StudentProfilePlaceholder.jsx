@@ -15,7 +15,7 @@ import {
   unfollowUser,
   getMutualFollowers
 } from '../firebase/profileService.js'
-import { getAvatarColor, getInitials, getUserPosts, getPostById } from '../firebase/postService.js'
+import { getAvatarColor, getInitials, getUserPosts, getUserPostCount, getPostById } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
 import { getOrCreateChat, getExistingChatStatus } from '../firebase/chatService.js'
 
@@ -46,12 +46,15 @@ export default function StudentProfilePlaceholder() {
 
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
+  const [postCount, setPostCount] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
   const [isFollowing, setIsFollowing] = useState(false)
   const [mutualFollowers, setMutualFollowers] = useState([])
   const [chatStatusInfo, setChatStatusInfo] = useState(null)
+  const [messageError, setMessageError] = useState('')
+  const [messageBusy, setMessageBusy] = useState(false)
 
   const [pinnedPosts, setPinnedPosts] = useState([])
   const [pinnedLoading, setPinnedLoading] = useState(false)
@@ -74,14 +77,16 @@ export default function StudentProfilePlaceholder() {
         }
         setProfile(data)
 
-        const [postsData, followingState, mutuals, chatStatus] = await Promise.all([
+        const [postsData, postCountData, followingState, mutuals, chatStatus] = await Promise.all([
           getUserPosts(data.uid, currentUid).catch(() => []),
+          getUserPostCount(data.uid).catch(() => null),
           currentUid ? checkIsFollowing(currentUid, data.uid) : false,
           currentUid ? getMutualFollowers(currentUid, data.uid) : [],
           currentUid ? getExistingChatStatus(currentUid, data.uid).catch(() => null) : null
         ])
         if (cancelled) return
         setPosts(postsData)
+        setPostCount(postCountData)
         setIsFollowing(followingState)
         setMutualFollowers(mutuals)
         setChatStatusInfo(chatStatus)
@@ -166,11 +171,20 @@ export default function StudentProfilePlaceholder() {
 
   const handleMessage = async () => {
     if (!currentUid || !profile) return
+    setMessageError('')
+    setMessageBusy(true)
     try {
-      const { chatId } = await getOrCreateChat(currentUid, profile.uid)
+      const { chatId, status, isNew } = await getOrCreateChat(currentUid, profile.uid)
+      if (import.meta.env.DEV) console.debug('[CHAT NAVIGATION] navigating from profile', { chatId, status, isNew, target: `/messages/${chatId}` })
       navigate(`/messages/${chatId}`)
     } catch (err) {
+      // Real fix, not just a debugging aid: this used to only
+      // console.error and leave the user staring at a button that
+      // appeared to do nothing on failure (blocked, permission issue,
+      // network blip) — now it's a visible, dismissible message.
       console.error('Could not open or start this conversation:', err)
+      setMessageError(err?.message || 'Could not open this conversation. Please try again.')
+      setMessageBusy(false)
     }
   }
 
@@ -236,7 +250,7 @@ export default function StudentProfilePlaceholder() {
     college: college?.name || '',
     initials: getInitials(profile.displayName || 'Student'),
     colorClass: getAvatarColor(profile.uid),
-    postsCount: posts.length,
+    postsCount: postCount ?? posts.length,
     followers: profile.followersCount || 0,
     following: profile.followingCount || 0,
     communitiesCount: communitiesLoadedOnce ? communities.length : undefined
@@ -277,11 +291,23 @@ export default function StudentProfilePlaceholder() {
           onMessage={handleMessage}
           onOpenMessageRequest={handleOpenMessageRequest}
           messageState={messageState}
+          messageBusy={messageBusy}
           onShare={handleShare}
           onOpenFollowers={() => navigate(`/followers/${profile.username}`)}
           onOpenFollowing={() => navigate(`/following/${profile.username}`)}
           mutualFollowers={mutualFollowers}
         />
+
+        {messageError && (
+          <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-[999] w-[calc(100%-2rem)] max-w-[360px]">
+            <div className="flex items-center gap-2.5 rounded-xl bg-gray-900 text-white text-sm px-4 py-3 shadow-lg">
+              <p className="flex-1">{messageError}</p>
+              <button type="button" onClick={() => setMessageError('')} className="text-gray-400 hover:text-white text-xs font-semibold">
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         <nav className="sticky top-14 z-30 flex items-center bg-white border-b border-gray-100">
           {tabs.map((tab) => (

@@ -407,6 +407,20 @@ export async function checkIsFollowing(followerId, followingId) {
 }
 
 /**
+ * Bulk equivalent of checkIsFollowing — ONE query for "everyone I
+ * follow" instead of N individual per-candidate reads. Built for
+ * Radar's discovery cards (Part 10's explicit "do not fetch the same
+ * profiles repeatedly" / "repeated queries" warning): checking follow
+ * state for, say, 24 candidates one-by-one would be 24 reads; this is
+ * always exactly 1, regardless of how many candidates are being shown.
+ */
+export async function getFollowingSet(uid) {
+  if (!uid) return new Set()
+  const snap = await getDocs(query(collection(db, 'follows'), where('followerId', '==', uid)))
+  return new Set(snap.docs.map((d) => d.data().followingId))
+}
+
+/**
  * Paginated, searchable follower/following list — the actual backend
  * for the redesigned bottom-sheet requirement (search, infinite
  * scroll). `direction` picks which side of the follows/{} record to

@@ -30,7 +30,7 @@ export default function RadarScanner({ matches, onSelectMatch, size = 320 }) {
   const minRadius = size * 0.22
   const maxRadius = size * 0.46
 
-  const MAX_TRACKED_DISTANCE = 10 // meters — matches RADAR_RADIUS_METERS in radarLocationService.js; anything beyond this was already filtered out server-query-side, this is just the positioning scale
+  const MAX_TRACKED_DISTANCE = 300 // meters — matches RADAR_RADIUS_METERS in radarLocationService.js; anything beyond this was already filtered out server-query-side, this is just the positioning scale. Matches with no confirmed GPS distance (campus-only matches) fall back to this value via the ?? below, placing them at the outer ring rather than crowding the center.
 
 const positioned = useMemo(() => {
     return matches.map((match) => {

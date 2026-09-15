@@ -10,7 +10,7 @@ import CommunityCard from '../components/CommunityCard.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
-import { getAvatarColor, getInitials, getUserPosts, getPostById } from '../firebase/postService.js'
+import { getAvatarColor, getInitials, getUserPosts, getUserPostCount, getPostById } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById, getOwnedCommunities } from '../firebase/communityService.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
@@ -70,6 +70,7 @@ export default function ProfilePage() {
   const { profile } = useAuth()
   const [myPosts, setMyPosts] = useState([])
   const [postsError, setPostsError] = useState('')
+  const [postCount, setPostCount] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -110,6 +111,15 @@ export default function ProfilePage() {
         if (!cancelled) setPostsError(err?.message || 'Could not load your posts.')
       }
     }
+
+    // Separate from loadPosts deliberately — the grid's own loading
+    // state must not wait on this, and this must not wait on the grid;
+    // a count() aggregation read is fast and independent of maxResults.
+    getUserPostCount(uid)
+      .then((count) => {
+        if (!cancelled) setPostCount(count)
+      })
+      .catch(() => {})
 
     loadPosts().finally(() => {
       if (!cancelled) setLoading(false)
@@ -257,10 +267,22 @@ export default function ProfilePage() {
     college: college?.name || '',
     initials: getInitials(profile.displayName || auth.currentUser?.displayName || 'Student'),
     colorClass: getAvatarColor(currentUid || profile.username),
-    postsCount: myPosts.length,
+    // postCount starts null (count query in flight) — fall back to the
+    // loaded grid's length for that brief instant rather than showing
+    // 0, then swap to the real total the moment the count resolves.
+    postsCount: postCount ?? myPosts.length,
     followers: profile.followersCount || 0,
     following: profile.followingCount || 0,
     communitiesCount: communitiesLoadedOnce ? communities.length : undefined
+  }
+
+  // One handler for both delete call sites (Posts grid, Pinned tab) so
+  // postCount can never drift out of sync with one of them by only
+  // being wired into the other.
+  const handlePostDeleted = (deletedId) => {
+    setMyPosts((prev) => prev.filter((p) => p.id !== deletedId))
+    setPinnedPosts((prev) => prev.filter((p) => p.id !== deletedId))
+    setPostCount((prev) => (typeof prev === 'number' ? Math.max(0, prev - 1) : prev))
   }
 
   const handleShare = () => {
@@ -382,7 +404,7 @@ export default function ProfilePage() {
                   <PostCard
                     key={post.id}
                     post={post}
-                    onDeleted={(deletedId) => setMyPosts((prev) => prev.filter((p) => p.id !== deletedId))}
+                    onDeleted={handlePostDeleted}
                   />
                 ))}
               </div>
@@ -404,16 +426,7 @@ export default function ProfilePage() {
                   <PostCard
                     key={post.id}
                     post={post}
-                    onDeleted={(deletedId) => {
-                      setPinnedPosts((prev) => prev.filter((p) => p.id !== deletedId))
-                      // A deleted post can no longer be pinned either —
-                      // keep myPosts in sync too, since deleting a
-                      // pinned post from the Pinned tab should also
-                      // update the Posts tab/count without requiring a
-                      // manual refresh, matching the same-post-same-
-                      // behavior-everywhere requirement.
-                      setMyPosts((prev) => prev.filter((p) => p.id !== deletedId))
-                    }}
+                    onDeleted={handlePostDeleted}
                   />
                 ))}
               </div>
