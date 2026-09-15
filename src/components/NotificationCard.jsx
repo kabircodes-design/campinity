@@ -16,7 +16,9 @@ const ICON_STYLES = {
   badge: { Icon: Award, bg: 'bg-amber-500', fill: true },
   level_up: { Icon: Star, bg: 'bg-violet-500', fill: true },
   invite: { Icon: Mail, bg: 'bg-amber-500', fill: false },
-  announcement: { Icon: Megaphone, bg: 'bg-violet-500', fill: false }
+  announcement: { Icon: Megaphone, bg: 'bg-violet-500', fill: false },
+  message_request: { Icon: Mail, bg: 'bg-blue-600', fill: false },
+  message_request_accepted: { Icon: MessageCircle, bg: 'bg-emerald-500', fill: false }
 }
 
 /**
@@ -45,7 +47,11 @@ export default function NotificationCard({ notification, onRead, onDelete }) {
   const handleClick = () => {
     if (!notification.read) onRead(notification.id)
 
-    if (notification.type === 'follow' && notification.actorUsername) {
+    if (notification.type === 'message_request' && notification.chatId) {
+      navigate('/messages/requests')
+    } else if (notification.type === 'message_request_accepted' && notification.chatId) {
+      navigate(`/messages/${notification.chatId}`)
+    } else if (notification.type === 'follow' && notification.actorUsername) {
       navigate(`/student/${notification.actorUsername}`)
     } else if (notification.postId && notification.commentId) {
       // #comment-{id} matches the anchor id PostDetailPage.jsx's comment

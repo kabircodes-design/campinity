@@ -17,7 +17,7 @@ import {
 } from '../firebase/profileService.js'
 import { getAvatarColor, getInitials, getUserPosts, getPostById } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
-import { getOrCreateChat } from '../firebase/chatService.js'
+import { getOrCreateChat, getExistingChatStatus } from '../firebase/chatService.js'
 
 /**
  * Real implementation — this file's own name ("Placeholder") confirms
@@ -51,6 +51,7 @@ export default function StudentProfilePlaceholder() {
 
   const [isFollowing, setIsFollowing] = useState(false)
   const [mutualFollowers, setMutualFollowers] = useState([])
+  const [chatStatusInfo, setChatStatusInfo] = useState(null)
 
   const [pinnedPosts, setPinnedPosts] = useState([])
   const [pinnedLoading, setPinnedLoading] = useState(false)
@@ -73,15 +74,17 @@ export default function StudentProfilePlaceholder() {
         }
         setProfile(data)
 
-        const [postsData, followingState, mutuals] = await Promise.all([
+        const [postsData, followingState, mutuals, chatStatus] = await Promise.all([
           getUserPosts(data.uid, currentUid).catch(() => []),
           currentUid ? checkIsFollowing(currentUid, data.uid) : false,
-          currentUid ? getMutualFollowers(currentUid, data.uid) : []
+          currentUid ? getMutualFollowers(currentUid, data.uid) : [],
+          currentUid ? getExistingChatStatus(currentUid, data.uid).catch(() => null) : null
         ])
         if (cancelled) return
         setPosts(postsData)
         setIsFollowing(followingState)
         setMutualFollowers(mutuals)
+        setChatStatusInfo(chatStatus)
       })
       .catch(() => {
         if (!cancelled) setNotFound(true)
@@ -171,6 +174,20 @@ export default function StudentProfilePlaceholder() {
     }
   }
 
+  const handleOpenMessageRequest = () => navigate('/messages/requests')
+
+  // Item 10 — resolved from the real chat doc (chatStatusInfo), never
+  // hardcoded: no chat yet or an already-accepted one both read as a
+  // plain "Message" button; a pending chat reads as outgoing (I'm
+  // requestedBy) or incoming (they are) depending on who actually sent it.
+  const messageState = !chatStatusInfo
+    ? 'none'
+    : chatStatusInfo.status !== 'pending'
+      ? 'accepted'
+      : chatStatusInfo.requestedBy === currentUid
+        ? 'pending_outgoing'
+        : 'pending_incoming'
+
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({ title: profile?.displayName, url: window.location.href }).catch(() => {})
@@ -258,6 +275,8 @@ export default function StudentProfilePlaceholder() {
           onFollow={handleFollow}
           onUnfollow={handleUnfollow}
           onMessage={handleMessage}
+          onOpenMessageRequest={handleOpenMessageRequest}
+          messageState={messageState}
           onShare={handleShare}
           onOpenFollowers={() => navigate(`/followers/${profile.username}`)}
           onOpenFollowing={() => navigate(`/following/${profile.username}`)}

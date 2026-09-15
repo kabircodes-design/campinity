@@ -34,6 +34,8 @@ export default function ProfileHeader({
   onFollow,
   onUnfollow,
   onMessage,
+  onOpenMessageRequest,
+  messageState = 'none', // 'none' | 'pending_outgoing' | 'pending_incoming' | 'accepted' — see item 10, resolved from real chat data by the caller (StudentProfilePlaceholder.jsx), never guessed here
   onShare,
   onOpenFollowers,
   onOpenFollowing,
@@ -220,11 +222,35 @@ export default function ProfileHeader({
             </button>
             <button
               type="button"
-              onClick={onMessage}
-              aria-label="Message"
-              className="w-11 h-11 flex-shrink-0 rounded-full border border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 transition-all duration-300"
+              onClick={blocked ? undefined : messageState === 'pending_incoming' ? onOpenMessageRequest : onMessage}
+              disabled={blocked}
+              aria-label={
+                blocked
+                  ? 'Blocked'
+                  : messageState === 'pending_outgoing'
+                    ? 'Request sent'
+                    : messageState === 'pending_incoming'
+                      ? 'View message request'
+                      : 'Message'
+              }
+              title={
+                blocked
+                  ? "You've blocked this person"
+                  : messageState === 'pending_outgoing'
+                    ? 'Request sent — waiting for them to accept'
+                    : messageState === 'pending_incoming'
+                      ? 'They sent you a message request'
+                      : 'Message'
+              }
+              className={`flex-shrink-0 rounded-full border flex items-center justify-center transition-all duration-300 ${
+                messageState === 'pending_outgoing' || messageState === 'pending_incoming'
+                  ? 'h-11 px-3.5 gap-1.5 border-blue-100 bg-blue-50 text-blue-600'
+                  : 'w-11 h-11 border-gray-200 text-gray-600 hover:border-gray-300'
+              } ${blocked ? 'opacity-40 cursor-not-allowed' : ''}`}
             >
-              <MessageCircle className="w-4 h-4" />
+              <MessageCircle className="w-4 h-4 flex-shrink-0" />
+              {messageState === 'pending_outgoing' && <span className="text-xs font-semibold whitespace-nowrap">Request Sent</span>}
+              {messageState === 'pending_incoming' && <span className="text-xs font-semibold whitespace-nowrap">Message Request</span>}
             </button>
           </>
         )}

@@ -265,6 +265,29 @@ export async function createFollowNotification({ targetUid, actorUid, actorName,
   })
 }
 
+/** Message Request system — see chatService.js's getOrCreateChat/acceptMessageRequest, the only two callers. */
+export async function createMessageRequestNotification({ targetUid, actorUid, actorName, actorAvatar, actorUsername, chatId }) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    actorUsername: actorUsername || '',
+    type: 'message_request',
+    chatId
+  })
+}
+
+export async function createMessageRequestAcceptedNotification({ targetUid, actorUid, actorName, actorAvatar, actorUsername, chatId }) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    actorUsername: actorUsername || '',
+    type: 'message_request_accepted',
+    chatId
+  })
+}
+
 /**
  * Community announcements — fans out to every member. Uses
  * communityService.js's getMembers (already built) to enumerate

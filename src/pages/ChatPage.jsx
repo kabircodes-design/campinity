@@ -241,7 +241,7 @@ export default function ChatPage() {
 
   const isPending = chat?.status === 'pending'
   const isMyRequest = isPending && chat?.requestedBy === currentUid
-  const pendingLimitReached = isMyRequest && (chat?.pendingMessageCount || 0) >= 3
+  const pendingLimitReached = isMyRequest && (chat?.pendingMessageCount || 0) >= 1
   const otherOnline = !isGroup && isOnline(otherProfile)
 
   const handleCall = (type) => {

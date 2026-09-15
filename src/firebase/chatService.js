@@ -19,7 +19,10 @@ import {
 } from 'firebase/firestore'
 import { db, storage } from './firebase.js'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { checkIsFollowing } from './profileService.js'
+import { checkIsFollowing, getUserProfile } from './profileService.js'
+import { isBlockedByMe } from './blockService.js'
+import { createMessageRequestNotification, createMessageRequestAcceptedNotification } from './notificationService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { SHARE_TYPE_LABELS } from '../sharing/shareTypes.js'
 import { awardXP, hasReachedDailyCap } from '../gamification/xpService.js'
 
@@ -87,6 +90,21 @@ export function subscribeToUserChats(uid, onData, onError) {
   )
 }
 
+/**
+ * Read-only lookup for the profile Message button's relationship state
+ * (item 10 of the Message Request spec) — never creates anything, unlike
+ * getOrCreateChat, since merely viewing a profile must never itself
+ * start a request. Returns null when no chat exists yet at all.
+ */
+export async function getExistingChatStatus(currentUid, otherUid) {
+  if (!currentUid || !otherUid) return null
+  const chatId = chatDocId(currentUid, otherUid)
+  const snap = await getDoc(chatDoc(chatId))
+  if (!snap.exists()) return null
+  const data = snap.data()
+  return { chatId, status: data.status, requestedBy: data.requestedBy || null }
+}
+
 /** Resolves a single chat's metadata + the other participant's uid — what useChat.js needs. */
 export async function getChat(chatId, uid) {
   const snap = await getDoc(chatDoc(chatId))
@@ -120,6 +138,20 @@ async function shouldStartAsRequest(uidA, uidB) {
   return !aFollowsB && !bFollowsA
 }
 
+/**
+ * Only checks the direction this client is actually allowed to read —
+ * "have I blocked them." Whether THEY have blocked ME can only be
+ * enforced server-side (firestore.rules' chatIsBlocked()): a user's own
+ * blockedUsers subcollection is structurally unreadable by anyone else
+ * (see blockService.js), so there is no client-side way to check that
+ * direction without leaking block state to the blocked party, which is
+ * exactly what that design deliberately prevents.
+ */
+async function assertNotBlockedByMe(currentUid, otherUid) {
+  const blocked = await isBlockedByMe(currentUid, otherUid).catch(() => false)
+  if (blocked) throw new Error("You've blocked this person. Unblock them to send a message.")
+}
+
 /** Gets an existing chat or creates one, deciding pending/accepted. Returns { chatId, status, isNew }. */
 export async function getOrCreateChat(currentUid, otherUid) {
   if (!currentUid || !otherUid) throw new Error('Both participants are required.')
@@ -131,32 +163,64 @@ export async function getOrCreateChat(currentUid, otherUid) {
     return { chatId, status: existingSnap.data().status, isNew: false }
   }
 
+  await assertNotBlockedByMe(currentUid, otherUid)
+
   const startAsRequest = await shouldStartAsRequest(currentUid, otherUid)
   const status = startAsRequest ? 'pending' : 'accepted'
 
-  await runTransaction(db, async (transaction) => {
-    const snap = await transaction.get(chatDoc(chatId))
-    if (snap.exists()) return
-    transaction.set(chatDoc(chatId), {
-      participants: [currentUid, otherUid],
-      status,
-      requestedBy: status === 'pending' ? currentUid : null,
-      pendingMessageCount: 0,
-      pinnedBy: [],
-      mutedBy: [],
-      archivedBy: [],
-      lastMessage: '',
-      lastMessageAt: serverTimestamp(),
-      lastSenderId: null,
-      readBy: [currentUid, otherUid],
-      createdAt: serverTimestamp()
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(chatDoc(chatId))
+      if (snap.exists()) return
+      transaction.set(chatDoc(chatId), {
+        participants: [currentUid, otherUid],
+        status,
+        requestedBy: status === 'pending' ? currentUid : null,
+        pendingMessageCount: 0,
+        pinnedBy: [],
+        mutedBy: [],
+        archivedBy: [],
+        lastMessage: '',
+        lastMessageAt: serverTimestamp(),
+        lastSenderId: null,
+        readBy: [currentUid, otherUid],
+        createdAt: serverTimestamp()
+      })
     })
-  })
+  } catch (err) {
+    // The one case a client-side check can't catch: the OTHER user has
+    // blocked ME. firestore.rules' chatIsBlocked() rejects the create
+    // with permission-denied — surfaced as a generic message, never
+    // "they've blocked you," matching blockService.js's own stated
+    // privacy requirement that a blocked user must never be able to
+    // detect the block.
+    if (err?.code === 'permission-denied') {
+      throw new Error("You can't message this person right now.")
+    }
+    throw err
+  }
+
+  // Real request notification — fire-and-forget, never blocks the
+  // sender's own send/navigate flow on a notification write succeeding.
+  if (status === 'pending') {
+    getUserProfile(currentUid)
+      .then((actorProfile) =>
+        createMessageRequestNotification({
+          targetUid: otherUid,
+          actorUid: currentUid,
+          actorName: actorProfile?.displayName || 'Someone',
+          actorAvatar: getProfileIdentityImage(actorProfile) || '',
+          actorUsername: actorProfile?.username || '',
+          chatId
+        })
+      )
+      .catch(() => {})
+  }
 
   return { chatId, status, isNew: true }
 }
 
-const PENDING_MESSAGE_LIMIT = 3 // configurable — how many messages the requester can send before the receiver accepts
+const PENDING_MESSAGE_LIMIT = 1 // Instagram-style: exactly one message allowed while a request is pending
 
 /**
  * Extended for the Sharing System (Phase 1) — the 4th `options`
@@ -336,10 +400,27 @@ export function subscribeToSentPendingChats(uid, callback) {
 export async function acceptMessageRequest(chatId, receiverUid) {
   const snap = await getDoc(chatDoc(chatId))
   if (!snap.exists()) throw new Error('This request no longer exists.')
-  if (snap.data().requestedBy === receiverUid) {
+  const data = snap.data()
+  if (data.requestedBy === receiverUid) {
     throw new Error('Only the recipient can accept a message request.')
   }
   await updateDoc(chatDoc(chatId), { status: 'accepted' })
+
+  const senderUid = data.requestedBy
+  if (senderUid) {
+    getUserProfile(receiverUid)
+      .then((actorProfile) =>
+        createMessageRequestAcceptedNotification({
+          targetUid: senderUid,
+          actorUid: receiverUid,
+          actorName: actorProfile?.displayName || 'Someone',
+          actorAvatar: getProfileIdentityImage(actorProfile) || '',
+          actorUsername: actorProfile?.username || '',
+          chatId
+        })
+      )
+      .catch(() => {})
+  }
 }
 
 /** Real delete — "sender isn't notified" per the brief, deliberately no notification call. */
