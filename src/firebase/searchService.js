@@ -22,7 +22,13 @@ function mapUserDoc(docSnap) {
     year: data.year || '',
     avatar: data.avatar || data.photoURL || '',
     initials: getInitials(displayName),
-    colorClass: getAvatarColor(docSnap.id)
+    colorClass: getAvatarColor(docSnap.id),
+    // Additive — existing callers (the real Search page) simply don't
+    // read these two; added for AdminUserVerificationPage.jsx's real
+    // user-lookup + verification-status view, reusing this search
+    // instead of a second one.
+    verifiedCampus: Boolean(data.verifiedCampus),
+    moderationStatus: data.moderationStatus || null
   }
 }
 

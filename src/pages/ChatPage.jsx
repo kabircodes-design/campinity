@@ -35,6 +35,7 @@ import { getCollegeById } from '../data/dummyColleges.js'
 import { useChat } from '../hooks/useChat.js'
 import { useMessages } from '../hooks/useMessages.js'
 import { useCallActions } from '../context/CallContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 
 function dayLabelFor(timestamp) {
   if (!timestamp?.toDate) return ''
@@ -146,11 +147,7 @@ export default function ChatPage() {
       })
     : listAllChats
 
-  const [profile, setProfile] = useState(null)
-  useEffect(() => {
-    const uid = auth.currentUser?.uid
-    if (uid) getUserProfile(uid).then(setProfile).catch(() => {})
-  }, [])
+  const { profile } = useAuth()
 
   useEffect(() => {
     const uid = auth.currentUser?.uid

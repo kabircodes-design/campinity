@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom'
-import { useAuthUser } from '../hooks/useAuthUser.js'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { useIsAdmin } from '../../hooks/useIsAdmin.js'
 import Loader from './Loader.jsx'
 
@@ -33,7 +33,15 @@ export function isCampusVerified(profile) {
 }
 
 export default function ProtectedRoute({ stage, children }) {
-  const { user, profile, loading } = useAuthUser()
+  // Reads the ONE shared, persistent auth subscription (AuthContext,
+  // mounted once in main.jsx) instead of calling useAuthUser() itself
+  // — this used to create a brand-new onAuthStateChanged + profile
+  // onSnapshot + presence-heartbeat listener on every single
+  // navigation (every route has its own ProtectedRoute instance), which
+  // is why `loading` went back to true and this component's own
+  // spinner flashed on every page change. Now `loading` only matters
+  // once, at initial app load.
+  const { user, profile, loading } = useAuth()
   const { isAdmin, loading: adminLoading } = useIsAdmin()
   const location = useLocation()
 
@@ -89,7 +97,7 @@ export default function ProtectedRoute({ stage, children }) {
 }
 
 export function PublicRoute({ children }) {
-  const { user, profile, loading } = useAuthUser()
+  const { user, profile, loading } = useAuth()
 
   if (loading) return <FullScreenLoader />
 

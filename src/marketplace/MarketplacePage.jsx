@@ -3,14 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import {
   Backpack,
   BarChart3,
-  Bell,
   BookOpen,
   Briefcase,
   Laptop,
-  MessageCircle,
   Package,
   Plus,
-  Radar,
   Search,
   Shirt,
   ShoppingBag,
@@ -18,19 +15,12 @@ import {
   Tag,
   UtensilsCrossed
 } from 'lucide-react'
-import BottomNav from '../components/BottomNav.jsx'
-import DesktopSidebar from '../components/DesktopSidebar.jsx'
-import Avatar from '../components/Avatar.jsx'
-import Logo from '../components/Logo.jsx'
 import ProductCard from '../components/ProductCard.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
-import { getUserProfile } from '../firebase/profileService.js'
 import { getMarketplaceProducts, CATEGORIES } from '../firebase/marketplaceService.js'
-import { subscribeToUnreadCount } from '../firebase/notificationService.js'
 import { getCollegeById } from '../data/dummyColleges.js'
-import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { getAvatarColor, getInitials } from '../firebase/postService.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 // Real categories only (marketplaceService.CATEGORIES, the same list
 // CreateProductPage already writes into every product) mapped to a
@@ -61,19 +51,16 @@ const CATEGORY_META = {
  */
 export default function MarketplacePage() {
   const navigate = useNavigate()
-  const [profile, setProfile] = useState(null)
+  // profile now comes from the shared AuthContext (see AppShell.jsx) —
+  // this page previously fetched it independently just to feed a
+  // header/sidebar it no longer renders itself.
+  const { profile } = useAuth()
   const [myCollegeName, setMyCollegeName] = useState('')
-  const [unreadNotifCount, setUnreadNotifCount] = useState(0)
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeCategory, setActiveCategory] = useState('All')
   const [searchTerm, setSearchTerm] = useState('')
-
-  useEffect(() => {
-    const uid = auth.currentUser?.uid
-    if (uid) getUserProfile(uid).then(setProfile).catch(() => {})
-  }, [])
 
   useEffect(() => {
     if (!profile?.collegeId) return
@@ -87,12 +74,6 @@ export default function MarketplacePage() {
       cancelled = true
     }
   }, [profile?.collegeId])
-
-  useEffect(() => {
-    const uid = auth.currentUser?.uid
-    const unsubscribe = subscribeToUnreadCount(uid, setUnreadNotifCount)
-    return () => unsubscribe()
-  }, [])
 
   const load = () => {
     setLoading(true)
@@ -168,9 +149,6 @@ export default function MarketplacePage() {
     [products]
   )
 
-  const initials = getInitials(profile?.displayName || '')
-  const myColorClass = getAvatarColor(auth.currentUser?.uid || profile?.displayName)
-
   const gridTitle = normalizedSearch
     ? `Results for "${searchTerm.trim()}"`
     : activeCategory === 'All'
@@ -178,85 +156,8 @@ export default function MarketplacePage() {
       : activeCategory
 
   return (
-    <>
-      <div
-        className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:gap-3 lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]"
-        style={{ backgroundColor: '#f8fafc' }}
-      >
-        <DesktopSidebar unreadNotifications={unreadNotifCount} profile={profile} />
-
-        <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
-          {/* Header — same treatment as the finished Home page (duplicated
-              here rather than extracted, since Home is explicitly final
-              and must not be touched to enable a refactor). */}
-          <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
-            <div className="h-14 flex items-center gap-3 px-4 lg:px-6">
-              <button
-                type="button"
-                onClick={() => navigate('/home')}
-                aria-label="Campinity — go to Home"
-                className="lg:hidden flex items-center flex-shrink-0"
-              >
-                <Logo className="w-7 h-7" withWordmark />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate('/search')}
-                className="group relative hidden lg:flex flex-1 max-w-md mx-auto items-center text-left"
-                aria-label="Search Campinity"
-              >
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-colors duration-200 group-hover:text-gray-500" />
-                <span className="flex items-center justify-between w-full rounded-full border border-gray-200 bg-gray-50 pl-10 pr-2.5 py-2 text-sm text-gray-400 transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)]">
-                  Search for people, communities, posts...
-                  <kbd className="flex-shrink-0 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">
-                    Ctrl K
-                  </kbd>
-                </span>
-              </button>
-
-              <div className="flex items-center gap-1 ml-auto">
-                <button
-                  type="button"
-                  aria-label="Radar"
-                  onClick={() => navigate('/radar')}
-                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
-                >
-                  <Radar className="w-5 h-5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Messages"
-                  onClick={() => navigate('/messages')}
-                  className="relative hidden lg:flex w-9 h-9 rounded-full items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
-                >
-                  <MessageCircle className="w-5 h-5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Notifications"
-                  onClick={() => navigate('/notifications')}
-                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
-                >
-                  <Bell className="w-5 h-5" />
-                  {unreadNotifCount > 0 && (
-                    <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />
-                  )}
-                </button>
-                {profile && (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/profile')}
-                    aria-label="Your profile"
-                    className="hidden lg:flex items-center ml-1 rounded-full hover:bg-gray-100 p-0.5 transition-all duration-200"
-                  >
-                    <Avatar initials={initials} colorClass={myColorClass} size="sm" src={getProfileIdentityImage(profile) || undefined} />
-                  </button>
-                )}
-              </div>
-            </div>
-          </header>
-
+    <div className="h-full lg:grid lg:gap-3 lg:[grid-template-columns:minmax(0,1fr)_minmax(260px,320px)] lg:overflow-hidden">
+      <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
           <div className="mx-auto max-w-[560px] lg:max-w-[860px] px-4 lg:px-6 pt-5 pb-24">
             {/* Hero — compact, per the explicit "not giant" instruction */}
             <div
@@ -542,11 +443,6 @@ export default function MarketplacePage() {
             </button>
           </div>
         </aside>
-      </div>
-
-      <div className="lg:hidden">
-        <BottomNav />
-      </div>
-    </>
+    </div>
   )
 }

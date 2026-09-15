@@ -6,6 +6,7 @@ import { PostsProvider } from './hooks/usePosts.jsx'
 import { ThemeProvider } from './theme/ThemeProvider.jsx'
 import { PostingStatusProvider } from './context/PostingStatusContext.jsx'
 import { CallProvider } from './context/CallContext.jsx'
+import { AuthProvider } from './context/AuthContext.jsx'
 import { getThemeById } from './theme/themes.js'
 import './index.css'
 import './theme/theme-tokens.css'
@@ -48,13 +49,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <ThemeProvider>
-        <PostsProvider>
-          <PostingStatusProvider>
-            <CallProvider>
-              <App />
-            </CallProvider>
-          </PostingStatusProvider>
-        </PostsProvider>
+        <AuthProvider>
+          <PostsProvider>
+            <PostingStatusProvider>
+              <CallProvider>
+                <App />
+              </CallProvider>
+            </PostingStatusProvider>
+          </PostsProvider>
+        </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>

@@ -466,11 +466,17 @@ async function requireValidAdminSession(sessionToken) {
   if (!snap.exists) {
     throw new HttpsError('unauthenticated', 'Admin session is invalid. Please log in again.')
   }
-  const { expiresAt } = snap.data()
-  if (!expiresAt || expiresAt.toMillis() < Date.now()) {
+  const data = snap.data()
+  if (!data.expiresAt || data.expiresAt.toMillis() < Date.now()) {
     await adminTokenDoc(sessionToken).delete().catch(() => {})
     throw new HttpsError('unauthenticated', 'Admin session has expired. Please log in again.')
   }
+  // Returned (not just validated) so every privileged action below can
+  // attribute itself to a real Firebase uid in the audit log — the
+  // session doc's own createdByUid, set once at adminLogin time — the
+  // two existing callers (adminResolveReport/adminListReports) simply
+  // don't use the return value, unaffected by this change.
+  return data
 }
 
 /**
@@ -696,6 +702,601 @@ exports.adminListReports = onCall({ region: 'us-central1' }, async (request) => 
   } catch (err) {
     console.error('[adminListReports] unexpected error', { status, message: err?.message, code: err?.code })
     throw new HttpsError('internal', 'Could not load reports. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * ADMIN PANEL — PHOTO VERIFICATION, COLLEGE REQUESTS, MODERATION,
+ * LOST & FOUND, MARKETPLACE, NOTIFICATIONS, AUDIT LOG, OVERVIEW
+ * =====================================================================
+ * Every function below follows the exact adminResolveReport/
+ * adminListReports template directly above: requireValidAdminSession
+ * (sessionToken) is the real security boundary — not platformAdmins,
+ * see that section's own comment for why — and every read/write uses
+ * the Admin SDK, which bypasses firestore.rules entirely (intentional:
+ * the token check is what's actually gating this, same as everything
+ * else in this file already does for its own operation).
+ *
+ * Confirmed directly, not assumed: verificationRequests, collegeRequests
+ * and moderationActions have NO client read/write rule for admin
+ * purposes in firestore.rules (verificationRequests only lets the
+ * submitter read their own doc; collegeRequests and moderationActions
+ * have no admin branch at all) — which is exactly why
+ * VerificationRequestsAdminPage.jsx/CollegeRequestsAdminPage.jsx's
+ * existing client-SDK reads/writes (and moderationService.js's
+ * logModerationAction) no longer work for anyone, platformAdmin or
+ * not. No firestore.rules changes were made or needed for any of this:
+ * Cloud Functions using the Admin SDK were never subject to those
+ * rules in the first place.
+ *
+ * Every mutating action below calls logAdminAction() — writing to the
+ * SAME moderationActions collection reviewReport's own
+ * logModerationAction() (moderationService.js) already targets, not a
+ * second parallel audit system.
+ */
+
+async function logAdminAction({ adminUid, action, targetType, targetId, targetUid, reason }) {
+  try {
+    await db().collection('moderationActions').add({
+      adminUid: adminUid || null,
+      action,
+      targetType: targetType || null,
+      targetId: targetId || null,
+      targetUid: targetUid || null,
+      reportId: null,
+      reason: reason || null,
+      viaAdminSession: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    })
+  } catch (err) {
+    // Never let a failed audit-log write undo or block the real admin
+    // action that already succeeded — logged server-side for
+    // investigation instead.
+    console.error('[logAdminAction] failed to write audit entry', { action, message: err?.message })
+  }
+}
+
+/** adminGetOverviewCounts — real counts via Firestore's count() aggregation (one small read per collection, not a full document fetch), replacing AdminOverviewPage.jsx's "Unavailable" placeholders with real numbers. */
+exports.adminGetOverviewCounts = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken } = request.data || {}
+  await requireValidAdminSession(sessionToken)
+
+  const countOf = async (path, field, value) => {
+    let ref = db().collection(path)
+    if (field) ref = ref.where(field, '==', value)
+    const snap = await ref.count().get()
+    return snap.data().count
+  }
+
+  try {
+    const [reports, verification, college, lostFound, totalUsers, verifiedUsers] = await Promise.all([
+      countOf('reports', 'status', 'pending'),
+      countOf('verificationRequests', 'status', 'pending'),
+      countOf('collegeRequests', 'status', 'pending'),
+      countOf('lostFound', 'status', 'active'),
+      countOf('users'),
+      countOf('users', 'verifiedCampus', true)
+    ])
+    return { reports, verification, college, lostFound, totalUsers, verifiedUsers }
+  } catch (err) {
+    console.error('[adminGetOverviewCounts] unexpected error', { message: err?.message })
+    throw new HttpsError('internal', 'Could not load overview stats. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * PHOTO VERIFICATION — verificationRequests/{requestId}, created by
+ * submitVerificationRequest (verificationService.js) during the
+ * college_id campus-verification path. Approval flips
+ * users/{uid}.verifiedCampus to true; rejection only touches the
+ * request, matching reviewVerificationRequest's original (now
+ * client-side-dead) semantics exactly, just performed via Admin SDK
+ * instead.
+ * =====================================================================
+ */
+exports.adminListVerificationRequests = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, pageSize } = request.data || {}
+  await requireValidAdminSession(sessionToken)
+  const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
+
+  try {
+    const snap = await db()
+      .collection('verificationRequests')
+      .where('status', '==', 'pending')
+      .orderBy('createdAt', 'desc')
+      .limit(limitCount)
+      .get()
+
+    const requests = await Promise.all(
+      snap.docs.map(async (d) => {
+        const data = d.data()
+        const [userSnap, collegeSnap] = await Promise.all([
+          db().collection('users').doc(data.uid).get().catch(() => null),
+          data.collegeId ? db().collection('colleges').doc(data.collegeId).get().catch(() => null) : Promise.resolve(null)
+        ])
+        const userData = userSnap && userSnap.exists ? userSnap.data() : null
+        return {
+          id: d.id,
+          uid: data.uid,
+          collegeId: data.collegeId || null,
+          documentPath: data.documentPath,
+          createdAt: data.createdAt,
+          displayName: userData?.displayName || userData?.fullName || 'Unknown user',
+          username: userData?.username || '',
+          collegeName: collegeSnap && collegeSnap.exists ? collegeSnap.data().name : ''
+        }
+      })
+    )
+    return { requests }
+  } catch (err) {
+    console.error('[adminListVerificationRequests] unexpected error', { message: err?.message })
+    throw new HttpsError('internal', 'Could not load verification requests. Please try again.')
+  }
+})
+
+/** Short-lived signed URL for a verification document — Admin SDK bucket access bypasses Storage rules entirely (no storage.rules file exists in this repo to safely extend; this sidesteps that gap rather than guessing at rules I can't verify). */
+exports.adminGetVerificationDocumentUrl = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, documentPath } = request.data || {}
+  await requireValidAdminSession(sessionToken)
+  if (!documentPath || typeof documentPath !== 'string') {
+    throw new HttpsError('invalid-argument', 'Missing document path.')
+  }
+  try {
+    const [url] = await bucket()
+      .file(documentPath)
+      .getSignedUrl({ action: 'read', expires: Date.now() + 10 * 60 * 1000 })
+    return { url }
+  } catch (err) {
+    console.error('[adminGetVerificationDocumentUrl] unexpected error', { documentPath, message: err?.message })
+    throw new HttpsError('internal', 'Could not load this document. Please try again.')
+  }
+})
+
+exports.adminReviewVerificationRequest = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, requestId, decision } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  if (!requestId || !['approved', 'rejected'].includes(decision)) {
+    throw new HttpsError('invalid-argument', 'Missing requestId or invalid decision.')
+  }
+
+  try {
+    const reqRef = db().collection('verificationRequests').doc(requestId)
+    let targetUid = null
+
+    await db().runTransaction(async (tx) => {
+      const snap = await tx.get(reqRef)
+      if (!snap.exists) throw new HttpsError('not-found', 'This request no longer exists.')
+      const data = snap.data()
+      if (data.status !== 'pending') {
+        throw new HttpsError('failed-precondition', `This request was already ${data.status}.`)
+      }
+      targetUid = data.uid
+
+      if (decision === 'approved') {
+        tx.update(db().collection('users').doc(data.uid), { verifiedCampus: true })
+      }
+      tx.update(reqRef, {
+        status: decision,
+        reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+        reviewedByAdminSession: true
+      })
+    })
+
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: decision === 'approved' ? 'verification_approved' : 'verification_rejected',
+      targetType: 'verificationRequest',
+      targetId: requestId,
+      targetUid
+    })
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminReviewVerificationRequest] unexpected error', { requestId, message: err?.message })
+    throw new HttpsError('internal', 'Could not update this request. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * COLLEGE REQUESTS — collegeRequests/{requestId}, created by
+ * AddCollegePage.jsx. Approval logic ported line-for-line from
+ * collegeRequestService.js's reviewCollegeRequest (same slug-dedup
+ * transaction, same "never overwrite an existing college" guarantee),
+ * just performed via Admin SDK since that function's client-SDK path
+ * is unreachable under the current rules (collegeRequests has no
+ * client read/write rule for anyone).
+ * =====================================================================
+ */
+function slugifyCollegeNameServer(name) {
+  const STOPWORDS = new Set(['of', 'and', 'the', '&'])
+  return (name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/['']/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word && !STOPWORDS.has(word))
+    .join('-')
+}
+
+function parseLocationServer(location) {
+  const parts = (location || '').split(',').map((p) => p.trim()).filter(Boolean)
+  if (parts.length >= 2) return { city: parts[0], state: parts[1] }
+  if (parts.length === 1) return { city: parts[0], state: '' }
+  return { city: '', state: '' }
+}
+
+exports.adminListCollegeRequests = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, pageSize } = request.data || {}
+  await requireValidAdminSession(sessionToken)
+  const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
+
+  try {
+    const snap = await db().collection('collegeRequests').where('status', '==', 'pending').limit(limitCount).get()
+    return { requests: snap.docs.map((d) => ({ id: d.id, ...d.data() })) }
+  } catch (err) {
+    console.error('[adminListCollegeRequests] unexpected error', { message: err?.message })
+    throw new HttpsError('internal', 'Could not load college requests. Please try again.')
+  }
+})
+
+exports.adminReviewCollegeRequest = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, requestId, decision } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  if (!requestId || !['approved', 'rejected'].includes(decision)) {
+    throw new HttpsError('invalid-argument', 'Missing requestId or invalid decision.')
+  }
+
+  try {
+    const reqRef = db().collection('collegeRequests').doc(requestId)
+
+    await db().runTransaction(async (tx) => {
+      const snap = await tx.get(reqRef)
+      if (!snap.exists) throw new HttpsError('not-found', 'This request no longer exists.')
+      const data = snap.data()
+      if (data.status !== 'pending') {
+        throw new HttpsError('failed-precondition', `This request was already ${data.status}.`)
+      }
+
+      if (decision === 'approved') {
+        const slug = slugifyCollegeNameServer(data.name)
+        const collegeRef = db().collection('colleges').doc(slug)
+        const existing = await tx.get(collegeRef)
+        if (!existing.exists) {
+          const { city, state } = parseLocationServer(data.location)
+          tx.set(collegeRef, {
+            name: data.name,
+            nameLower: (data.name || '').trim().toLowerCase(),
+            city,
+            cityLower: city.toLowerCase(),
+            state,
+            stateLower: state.toLowerCase(),
+            verified: false
+          })
+        }
+        // Already exists — deliberately no write, matching "must NOT
+        // be deleted, renamed, overwritten, or duplicated."
+      }
+      tx.update(reqRef, { status: decision })
+    })
+
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: decision === 'approved' ? 'college_request_approved' : 'college_request_rejected',
+      targetType: 'collegeRequest',
+      targetId: requestId
+    })
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminReviewCollegeRequest] unexpected error', { requestId, message: err?.message })
+    throw new HttpsError('internal', 'Could not update this request. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * USER VERIFICATION — deliberately distinct from Photo Verification
+ * above: that section reviews the QUEUE of pending ID-document
+ * submissions; this is a direct search/lookup over the real `users`
+ * collection (already client-readable, so the search itself doesn't
+ * need a Cloud Function — see adminAuthService.js's sibling client
+ * helper — but the WRITE, a manual verifiedCampus override for edge
+ * cases outside the normal queue, does).
+ * =====================================================================
+ */
+exports.adminSetUserVerification = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, uid, verified } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  if (!uid || typeof verified !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'Missing uid or verified flag.')
+  }
+
+  try {
+    const userRef = db().collection('users').doc(uid)
+    const snap = await userRef.get()
+    if (!snap.exists) throw new HttpsError('not-found', 'This user no longer exists.')
+    await userRef.update({ verifiedCampus: verified })
+
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: verified ? 'user_verified_manual' : 'user_unverified_manual',
+      targetType: 'user',
+      targetId: uid,
+      targetUid: uid
+    })
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminSetUserVerification] unexpected error', { uid, message: err?.message })
+    throw new HttpsError('internal', 'Could not update this user. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * MODERATION — the richer action set ModerationDashboardPage.jsx/
+ * moderationService.js already modeled (content_removed/restricted/
+ * suspended, not just resolve/dismiss), brought into the new
+ * session-token-gated panel. Reads the SAME reports/{reportId} queue
+ * adminListReports already serves — this is not a second report
+ * system, just a richer action available on the same data.
+ * =====================================================================
+ */
+exports.adminModerateContent = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, reportId, moderationAction, targetType, targetId, targetOwnerUid, parentPostId } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  const VALID_ACTIONS = ['resolved', 'dismissed', 'content_removed', 'restricted', 'suspended']
+  if (!reportId || !VALID_ACTIONS.includes(moderationAction)) {
+    throw new HttpsError('invalid-argument', 'Missing reportId or invalid action.')
+  }
+
+  try {
+    const reportRef = db().collection('reports').doc(reportId)
+    const reportSnap = await reportRef.get()
+    if (!reportSnap.exists) throw new HttpsError('not-found', 'This report no longer exists.')
+    if (reportSnap.data().status !== 'pending') {
+      throw new HttpsError('failed-precondition', `This report was already ${reportSnap.data().status}.`)
+    }
+
+    if (moderationAction === 'content_removed') {
+      if (targetType === 'post' && targetId) {
+        await db().collection('posts').doc(targetId).delete().catch(() => {})
+      } else if (targetType === 'comment' && targetId && parentPostId) {
+        await db().collection('posts').doc(parentPostId).collection('comments').doc(targetId).delete().catch(() => {})
+      } else if (targetType === 'story' && targetId) {
+        await db().collection('stories').doc(targetId).delete().catch(() => {})
+      }
+      // Any other targetType: the report is still resolved below, but
+      // no content deletion is attempted — a real, stated limitation
+      // (matching ModerationDashboardPage.jsx's own comment on the
+      // comment/parentPostId gap) rather than a silent no-op presented
+      // as success.
+    }
+
+    if ((moderationAction === 'restricted' || moderationAction === 'suspended') && targetOwnerUid) {
+      await db().collection('users').doc(targetOwnerUid).update({ moderationStatus: moderationAction })
+    }
+
+    await reportRef.update({
+      status: 'resolved',
+      reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+      moderationAction,
+      reviewedByAdminSession: true
+    })
+
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: moderationAction,
+      targetType: targetType || 'report',
+      targetId: targetId || reportId,
+      targetUid: targetOwnerUid || null,
+      reason: `report:${reportId}`
+    })
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminModerateContent] unexpected error', { reportId, message: err?.message })
+    throw new HttpsError('internal', 'Could not complete this action. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * LOST & FOUND — lostFound/{itemId}. "Remove" sets status: 'removed',
+ * a new status value alongside the existing 'active'/'resolved' — the
+ * user-facing getLostFoundItems() query always filters by an exact
+ * status ('active' or 'resolved'), so a 'removed' item is automatically
+ * excluded from both without any change to that read path at all.
+ * Reversible via "restore", matching the brief's stated preference for
+ * status-based over destructive moderation.
+ * =====================================================================
+ */
+exports.adminListLostFound = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, status, pageSize } = request.data || {}
+  await requireValidAdminSession(sessionToken)
+  const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
+
+  try {
+    const snap = await db()
+      .collection('lostFound')
+      .where('status', '==', status || 'active')
+      .orderBy('createdAt', 'desc')
+      .limit(limitCount)
+      .get()
+    return { items: snap.docs.map((d) => ({ id: d.id, ...d.data() })) }
+  } catch (err) {
+    console.error('[adminListLostFound] unexpected error', { message: err?.message })
+    throw new HttpsError('internal', 'Could not load Lost & Found listings. Please try again.')
+  }
+})
+
+exports.adminModerateLostFoundItem = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, itemId, action } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  if (!itemId || !['remove', 'restore'].includes(action)) {
+    throw new HttpsError('invalid-argument', 'Missing itemId or invalid action.')
+  }
+
+  try {
+    const ref = db().collection('lostFound').doc(itemId)
+    const snap = await ref.get()
+    if (!snap.exists) throw new HttpsError('not-found', 'This listing no longer exists.')
+
+    await ref.update({
+      status: action === 'remove' ? 'removed' : 'active',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    })
+
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: action === 'remove' ? 'lostfound_removed' : 'lostfound_restored',
+      targetType: 'lostFoundItem',
+      targetId: itemId,
+      targetUid: snap.data().createdBy || null
+    })
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminModerateLostFoundItem] unexpected error', { itemId, message: err?.message })
+    throw new HttpsError('internal', 'Could not update this listing. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * MARKETPLACE — products/{productId}. Adds a real `hidden` boolean
+ * (default false, additive — every existing product document without
+ * this field is treated as not-hidden by marketplaceService.js's own
+ * mapProductDoc default). Reversible via "unhide", same reasoning as
+ * Lost & Found above.
+ * =====================================================================
+ */
+exports.adminListMarketplaceProducts = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, pageSize } = request.data || {}
+  await requireValidAdminSession(sessionToken)
+  const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
+
+  try {
+    const snap = await db().collection('products').orderBy('createdAt', 'desc').limit(limitCount).get()
+    return { products: snap.docs.map((d) => ({ id: d.id, ...d.data() })) }
+  } catch (err) {
+    console.error('[adminListMarketplaceProducts] unexpected error', { message: err?.message })
+    throw new HttpsError('internal', 'Could not load marketplace listings. Please try again.')
+  }
+})
+
+exports.adminModerateProduct = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, productId, action } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  if (!productId || !['hide', 'unhide'].includes(action)) {
+    throw new HttpsError('invalid-argument', 'Missing productId or invalid action.')
+  }
+
+  try {
+    const ref = db().collection('products').doc(productId)
+    const snap = await ref.get()
+    if (!snap.exists) throw new HttpsError('not-found', 'This listing no longer exists.')
+
+    await ref.update({ hidden: action === 'hide' })
+
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: action === 'hide' ? 'product_hidden' : 'product_unhidden',
+      targetType: 'product',
+      targetId: productId,
+      targetUid: snap.data().sellerId || null
+    })
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminModerateProduct] unexpected error', { productId, message: err?.message })
+    throw new HttpsError('internal', 'Could not update this listing. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * NOTIFICATIONS — a real admin broadcast, using the EXACT
+ * notifications/{notificationId} schema and 'announcement' type
+ * createCommunityAnnouncementNotifications (notificationService.js)
+ * already established (same field shape, same 450-per-batch fan-out) —
+ * not a second notification system. Rendered by the app's existing
+ * notificationText.js 'announcement' case with zero new client code:
+ * communityName: 'Campinity' reads as "Campinity posted an update."
+ * capped at 5000 recipients for an all-users send — a real, stated
+ * bound, not silently unlimited.
+ * =====================================================================
+ */
+exports.adminSendNotification = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, message, targetUsername } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  const trimmed = (message || '').trim()
+  if (!trimmed) throw new HttpsError('invalid-argument', 'Message is required.')
+  if (trimmed.length > 280) throw new HttpsError('invalid-argument', 'Message must be 280 characters or fewer.')
+
+  try {
+    let recipientUids = []
+    if (targetUsername && targetUsername.trim()) {
+      const userSnap = await db().collection('users').where('username', '==', targetUsername.trim()).limit(1).get()
+      if (userSnap.empty) throw new HttpsError('not-found', 'No user found with that username.')
+      recipientUids = [userSnap.docs[0].id]
+    } else {
+      const MAX_RECIPIENTS = 5000
+      const usersSnap = await db().collection('users').limit(MAX_RECIPIENTS).get()
+      recipientUids = usersSnap.docs.map((d) => d.id)
+    }
+
+    for (let i = 0; i < recipientUids.length; i += 450) {
+      const batch = db().batch()
+      recipientUids.slice(i, i + 450).forEach((uid) => {
+        const notifRef = db().collection('users').doc(uid).collection('notifications').doc()
+        batch.set(notifRef, {
+          actorUid: uid, // system notification — same "actorUid === target" convention createBadgeNotification/createLevelUpNotification already use for a non-person sender
+          actorName: 'Campinity',
+          actorAvatar: '',
+          type: 'announcement',
+          communityId: null,
+          communityName: 'Campinity',
+          message: trimmed,
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        })
+      })
+      await batch.commit()
+    }
+
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: 'notification_sent',
+      targetType: targetUsername ? 'user' : 'all_users',
+      targetId: null,
+      targetUid: targetUsername ? recipientUids[0] : null,
+      reason: trimmed.slice(0, 100)
+    })
+    return { ok: true, recipientCount: recipientUids.length }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminSendNotification] unexpected error', { message: err?.message })
+    throw new HttpsError('internal', 'Could not send this notification. Please try again.')
+  }
+})
+
+/** adminListAuditLog — read side of logAdminAction() above, the actual "Audit Log" admin section. */
+exports.adminListAuditLog = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, pageSize } = request.data || {}
+  await requireValidAdminSession(sessionToken)
+  const limitCount = Math.min(Math.max(Number(pageSize) || 50, 1), 200)
+
+  try {
+    const snap = await db().collection('moderationActions').orderBy('createdAt', 'desc').limit(limitCount).get()
+    return { entries: snap.docs.map((d) => ({ id: d.id, ...d.data() })) }
+  } catch (err) {
+    console.error('[adminListAuditLog] unexpected error', { message: err?.message })
+    throw new HttpsError('internal', 'Could not load the audit log. Please try again.')
   }
 })
 

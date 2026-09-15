@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Bookmark, HelpCircle, Info, Lock, LogOut, Shield, ShieldCheck, Trash2, User, UserX, ArrowLeft } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
@@ -7,20 +7,14 @@ import SettingsItem from '../components/SettingsItem.jsx'
 import AppearanceSettings from '../components/AppearanceSettings.jsx'
 import ContentPreferences from '../onboarding/ContentPreferences.jsx'
 import { logOut } from '../firebase/accountService.js'
-import { auth } from '../firebase/firebase.js'
-import { getUserProfile } from '../firebase/profileService.js'
 import { getAuthErrorMessage, logAuthErrorForDebug } from '../auth/utils/authErrorMessages.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState('')
-  const [profile, setProfile] = useState(null)
-
-  useEffect(() => {
-    const uid = auth.currentUser?.uid
-    if (uid) getUserProfile(uid).then(setProfile).catch(() => {})
-  }, [])
+  const { profile } = useAuth()
 
   const handleLogout = async () => {
     if (isLoggingOut) return

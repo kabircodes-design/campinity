@@ -15,9 +15,9 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { searchAll } from '../firebase/searchService.js'
 import { searchCommunitiesByName, getTrendingCommunities } from '../firebase/communityService.js'
 import { searchPostsByText } from '../firebase/postService.js'
-import { getUserProfile } from '../firebase/profileService.js'
 import { auth } from '../firebase/firebase.js'
 import { addRecentSearch, clearRecentSearches, getRecentSearches, removeRecentSearch } from '../utils/recentSearches.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const tabs = [
   { label: 'All', key: 'all' },
@@ -54,12 +54,10 @@ export default function SearchPage() {
   const [posts, setPosts] = useState([])
   const [status, setStatus] = useState('idle') // 'idle' | 'loading' | 'success' | 'error'
 
-  const [profile, setProfile] = useState(null)
+  const { profile } = useAuth()
   const [popularCommunities, setPopularCommunities] = useState([])
 
   useEffect(() => {
-    const uid = auth.currentUser?.uid
-    if (uid) getUserProfile(uid).then(setProfile).catch(() => {})
     getTrendingCommunities({ pageSize: 4 }).then(setPopularCommunities).catch(() => {})
   }, [])
 

@@ -1,23 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, MessageCircle, Radar, Search, Sparkles, UserPlus } from 'lucide-react'
-import Avatar from '../components/Avatar.jsx'
+import { Search, Sparkles, UserPlus } from 'lucide-react'
 import StoryBubble from '../components/StoryBubble.jsx'
 import PostCard from '../components/PostCard.jsx'
 import PostComposer from '../components/PostComposer.jsx'
-import BottomNav from '../components/BottomNav.jsx'
-import DesktopSidebar from '../components/DesktopSidebar.jsx'
 import DesktopRightRail from '../components/DesktopRightRail.jsx'
 import NotesView from '../components/NotesView.jsx'
 import Loader from '../auth/components/Loader.jsx'
-import Logo from '../components/Logo.jsx'
 import { auth } from '../firebase/firebase.js'
-import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getFeedPosts, getAvatarColor, getInitials, getNotesPosts } from '../firebase/postService.js'
 import { getFeedStories, getViewedStoryIds } from '../firebase/storyService.js'
-import { subscribeToUnreadCount } from '../firebase/notificationService.js'
 import { getTrendingCommunities } from '../firebase/communityService.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 import SwipeablePage from '../components/SwipeablePage.jsx'
 import { useFollowingFeed } from '../hooks/useFollowingFeed.js'
@@ -63,33 +58,27 @@ export default function HomePage() {
     return ''
   }
 
-  const [profile, setProfile] = useState(null)
+  // profile now comes from the shared AuthContext (see AppShell.jsx) —
+  // this page previously fetched it independently just to feed a
+  // header/sidebar it no longer renders itself, plus its own greeting/
+  // PostComposer/story-avatar usage below (unchanged, still reads
+  // `profile`, just from context now).
+  const { profile } = useAuth()
   const [posts, setPosts] = useState([])
   const [stories, setStories] = useState([])
   const [viewedStoryIds, setViewedStoryIds] = useState(new Set())
-  const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [contentPreferences, setContentPreferences] = useState([])
 
   useEffect(() => {
+    const types = profile?.preferences?.contentTypes
+    if (Array.isArray(types) && types.length > 0) setContentPreferences(types)
+  }, [profile])
+
+  useEffect(() => {
     let cancelled = false
     const uid = auth.currentUser?.uid
-
-    const loadProfile = async () => {
-      if (!uid) return
-      try {
-        const data = await getUserProfile(uid)
-        if (!cancelled) {
-          setProfile(data)
-          const types = data?.preferences?.contentTypes
-          if (Array.isArray(types) && types.length > 0) setContentPreferences(types)
-        }
-      } catch {
-        // Greeting falls back to initials-only if this fails; the feed
-        // below still loads on its own regardless.
-      }
-    }
 
     const loadFeed = async () => {
       try {
@@ -110,19 +99,13 @@ export default function HomePage() {
       }
     }
 
-    Promise.all([loadProfile(), loadFeed()]).finally(() => {
+    loadFeed().finally(() => {
       if (!cancelled) setLoading(false)
     })
 
     return () => {
       cancelled = true
     }
-  }, [])
-
-  useEffect(() => {
-    const uid = auth.currentUser?.uid
-    const unsubscribe = subscribeToUnreadCount(uid, setUnreadCount)
-    return () => unsubscribe()
   }, [])
 
   const visiblePosts = useMemo(
@@ -286,7 +269,7 @@ export default function HomePage() {
         {entranceStage === 'waiting' && (
           <CampinityIntro campusName={profile?.college} onComplete={handleIntroComplete} />
         )}
-        <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
+        <div className="h-full flex items-center justify-center">
           <Loader size="lg" tone="dark" />
         </div>
       </>
@@ -298,87 +281,13 @@ export default function HomePage() {
     {entranceStage === 'waiting' && (
       <CampinityIntro campusName={profile?.college} onComplete={handleIntroComplete} />
     )}
-    <div
-      className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:gap-3 lg:[grid-template-columns:minmax(240px,280px)_minmax(0,1fr)_minmax(260px,320px)]"
-      style={{ backgroundColor: '#f8fafc' }}
-    ><DesktopSidebar unreadNotifications={unreadCount} profile={profile} />
+    <div className="h-full lg:grid lg:gap-3 lg:[grid-template-columns:minmax(0,1fr)_minmax(260px,320px)] lg:overflow-hidden">
     <SwipeablePage>
-    <div className="min-h-screen w-full max-w-[100vw] lg:max-w-none lg:h-screen lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
-      <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-screen lg:min-h-0 bg-white lg:bg-transparent border-x border-gray-100">
-        <header className={`sticky top-0 z-40 bg-white border-b border-gray-100 ${entranceClass(0)}`}>
-          <div className="h-14 flex items-center gap-3 px-4 lg:px-6">
-            <button
-              type="button"
-              onClick={() => navigate('/home')}
-              aria-label="Campinity — go to Home"
-              className="lg:hidden flex items-center flex-shrink-0"
-            >
-              <Logo className="w-7 h-7" withWordmark />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate('/search')}
-              className="group relative hidden lg:flex flex-1 max-w-md mx-auto items-center text-left"
-              aria-label="Search Campinity"
-            >
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-colors duration-200 group-hover:text-gray-500" />
-              <span className="flex items-center justify-between w-full rounded-full border border-gray-200 bg-gray-50 pl-10 pr-2.5 py-2 text-sm text-gray-400 transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)]">
-                Search for people, communities, posts...
-                <kbd className="flex-shrink-0 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">
-                  Ctrl K
-                </kbd>
-              </span>
-            </button>
-
-            <div className="flex items-center gap-1 ml-auto">
-              <button
-                type="button"
-                aria-label="Radar"
-                onClick={() => navigate('/radar')}
-                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
-              >
-                <Radar className="w-5 h-5" />
-              </button>
-
-              <button
-                type="button"
-                aria-label="Messages"
-                onClick={() => navigate('/messages')}
-                className="relative hidden lg:flex w-9 h-9 rounded-full items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
-              >
-                <MessageCircle className="w-5 h-5" />
-              </button>
-
-              <button
-                type="button"
-                aria-label="Notifications"
-                onClick={() => navigate('/notifications')}
-                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all duration-200"
-              >
-                <Bell className="w-5 h-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />
-                )}
-              </button>
-
-              {profile && (
-                <button
-                  type="button"
-                  onClick={() => navigate('/profile')}
-                  aria-label="Your profile"
-                  className="hidden lg:flex items-center ml-1 rounded-full hover:bg-gray-100 p-0.5 transition-all duration-200"
-                >
-                  <Avatar initials={initials} colorClass={myColorClass} size="sm" src={getProfileIdentityImage(profile) || undefined} />
-                </button>
-              )}
-            </div>
-          </div>
-        </header>
-
+    <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
+      <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-full lg:min-h-0 bg-white lg:bg-transparent border-x border-gray-100">
         {showBanner && <CampusVerificationBanner onDismiss={dismissBanner} />}
 
-        <section className={`mx-4 lg:mx-6 mt-5 mb-5 ${entranceClass(80)}`}>
+        <section className={`mx-4 lg:mx-6 mt-5 mb-5 ${entranceClass(0)}`}>
           <div
             className="relative overflow-hidden rounded-2xl lg:rounded-3xl px-5 py-5 lg:px-7 lg:py-6"
             style={{ background: 'linear-gradient(120deg, #eaf3ff 0%, #dcecff 45%, #e7f7f7 100%)' }}
@@ -421,7 +330,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className={`mx-4 lg:mx-6 mb-5 py-0 ${entranceClass(140)}`}>
+        <section className={`mx-4 lg:mx-6 mb-5 py-0 ${entranceClass(80)}`}>
           <div className="flex items-start gap-3.5 overflow-x-auto scroll-hidden">
             {storyBubbles.map((story) => {
               const seen =
@@ -447,7 +356,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <nav className={`sticky top-14 z-30 bg-white flex items-center gap-6 px-4 lg:px-6 border-b border-gray-100 mb-3 ${entranceClass(200)}`}>
+        <nav className={`sticky top-14 z-30 bg-white flex items-center gap-6 px-4 lg:px-6 border-b border-gray-100 mb-3 ${entranceClass(140)}`}>
           {feedTabs.map((tab) => {
             const isActive = activeTab === tab.key
             return (
@@ -471,7 +380,7 @@ export default function HomePage() {
           })}
         </nav>
 
-        <main className={`pb-24 ${entranceClass(200)}`} style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}>
+        <main className={`pb-24 ${entranceClass(140)}`} style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}>
           {activeTab === 'notes' ? (
             <NotesView />
           ) : activeTab === 'following' ? (
@@ -575,10 +484,6 @@ export default function HomePage() {
       onViewNotes={() => setActiveTab('notes')}
     />
     </div>
-
-      <div className="lg:hidden">
-        <BottomNav />
-      </div>
 
       <PostingStatusPill />
 

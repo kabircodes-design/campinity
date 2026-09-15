@@ -9,7 +9,7 @@ import NotificationBadge from '../components/NotificationBadge.jsx'
 import NotificationSkeleton from '../components/NotificationSkeleton.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { getUserProfile } from '../firebase/profileService.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import {
   deleteNotification,
   getNotifications,
@@ -78,12 +78,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [profile, setProfile] = useState(null)
-
-  useEffect(() => {
-    const uid = auth.currentUser?.uid
-    if (uid) getUserProfile(uid).then(setProfile).catch(() => {})
-  }, [])
+  const { profile } = useAuth()
 
   useEffect(() => {
     let cancelled = false

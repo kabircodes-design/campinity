@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import LandingPage from './pages/LandingPage.jsx'
 import ProtectedRoute, { FullScreenLoader, PublicRoute } from './auth/components/ProtectedRoute.jsx'
+import AppShell from './components/AppShell.jsx'
 
 const LoginPage = lazy(() => import('./auth/pages/LoginPage.jsx'))
 const SignupPage = lazy(() => import('./auth/pages/SignupPage.jsx'))
@@ -129,14 +130,22 @@ export default function App() {
           }
         />
 
-        <Route
-          path="/home"
-          element={
-            <ProtectedRoute stage="home">
-              <HomePage />
-            </ProtectedRoute>
-          }
-        />
+        {/* Persistent shell — sidebar/header/bottom-nav mount ONCE here
+            (AppShell.jsx) and never remount navigating between these 5
+            pages; only <Outlet/>'s content changes. This is what fixes
+            "navigation feels like a fresh page load" for the app's
+            highest-traffic destinations. See AppShell.jsx's own comment
+            for why Search/Notifications/Profile/Settings aren't part of
+            this group (still on an older, structurally different
+            layout that predates this pass — they still benefit from
+            the shared AuthContext fix below, just not this shell). */}
+        <Route element={<ProtectedRoute stage="home"><AppShell /></ProtectedRoute>}>
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/communities" element={<DiscoverCommunitiesPage />} />
+          <Route path="/marketplace" element={<MarketplacePage />} />
+          <Route path="/lost-found" element={<LostFoundPage />} />
+          <Route path="/messages" element={<MessagesPage />} />
+        </Route>
 
         <Route
           path="/search"
@@ -157,14 +166,6 @@ export default function App() {
           }
         />
 
-        <Route
-          path="/messages"
-          element={
-            <ProtectedRoute stage="home">
-              <MessagesPage />
-            </ProtectedRoute>
-          }
-        />
         <Route
           path="/messages/requests"
           element={
@@ -288,25 +289,6 @@ export default function App() {
           }
         />
 
-        {/* Marketplace — bottom nav entry added ahead of the real feature.
-            Placeholder only, same ComingSoon convention already used
-            below for /settings/notifications, /settings/privacy, etc. */}
-        <Route
-          path="/marketplace"
-          element={
-            <ProtectedRoute stage="home">
-              <MarketplacePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/lost-found"
-          element={
-            <ProtectedRoute stage="home">
-              <LostFoundPage />
-            </ProtectedRoute>
-          }
-        />
         <Route
           path="/marketplace/create"
           element={
@@ -351,17 +333,9 @@ export default function App() {
           }
         />
 
-        {/* Communities — Phase 2. /community/create must come before the
-            dynamic /community/:communityId route, or "create" would be
-            matched as a communityId param instead. */}
-        <Route
-          path="/communities"
-          element={
-            <ProtectedRoute stage="home">
-              <DiscoverCommunitiesPage />
-            </ProtectedRoute>
-          }
-        />
+        {/* /community/create must come before the dynamic
+            /community/:communityId route, or "create" would be matched
+            as a communityId param instead. */}
         <Route
           path="/community/create"
           element={

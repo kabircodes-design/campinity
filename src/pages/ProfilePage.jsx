@@ -10,9 +10,9 @@ import CommunityCard from '../components/CommunityCard.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
-import { getUserProfile } from '../firebase/profileService.js'
 import { getAvatarColor, getInitials, getUserPosts, getPostById } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById, getOwnedCommunities } from '../firebase/communityService.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const GRID_LAYOUT_KEY = 'campinity:profileGridLayout'
 
@@ -63,7 +63,11 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState(tabs[0].key)
   const [gridLayout, setGridLayout] = useState(() => localStorage.getItem(GRID_LAYOUT_KEY) || 'list')
 
-  const [profile, setProfile] = useState(null)
+  // profile now comes from the shared AuthContext (see AppShell.jsx's
+  // comment on the same pattern) instead of this page's own
+  // getUserProfile() call — same document, same live data, one fewer
+  // redundant Firestore read every time this page is visited.
+  const { profile } = useAuth()
   const [myPosts, setMyPosts] = useState([])
   const [postsError, setPostsError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -81,21 +85,13 @@ export default function ProfilePage() {
     let cancelled = false
     const uid = currentUid
 
-    const loadProfile = async () => {
-      if (!uid) {
-        if (!cancelled) setError('Not signed in.')
-        return
-      }
-      try {
-        const data = await getUserProfile(uid)
-        if (!cancelled) setProfile(data)
-      } catch (err) {
-        if (!cancelled) setError(err?.message || 'Could not load your profile.')
-      }
+    if (!uid) {
+      setError('Not signed in.')
+      setLoading(false)
+      return undefined
     }
 
     const loadPosts = async () => {
-      if (!uid) return
       try {
         const data = await getUserPosts(uid, uid)
         // Guarantee userId on every post — every post fetched here is,
@@ -115,7 +111,7 @@ export default function ProfilePage() {
       }
     }
 
-    Promise.all([loadProfile(), loadPosts()]).finally(() => {
+    loadPosts().finally(() => {
       if (!cancelled) setLoading(false)
     })
 

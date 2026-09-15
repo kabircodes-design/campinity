@@ -40,13 +40,18 @@ function mapProductDoc(docSnap) {
     collegeId: data.collegeId || null,
     collegeName: data.collegeName || null,
     sponsored: data.sponsored || null,
+    // Admin moderation flag (adminModerateProduct in the Cloud
+    // Functions, "hide"/"unhide") — additive, defaults false, so every
+    // existing product without this field is correctly treated as
+    // visible.
+    hidden: data.hidden === true,
     createdAtMs: data.createdAt?.toMillis ? data.createdAt.toMillis() : 0
   }
 }
 
 export async function getMarketplaceProducts({ pageSize = 40 } = {}) {
   const snap = await getDocs(query(collection(db, COLLECTION), limit(pageSize)))
-  const products = snap.docs.map(mapProductDoc)
+  const products = snap.docs.map(mapProductDoc).filter((p) => !p.hidden)
   return products.sort((a, b) => b.createdAtMs - a.createdAtMs)
 }
 

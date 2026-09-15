@@ -5,6 +5,7 @@ import Logo from './Logo.jsx'
 import VerifiedBadge from './VerifiedBadge.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { prefetchRoute } from '../routePrefetch.js'
 
 const NAV_ITEMS = [
   { to: '/home', label: 'Home', icon: Home },
@@ -50,6 +51,8 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
           <NavLink
             key={to}
             to={to}
+            onMouseEnter={() => prefetchRoute(to)}
+            onFocus={() => prefetchRoute(to)}
             className={({ isActive }) =>
               `relative flex items-center gap-3 rounded-lg pl-3.5 pr-3 py-2.5 text-[14px] font-medium transition-all duration-200 ${
                 isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-50'

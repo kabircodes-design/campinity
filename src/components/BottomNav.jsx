@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Home, MessageCircle, Orbit, ShoppingBag, User } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { prefetchRoute } from '../routePrefetch.js'
 
 const navItems = [
   { id: 'home', label: 'Home', icon: Home, to: '/home' },
@@ -109,6 +110,7 @@ export default function BottomNav() {
               ref={(el) => (itemRefs.current[index] = el)}
               to={item.to}
               aria-label={item.label}
+              onTouchStart={() => prefetchRoute(item.to)}
               className="relative z-10 flex flex-col items-center justify-center py-1.5"
             >
               <item.icon
