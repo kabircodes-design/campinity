@@ -78,6 +78,19 @@ export default function ProtectedRoute({ stage, children }) {
     return children
   }
 
+  // /admin has its own independent gate (AdminGate/AdminLockScreen's
+  // password + server-verified session token) that has nothing to do
+  // with normal-user onboarding. Requiring profileCompleted here as
+  // well was actively wrong (an authenticated, email-verified admin
+  // could get routed through /campus-verification and dumped on /home
+  // before ever reaching AdminPage) and unnecessary (AdminLockScreen
+  // never reads `profile` at all). Still requires real Firebase auth +
+  // a verified email above — only the onboarding-completion
+  // requirement is skipped.
+  if (stage === 'admin-entry') {
+    return children
+  }
+
   if (!profile?.profileCompleted) {
     return <Navigate to={resolveOnboardingRoute(profile)} replace />
   }

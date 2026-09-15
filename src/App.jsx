@@ -480,7 +480,7 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute stage="home">
+            <ProtectedRoute stage="admin-entry">
               <AdminPage />
             </ProtectedRoute>
           }
