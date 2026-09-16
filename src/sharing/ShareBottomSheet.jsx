@@ -233,7 +233,7 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/40 animate-in fade-in duration-200"
+        className="absolute inset-0 bg-black/40 [animation:fadeIn_200ms_ease-out]"
       />
 
       <motion.div

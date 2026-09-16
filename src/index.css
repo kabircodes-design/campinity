@@ -116,3 +116,12 @@
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Chat typing indicator — 3 dots, sequential pulse. Covered for free by
+   the global prefers-reduced-motion rule above (animation-duration is
+   forced to ~0ms for every element), so no separate reduced-motion
+   override is needed here. */
+@keyframes typingDotBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}

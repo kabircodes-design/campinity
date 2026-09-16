@@ -28,7 +28,7 @@ export default function RadarProfileSheet({ match, onClose }) {
 
   const sheet = (
     <div className="fixed inset-0 z-[9999] flex items-end justify-center">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" />
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/40 [animation:fadeIn_200ms_ease-out]" />
       <motion.div
         initial={{ y: '100%' }}
         animate={{ y: 0 }}

@@ -16,6 +16,7 @@ import DesktopSidebar from '../components/DesktopSidebar.jsx'
 import ChatListPanel from '../components/ChatListPanel.jsx'
 import MessageBubble from '../components/MessageBubble.jsx'
 import MessageInput from '../components/MessageInput.jsx'
+import TypingIndicator from '../components/TypingIndicator.jsx'
 import ReportModal from '../components/ReportModal.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
@@ -432,6 +433,12 @@ export default function ChatPage() {
                   </button>
                 </div>
               )}
+
+              <TypingIndicator
+                chatId={chatId}
+                currentUid={currentUid}
+                otherDisplayName={!isGroup ? otherProfile?.displayName : undefined}
+              />
 
               <div className="flex-shrink-0 border-t border-gray-100 bg-white pb-16 lg:pb-[env(safe-area-inset-bottom)]">
                 {pendingLimitReached ? (

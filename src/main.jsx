@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import { MotionConfig } from 'framer-motion'
 import App from './App.jsx'
 import { PostsProvider } from './hooks/usePosts.jsx'
 import { ThemeProvider } from './theme/ThemeProvider.jsx'
@@ -47,18 +48,30 @@ try {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <ThemeProvider>
-        <AuthProvider>
-          <PostsProvider>
-            <PostingStatusProvider>
-              <CallProvider>
-                <App />
-              </CallProvider>
-            </PostingStatusProvider>
-          </PostsProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+    {/* reducedMotion="user" — the one global switch that makes every
+        existing framer-motion component (sheets, modals, story viewer,
+        radar cards, etc.) automatically honor OS-level "reduce motion",
+        the same way index.css's own transition/animation-duration rule
+        already does for plain CSS. Framer Motion's animations run via
+        the Web Animations API, not CSS transitions, so that CSS rule
+        never covered them — this was the one real gap. Purely a motion
+        toggle: it does not change component structure, props, or any
+        existing animate/exit variant, so nothing else here changes
+        behavior. */}
+    <MotionConfig reducedMotion="user">
+      <BrowserRouter>
+        <ThemeProvider>
+          <AuthProvider>
+            <PostsProvider>
+              <PostingStatusProvider>
+                <CallProvider>
+                  <App />
+                </CallProvider>
+              </PostingStatusProvider>
+            </PostsProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </BrowserRouter>
+    </MotionConfig>
   </React.StrictMode>
 )

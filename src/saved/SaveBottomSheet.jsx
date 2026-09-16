@@ -119,7 +119,7 @@ export default function SaveBottomSheet({ open, onClose, entityType, entityId, p
 
   const sheet = (
     <div className="fixed inset-0 z-[9999] flex items-end justify-center">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" />
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/40 [animation:fadeIn_200ms_ease-out]" />
 
       <motion.div
         drag="y"

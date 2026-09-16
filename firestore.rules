@@ -310,6 +310,22 @@ service cloud.firestore {
         allow update: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
         allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
       }
+
+      // chats/{chatId}/typing/{uid} — ephemeral typing-presence only,
+      // never a message (real-time typing indicator pass). Doc id IS
+      // the typer's own uid, so no one can write typing state as
+      // someone else; both read and write additionally require the
+      // caller to already be a listed participant of the PARENT chat,
+      // same get()-on-parent pattern messages/{messageId} above already
+      // uses — so typing state can never leak outside a conversation,
+      // and never bypasses the participant/verification/block checks on
+      // the chat's own create rule (this only ever operates on a chat
+      // document that already exists).
+      match /typing/{uid} {
+        allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow write: if isSignedIn() && request.auth.uid == uid &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+      }
     }
 
     // calls/{callId} — WebRTC signaling for 1:1 voice/video calls

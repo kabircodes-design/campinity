@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { FileText, Paperclip, Send, X } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
 import { uploadChatFile, uploadChatImage } from '../firebase/chatService.js'
+import { useTypingBroadcast } from '../hooks/useTypingIndicator.js'
 
 // At minimum: JPG/JPEG/PNG/WEBP/GIF images (previewed inline) and PDF
 // documents (shown as a file card) — the two categories this app's
@@ -30,10 +31,12 @@ export default function MessageInput({ onSend, disabled, chatId }) {
   const [uploadError, setUploadError] = useState('')
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
+  const { notifyTyping, stopTyping } = useTypingBroadcast(chatId, auth.currentUser?.uid)
 
   const handleSend = async () => {
     if (disabled || uploading) return
     if (!text.trim() && !attachment) return
+    stopTyping() // covers "message is sent" — cleared before the async send/upload work below, not after
 
     if (attachment) {
       const uid = auth.currentUser?.uid
@@ -97,7 +100,13 @@ export default function MessageInput({ onSend, disabled, chatId }) {
   }
 
   const handleChange = (event) => {
-    setText(event.target.value)
+    const value = event.target.value
+    setText(value)
+    if (value.trim()) {
+      notifyTyping()
+    } else {
+      stopTyping() // covers "composer becomes empty"
+    }
     const el = textareaRef.current
     if (el) {
       el.style.height = 'auto'

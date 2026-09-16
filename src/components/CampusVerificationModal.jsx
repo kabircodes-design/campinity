@@ -9,8 +9,13 @@ export default function CampusVerificationModal({ open, onRemindLater }) {
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center px-6">
-      <button type="button" aria-label="Close" onClick={onRemindLater} className="absolute inset-0 bg-black/40" />
-      <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5 shadow-xl text-center">
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onRemindLater}
+        className="absolute inset-0 bg-black/40 [animation:fadeIn_200ms_ease-out]"
+      />
+      <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5 shadow-xl text-center [animation:modalIn_250ms_cubic-bezier(0.16,1,0.3,1)]">
         <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
           <ShieldCheck className="w-5 h-5 text-blue-600" />
         </div>

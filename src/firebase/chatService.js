@@ -12,6 +12,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   startAfter,
   updateDoc,
   where,
@@ -562,6 +563,54 @@ export async function markChatRead(chatId, uid) {
   if (chatSnap.exists() && !(chatSnap.data().readBy || []).includes(uid)) {
     await updateDoc(chatDoc(chatId), { readBy: arrayUnion(uid) })
   }
+}
+
+const TYPING_STALE_MS = 5000 // client auto-clears at ~1.8s; this is just headroom for the write to land plus a fallback for an abrupt disconnect (no onDisconnect hook without RTDB — same honest limitation presenceService.js already documents for online/offline).
+
+function typingDoc(chatId, uid) {
+  return doc(db, 'chats', chatId, 'typing', uid)
+}
+
+/**
+ * Ephemeral typing presence only — never creates a message, never
+ * touches lastMessage/lastMessageAt. `true` upserts a tiny doc (id =
+ * the typer's own uid, matching the rule's expectations); `false`
+ * deletes it outright rather than writing `{ typing: false }`, so a
+ * stopped-typing state has nothing lingering to go stale.
+ */
+export async function setTypingState(chatId, uid, isTyping) {
+  if (!chatId || !uid) return
+  if (isTyping) {
+    await setDoc(typingDoc(chatId, uid), { typing: true, updatedAt: serverTimestamp() }).catch(() => {})
+  } else {
+    await deleteDoc(typingDoc(chatId, uid)).catch(() => {})
+  }
+}
+
+/**
+ * Real-time listener for who else is currently typing in this exact
+ * chatId — excludes the caller's own doc and anything older than
+ * TYPING_STALE_MS, so a write that never got cleaned up (crash, closed
+ * tab) ages out on its own instead of showing "typing..." forever.
+ */
+export function subscribeToTypingState(chatId, currentUid, onData) {
+  if (!chatId) return () => {}
+  return onSnapshot(
+    collection(db, 'chats', chatId, 'typing'),
+    (snap) => {
+      const now = Date.now()
+      const typingUids = snap.docs
+        .filter((d) => d.id !== currentUid)
+        .filter((d) => {
+          const data = d.data()
+          const ms = data.updatedAt?.toMillis?.()
+          return data.typing === true && ms && now - ms < TYPING_STALE_MS
+        })
+        .map((d) => d.id)
+      onData(typingUids)
+    },
+    () => onData([])
+  )
 }
 
 export async function editMessage(chatId, messageId, senderId, newText) {
