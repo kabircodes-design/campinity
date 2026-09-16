@@ -243,7 +243,12 @@ export default function MessageBubble({
         </div>
       )}
 
-      <div className="max-w-[78%] lg:max-w-[68%] flex flex-col">
+      {/* Desktop cap added alongside the wider chat column (Messages
+          right-panel removal pass) — 68% of a much wider center column
+          on a 1920px screen would otherwise stretch a single message
+          bubble absurdly wide; min() keeps it proportional on normal
+          widths and hard-capped on very large ones. */}
+      <div className="max-w-[78%] lg:max-w-[min(68%,560px)] flex flex-col">
         <div
           className={`rounded-2xl ${type === 'image' && !editing ? 'p-1' : 'px-3.5 py-2'} ${
             isMine

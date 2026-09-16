@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, MessageCircle, Radar, Search } from 'lucide-react'
+import { Bell, MessageCircle, Radar } from 'lucide-react'
 import DesktopSidebar from './DesktopSidebar.jsx'
 import BottomNav from './BottomNav.jsx'
 import Avatar from './Avatar.jsx'
@@ -82,21 +82,22 @@ export default function AppShell() {
                 <Logo className="w-7 h-7" withWordmark />
               </button>
 
-              <button
-                type="button"
-                onClick={() => navigate('/search')}
-                className="group relative hidden lg:flex flex-1 max-w-md mx-auto items-center text-left"
-                aria-label="Search Campinity"
-              >
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 transition-colors duration-200 group-hover:text-gray-500 dark:group-hover:text-gray-400" />
-                <span className="flex items-center justify-between w-full rounded-full border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 pl-10 pr-2.5 py-2 text-sm text-gray-400 dark:text-gray-500 transition-all duration-200 group-hover:bg-white dark:group-hover:bg-white/10 group-hover:border-gray-300 dark:group-hover:border-white/20 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:group-hover:shadow-none">
-                  Search for people, communities, posts...
-                  <kbd className="flex-shrink-0 rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-400">
-                    Ctrl K
-                  </kbd>
-                </span>
-              </button>
-
+              {/* The large "Search for people, communities, posts..."
+                  desktop bar that used to live here is removed —
+                  requested explicitly, it was taking unnecessary header
+                  space above every AppShell page (Home/Communities/
+                  Marketplace/Lost & Found/Messages all share this one
+                  header). Search/Explore itself is untouched — Ctrl K
+                  never had a real keyboard listener behind it (grepped
+                  the whole app; it was decorative only), so nothing
+                  functional is lost. The desktop Radar icon below still
+                  reaches Search-adjacent discovery, and /search remains
+                  a normal route reachable via DesktopSidebar's own
+                  "Explore" nav item and mobile's bottom-nav-adjacent
+                  entry points — this only removes the redundant top-bar
+                  shortcut. ml-auto below still correctly right-aligns
+                  the icon cluster now that there's no flex-1 sibling
+                  pushing it — no phantom gap left behind. */}
               <div className="flex items-center gap-1 ml-auto">
                 <button
                   type="button"

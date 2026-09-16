@@ -450,6 +450,22 @@ export default function CreatePostPage() {
           likedByMe: false,
           comments: 0,
           feedCategories: ['forYou', 'campus'],
+          // ROOT CAUSE of "poll doesn't appear in the feed until
+          // opening the post" — this hand-built object is what
+          // HomePage.jsx inserts into its `posts` state immediately
+          // after a successful createPost(), for instant feed display
+          // without waiting on a real refetch. It's a SEPARATE object
+          // from what Firestore actually stores (createPost's own
+          // `extra` above already correctly writes `poll`) — this one
+          // just never included it, so PostCard's `{post.poll && ...}`
+          // check was always false for the optimistic copy specifically.
+          // PostDetailPage never showed this bug because it always does
+          // a real getPostById() -> mapPostDoc() fetch, which already
+          // mapped `poll` correctly (confirmed by reading it) — the gap
+          // was only ever in this one optimistic-insertion object, nothing
+          // about feed mapping/normalization/PostCard's own render logic
+          // was actually broken.
+          poll: publishData.poll,
           ...(fileData && { file: fileData }),
           ...(publishData.selectedCommunity && {
             communityId: publishData.selectedCommunity.id,

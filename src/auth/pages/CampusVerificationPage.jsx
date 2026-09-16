@@ -29,14 +29,14 @@ export default function CampusVerificationPage() {
     }
   }
 
-  const handleVerified = (method) => {
-    if (method === 'college_email') {
-      navigate('/create-profile')
-    }
-    // college_id goes to 'pending' review — CampusVerificationOptions
-    // already shows the pending message and stays on this screen,
-    // matching the original behavior.
-  }
+  // Both methods now submit a request for admin review instead of
+  // granting verification instantly (see CampusVerificationOptions.jsx's
+  // own comment for the security reasoning) — neither one navigates
+  // away on its own anymore. CampusVerificationOptions already shows
+  // its own "pending" message and stays on this screen for both paths;
+  // the user moves on via the existing Skip action below, same as
+  // someone who hasn't verified at all yet.
+  const handleVerified = () => {}
 
   return (
     <AuthLayout

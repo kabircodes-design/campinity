@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BadgeCheck, Calendar, Camera, Link as LinkIcon, MessageCircle, MoreVertical, Pencil, Share2 } from 'lucide-react'
 import ProfilePhotoEditor from '../avatar/ProfilePhotoEditor.jsx'
 import Avatar from './Avatar.jsx'
@@ -48,6 +48,16 @@ export default function ProfileHeader({
   const [blocked, setBlocked] = useState(false)
   const [blockBusy, setBlockBusy] = useState(false)
   const [photoEditorOpen, setPhotoEditorOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    if (!menuOpen) return undefined
+    const handleOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [menuOpen])
 
   useEffect(() => {
     if (isOwnProfile || !profile?.uid) return
@@ -283,7 +293,7 @@ export default function ProfileHeader({
           <Share2 className="w-4 h-4" />
         </button>
         {!isOwnProfile && (
-          <div className="relative flex-shrink-0">
+          <div className="relative flex-shrink-0" ref={menuRef}>
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
@@ -293,7 +303,18 @@ export default function ProfileHeader({
               <MoreVertical className="w-4 h-4" />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-12 w-40 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30 dark:border-white/10 dark:bg-[#181b24]">
+              // z-40, not z-30: the profile page's tabs nav below this
+              // header is `sticky` at the SAME z-30 — at equal z-index,
+              // the later element in the DOM (the tabs) paints on top,
+              // so this menu (opened, positioned top-12 below the "..."
+              // button) could render partially BEHIND the sticky tabs
+              // row on a compact header, with just the last item (Block,
+              // in red) visible poking out underneath — exactly the
+              // "stray red BLOCK leaking into the tabs" bug. A real
+              // dropdown menu must always paint above page content, so
+              // this raises it clearly above that collision instead of
+              // relying on DOM order to accidentally not collide.
+              <div className="absolute right-0 top-12 w-40 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-40 dark:border-white/10 dark:bg-[#181b24]">
                 <button
                   type="button"
                   onClick={() => {

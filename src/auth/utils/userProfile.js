@@ -37,6 +37,16 @@ export async function saveUserProfile(uid, data) {
 
 /** Records the outcome of the campus verification step (email, ID card, or skip). */
 export async function setCampusVerification(uid, { verifiedCampus, verificationMethod, verificationStatus }) {
+  if (import.meta.env.DEV) {
+    const previous = await getUserProfile(uid).catch(() => null)
+    console.debug('[VERIFICATION DEBUG]', {
+      operation: 'setCampusVerification',
+      uid,
+      previousVerifiedCampus: previous?.verifiedCampus ?? null,
+      requestedVerifiedCampus: verifiedCampus,
+      source: 'auth/utils/userProfile.js:setCampusVerification'
+    })
+  }
   await saveUserProfile(uid, { verifiedCampus, verificationMethod, verificationStatus })
 }
 

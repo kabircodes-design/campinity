@@ -15,21 +15,29 @@ import { sanitizeEmail } from '../utils/sanitize.js'
  * inside CampusVerificationModal.jsx without duplicating any Firebase
  * code.
  *
- * `onVerified(method)` fires after a successful action, with the method
- * that succeeded:
- *   - 'college_email': verification completes immediately
- *     (verifiedCampus true, verificationStatus 'verified').
- *   - 'college_id': goes to 'pending' review — NOT immediately
- *     verified, so this only signals "request submitted", matching the
- *     original page's behavior of staying put and showing the pending
- *     message rather than moving on.
- * What to actually do in each case (navigate, close a modal, etc.) is
- * entirely the caller's decision.
+ * SECURITY FIX: the college-email path used to write verifiedCampus:
+ * true directly from this client component the instant a
+ * well-formed-but-unverified email string was typed in — no domain
+ * check, no confirmation code, no admin involved at all. Any signed-in
+ * user could self-verify by visiting /verify-college and typing any
+ * syntactically valid email. Firestore's own users/{uid} update rule
+ * had no restriction on this field either, so this wasn't just a UI
+ * bug — a client could reach the same result with a raw Firestore
+ * write, bypassing this component entirely (see firestore.rules for
+ * the matching backend fix). Both methods now do the SAME thing:
+ * submit a verificationRequests entry and leave verifiedCampus at
+ * false, exactly like the college-ID path already did — an admin must
+ * approve it (adminSetUserVerification / adminReviewVerificationRequest,
+ * Cloud Functions using the Admin SDK) before verifiedCampus can ever
+ * become true. `onVerified(method)` now always means "request
+ * submitted," never "verified" — see CampusVerificationPage.jsx's own
+ * updated handleVerified for how that's reflected in the UI.
  */
 export default function CampusVerificationOptions({ onVerified }) {
   const [collegeEmail, setCollegeEmail] = useState('')
   const [emailError, setEmailError] = useState('')
   const [emailSubmitting, setEmailSubmitting] = useState(false)
+  const [emailStatusMsg, setEmailStatusMsg] = useState('')
 
   const [idFile, setIdFile] = useState(null)
   const [idSubmitting, setIdSubmitting] = useState(false)
@@ -47,18 +55,32 @@ export default function CampusVerificationOptions({ onVerified }) {
     setEmailSubmitting(true)
     setFormError('')
     try {
-      // NOTE: this confirms the email is well-formed only. A production
-      // build should verify the domain / send a confirmation code from a
-      // trusted backend (e.g. a Cloud Function) rather than trusting the
-      // client outright — that backend piece is outside this UI-only pass.
-      await setCampusVerification(auth.currentUser.uid, {
-        verifiedCampus: true,
+      const uid = auth.currentUser.uid
+      const profile = await getUserProfile(uid)
+
+      // Never verifiedCampus: true here — a real email-domain check
+      // (or a sent confirmation code) belongs in a trusted backend,
+      // which doesn't exist yet. Until it does, this method goes
+      // through the same admin-reviewed request queue as the ID-card
+      // path, not an instant self-grant.
+      await setCampusVerification(uid, {
+        verifiedCampus: false,
         verificationMethod: 'college_email',
-        verificationStatus: 'verified'
+        verificationStatus: 'pending'
       })
+
+      await createVerificationRequest({
+        uid,
+        name: profile?.fullName || auth.currentUser.displayName || '',
+        college: profile?.college || '',
+        collegeEmail: clean,
+        verificationMethod: 'college_email'
+      })
+
+      setEmailStatusMsg('Verification pending — usually reviewed within 24 hours.')
       onVerified?.('college_email')
     } catch (err) {
-      setFormError(err?.message || 'Could not verify right now. Please try again.')
+      setFormError(err?.message || 'Could not submit right now. Please try again.')
     } finally {
       setEmailSubmitting(false)
     }
@@ -127,11 +149,16 @@ export default function CampusVerificationOptions({ onVerified }) {
               if (emailError) setEmailError('')
             }}
             error={emailError}
-            disabled={emailSubmitting}
+            disabled={emailSubmitting || !!emailStatusMsg}
             required
           />
-          <Button type="submit" loading={emailSubmitting}>
-            Verify college email
+          {emailStatusMsg && (
+            <p role="status" className="text-[12.5px] text-accent font-medium">
+              {emailStatusMsg}
+            </p>
+          )}
+          <Button type="submit" loading={emailSubmitting} disabled={!!emailStatusMsg}>
+            Submit for review
           </Button>
         </form>
       </div>

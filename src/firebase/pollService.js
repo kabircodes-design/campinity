@@ -1,4 +1,4 @@
-import { collection, doc, getCountFromServer, getDoc, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getCountFromServer, getDoc, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { db } from './firebase.js'
 
 /**
@@ -17,11 +17,11 @@ import { db } from './firebase.js'
  * bounded to the poll's own small option list (2-6 queries), so this
  * is never a scan and never trusts anything the client claims.
  *
- * One vote per user is enforced at the RULES layer (see
- * firestore.rules' pollVotes/{uid} block): the vote doc's own id IS
- * the voter's uid, and the rule only ever allows create — never
- * update — so a second vote attempt is rejected outright, not just
- * hidden by this file's own logic.
+ * "One active vote per user, ever-changeable" is enforced at the RULES
+ * layer (see firestore.rules' pollVotes/{uid} block): the vote doc's
+ * own id IS the voter's uid, and create/update/delete are all
+ * owner-only — there is structurally only ever one doc per user no
+ * matter how many times votePoll()/unvotePoll() are called.
  */
 
 function pollVotesCollection(postId) {
@@ -32,9 +32,16 @@ function pollVoteDoc(postId, uid) {
   return doc(db, 'posts', postId, 'pollVotes', uid)
 }
 
+/** First vote OR changing to a different option — setDoc overwrites the same doc id either way, so this is one function for both cases, not two. */
 export async function votePoll(postId, uid, optionId) {
   if (!postId || !uid || !optionId) throw new Error('Missing vote details.')
   await setDoc(pollVoteDoc(postId, uid), { optionId, votedAt: serverTimestamp() })
+}
+
+/** Removes the caller's own vote entirely — returns the poll to its pre-vote state for them. */
+export async function unvotePoll(postId, uid) {
+  if (!postId || !uid) return
+  await deleteDoc(pollVoteDoc(postId, uid))
 }
 
 /** Returns the optionId the viewer already voted for, or null if they haven't. */

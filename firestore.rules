@@ -70,10 +70,30 @@ service cloud.firestore {
     // updates followersCount/followingCount on the OTHER party's doc as
     // part of the same transaction — that field-scoped carve-out is what
     // makes follow/unfollow work at all.
+    // SECURITY FIX (verifiedCampus self-verification bug): this rule
+    // previously let the owner of a users/{uid} doc write ANY field,
+    // with zero restriction on verifiedCampus — so any signed-in user
+    // could set their own verifiedCampus to true via a direct Firestore
+    // write (auth/components/CampusVerificationOptions.jsx was doing
+    // exactly this from the client; a raw SDK call from devtools would
+    // have worked identically even without that UI bug, since this
+    // rule was the real, and only, enforcement layer). verifiedCampus
+    // is now immutable for every owner-initiated write: create requires
+    // it be absent or explicitly false, and update requires the
+    // incoming value to equal whatever it already was — a client can
+    // never move it in either direction. The only paths that still can
+    // are the existing Cloud Functions (adminSetUserVerification,
+    // adminReviewVerificationRequest in functions/functions/index.js),
+    // which use the Admin SDK and bypass this rule entirely, unaffected
+    // by this change. The pre-existing followersCount/followingCount
+    // carve-out (any signed-in user, for follow/unfollow side effects)
+    // is untouched — it never touched verifiedCampus and still doesn't.
     match /users/{uid} {
       allow read: if isSignedIn();
-      allow create: if isOwner(uid);
-      allow update: if isOwner(uid) || (isSignedIn() && onlyChanged(['followersCount', 'followingCount']));
+      allow create: if isOwner(uid) && request.resource.data.get('verifiedCampus', false) == false;
+      allow update: if
+        (isOwner(uid) && request.resource.data.get('verifiedCampus', false) == resource.data.get('verifiedCampus', false)) ||
+        (isSignedIn() && onlyChanged(['followersCount', 'followingCount']));
       allow delete: if false;
 
       // users/{uid}/notifications/{notificationId} — per notificationService.js's
@@ -207,10 +227,24 @@ service cloud.firestore {
       // Tightening this would need routing counts through a Cloud
       // Function (Admin SDK) instead of a client aggregation query, not
       // attempted in this pass.
+      // ROOT CAUSE of "poll voting is one-time-only": this previously
+      // only allowed `create`, so a first vote succeeded (the doc didn't
+      // exist yet) but a second write to the SAME doc id — whether the
+      // client called setDoc() or updateDoc(), Firestore rules evaluate
+      // that identically as an "update" once the target document already
+      // exists — hit `allow update: if false` and was silently rejected.
+      // Now: create (first vote), update (change to a different option —
+      // same doc id, same owner-only check as create), and delete
+      // (unvote) are all allowed, but ONLY for the doc's own owner in
+      // every case — the doc id IS the voter's uid, so this can never
+      // touch anyone else's vote, and "one active vote per user" still
+      // holds structurally: there is exactly one doc per uid no matter
+      // how many times they change their mind.
       match /pollVotes/{uid} {
         allow read: if isSignedIn();
         allow create: if isSignedIn() && request.auth.uid == uid;
-        allow update, delete: if false;
+        allow update: if isSignedIn() && request.auth.uid == uid;
+        allow delete: if isSignedIn() && request.auth.uid == uid;
       }
     }
 

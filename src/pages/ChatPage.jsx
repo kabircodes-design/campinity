@@ -3,10 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Clock,
-  Download,
-  FileText,
+  Flag,
+  MoreVertical,
   Phone,
-  ShieldAlert,
+  UserX,
   Users,
   Video
 } from 'lucide-react'
@@ -35,7 +35,6 @@ import { getUserProfile } from '../firebase/profileService.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
 import { isOnline, presenceLabel } from '../firebase/presenceService.js'
 import { blockUser } from '../firebase/blockService.js'
-import { getCollegeById } from '../data/dummyColleges.js'
 import { useChat } from '../hooks/useChat.js'
 import { useMessages } from '../hooks/useMessages.js'
 import { useCallActions } from '../context/CallContext.jsx'
@@ -54,13 +53,6 @@ function dayLabelFor(timestamp) {
   if (isSameDay(date, today)) return 'Today'
   if (isSameDay(date, yesterday)) return 'Yesterday'
   return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
-}
-
-function formatFileSize(bytes) {
-  if (!bytes) return ''
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 /**
@@ -96,7 +88,8 @@ export default function ChatPage() {
   const [listSearchTerm, setListSearchTerm] = useState('')
   const [unreadNotifCount, setUnreadNotifCount] = useState(0)
   const [reportOpen, setReportOpen] = useState(false)
-  const [otherCollege, setOtherCollege] = useState(null)
+  const [chatMenuOpen, setChatMenuOpen] = useState(false)
+  const chatMenuRef = useRef(null)
   const fetchedUidsRef = useRef(new Set())
 
   useEffect(() => {
@@ -158,20 +151,6 @@ export default function ChatPage() {
     const unsubscribe = subscribeToUnreadCount(uid, setUnreadNotifCount)
     return () => unsubscribe()
   }, [])
-
-  useEffect(() => {
-    if (!otherProfile?.collegeId) {
-      setOtherCollege(null)
-      return
-    }
-    let cancelled = false
-    getCollegeById(otherProfile.collegeId).then((c) => {
-      if (!cancelled) setOtherCollege(c)
-    }).catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [otherProfile?.collegeId])
 
   const messagesContainerRef = useRef(null)
   const [showNewMessagesButton, setShowNewMessagesButton] = useState(false)
@@ -283,9 +262,6 @@ export default function ChatPage() {
     return groups
   }, [messages])
 
-  const sharedFiles = useMemo(() => messages.filter((m) => m.type === 'file').slice(-8).reverse(), [messages])
-  const mediaItems = useMemo(() => messages.filter((m) => m.type === 'image' && m.imageUrl).slice(-8).reverse(), [messages])
-
   const loading = chatLoading || (messagesLoading && messages.length === 0)
   const displayName = otherProfile?.displayName || 'Student'
   const isGroup = chat?.type === 'group'
@@ -305,6 +281,31 @@ export default function ChatPage() {
     // (many rapid clicks before the first click's state update lands).
     if (isGroup || !otherUid || isBusy) return
     startCall(otherUid, chatId, type)
+  }
+
+  // Chat header "..." menu (Report/Block) — replaces the removed
+  // right-side info rail's own Safety section. Same real
+  // handleBlock/setReportOpen this page already had; only where they're
+  // triggered from changed.
+  useEffect(() => {
+    if (!chatMenuOpen) return undefined
+    const handleOutside = (event) => {
+      if (chatMenuRef.current && !chatMenuRef.current.contains(event.target)) setChatMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [chatMenuOpen])
+
+  // Instagram/Facebook-style: tap the header identity to open that
+  // person's real profile — the existing /student/:username route,
+  // nothing new. React Router push, not a reload, so the browser Back
+  // button returns straight to this exact conversation (chatId in the
+  // URL is untouched by this navigation, and useChat/useMessages
+  // re-subscribe correctly on remount the same way opening the chat
+  // fresh already does).
+  const handleOpenOtherProfile = () => {
+    if (isGroup || !otherProfile?.username) return
+    navigate(`/student/${otherProfile.username}`)
   }
 
   const handleBlock = async () => {
@@ -404,30 +405,40 @@ export default function ChatPage() {
                     </button>
                   ) : (
                     <>
-                      <div className="relative flex-shrink-0">
-                        <Avatar
-                          initials={getInitials(displayName)}
-                          colorClass={getAvatarColor(otherUid || chatId)}
-                          size="sm"
-                          src={getProfileIdentityImage(otherProfile) || undefined}
-                        />
-                        {otherOnline && (
-                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" aria-label="Online" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
-                        <p className={`text-[11px] truncate ${otherOnline ? 'text-emerald-600' : 'text-gray-400'}`}>
-                          {presenceLabel(otherProfile)}
-                        </p>
-                      </div>
+                      {/* Instagram/Facebook-style tap-to-open-profile —
+                          same identity block, just wrapped in a button
+                          instead of a static div. cursor-pointer +
+                          hover bg gives it real desktop affordance. */}
+                      <button
+                        type="button"
+                        onClick={handleOpenOtherProfile}
+                        className="flex items-center gap-2 flex-1 min-w-0 text-left rounded-lg -mx-1.5 px-1.5 py-1 hover:bg-gray-50 transition-all duration-200 cursor-pointer"
+                      >
+                        <div className="relative flex-shrink-0">
+                          <Avatar
+                            initials={getInitials(displayName)}
+                            colorClass={getAvatarColor(otherUid || chatId)}
+                            size="sm"
+                            src={getProfileIdentityImage(otherProfile) || undefined}
+                          />
+                          {otherOnline && (
+                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" aria-label="Online" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
+                          <p className={`text-[11px] truncate ${otherOnline ? 'text-emerald-600' : 'text-gray-400'}`}>
+                            {presenceLabel(otherProfile)}
+                          </p>
+                        </div>
+                      </button>
                       <button
                         type="button"
                         aria-label="Voice call"
                         title="Voice call"
                         onClick={() => handleCall('voice')}
                         disabled={isBusy}
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent transition-all duration-200"
+                        className="w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent transition-all duration-200"
                       >
                         <Phone className="w-4.5 h-4.5" />
                       </button>
@@ -437,10 +448,52 @@ export default function ChatPage() {
                         title="Video call"
                         onClick={() => handleCall('video')}
                         disabled={isBusy}
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent transition-all duration-200"
+                        className="w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent transition-all duration-200"
                       >
                         <Video className="w-4.5 h-4.5" />
                       </button>
+                      {/* Report/Block — the old right rail's own Safety
+                          section, moved here (same handleBlock/
+                          setReportOpen, same ReportModal already
+                          rendered at the bottom of this page). z-40, not
+                          the previous rail's implied z-30-and-under: see
+                          ProfileHeader.jsx's identical fix for why an
+                          open dropdown must clear a page's sticky
+                          elements, not just happen to not collide. */}
+                      <div className="relative flex-shrink-0" ref={chatMenuRef}>
+                        <button
+                          type="button"
+                          aria-label="More options"
+                          onClick={() => setChatMenuOpen((v) => !v)}
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200"
+                        >
+                          <MoreVertical className="w-4.5 h-4.5" />
+                        </button>
+                        {chatMenuOpen && (
+                          <div className="absolute right-0 top-11 w-40 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-40">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setChatMenuOpen(false)
+                                setReportOpen(true)
+                              }}
+                              className="w-full flex items-center gap-2 text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                            >
+                              <Flag className="w-3.5 h-3.5 text-gray-400" /> Report
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setChatMenuOpen(false)
+                                handleBlock()
+                              }}
+                              className="w-full flex items-center gap-2 text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-all duration-150"
+                            >
+                              <UserX className="w-3.5 h-3.5" /> Block
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </>
                   )}
                 </div>
@@ -527,135 +580,6 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
-
-            {/* Right info rail — desktop only, real data only. */}
-            {!isGroup && (
-              <aside className="hidden lg:flex lg:flex-col w-72 flex-shrink-0 h-full overflow-y-auto border-l border-gray-100 bg-white px-4 py-5 gap-4">
-                <div className="text-center">
-                  <div className="relative inline-block">
-                    <Avatar
-                      initials={getInitials(displayName)}
-                      colorClass={getAvatarColor(otherUid || chatId)}
-                      size="lg"
-                      src={getProfileIdentityImage(otherProfile) || undefined}
-                    />
-                    {otherOnline && (
-                      <span className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white" />
-                    )}
-                  </div>
-                  <p className="mt-2.5 text-sm font-bold text-gray-900">{displayName}</p>
-                  <p className={`text-xs ${otherOnline ? 'text-emerald-600' : 'text-gray-400'}`}>{presenceLabel(otherProfile)}</p>
-                  <div className="mt-3 flex items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleCall('voice')}
-                      disabled={isBusy}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-full bg-blue-600 text-white text-xs font-semibold py-2.5 hover:bg-blue-700 disabled:opacity-40 transition-all duration-200"
-                    >
-                      <Phone className="w-3.5 h-3.5" /> Call
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleCall('video')}
-                      disabled={isBusy}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-full border border-gray-200 text-gray-900 text-xs font-semibold py-2.5 hover:border-gray-300 disabled:opacity-40 transition-all duration-200"
-                    >
-                      <Video className="w-3.5 h-3.5" /> Video
-                    </button>
-                  </div>
-                </div>
-
-                {(otherCollege || otherProfile?.course || otherProfile?.year) && (
-                  <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
-                    <p className="text-sm font-bold text-gray-900 mb-2.5">Quick Info</p>
-                    <div className="space-y-2 text-xs">
-                      {otherCollege?.name && (
-                        <div>
-                          <p className="text-gray-400">College</p>
-                          <p className="font-medium text-gray-800">{otherCollege.name}</p>
-                        </div>
-                      )}
-                      {otherProfile?.year && (
-                        <div>
-                          <p className="text-gray-400">Year</p>
-                          <p className="font-medium text-gray-800">{otherProfile.year}</p>
-                        </div>
-                      )}
-                      {otherProfile?.course && (
-                        <div>
-                          <p className="text-gray-400">Course</p>
-                          <p className="font-medium text-gray-800">{otherProfile.course}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {sharedFiles.length > 0 && (
-                  <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
-                    <p className="text-sm font-bold text-gray-900 mb-2.5">Shared Files</p>
-                    <div className="space-y-1.5">
-                      {sharedFiles.slice(0, 3).map((m) => (
-                        <a
-                          key={m.id}
-                          href={m.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 -mx-2 hover:bg-gray-50 transition-all duration-200"
-                        >
-                          <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
-                            <FileText className="w-4 h-4" />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-gray-900 truncate">{m.fileName || 'File'}</p>
-                            <p className="text-[10px] text-gray-400">{formatFileSize(m.fileSize)}</p>
-                          </div>
-                          <Download className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {mediaItems.length > 0 && (
-                  <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
-                    <p className="text-sm font-bold text-gray-900 mb-2.5">Media</p>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {mediaItems.slice(0, 6).map((m) => (
-                        <a key={m.id} href={m.imageUrl} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                          <img src={m.imageUrl} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-200" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
-                  <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-2">
-                    <ShieldAlert className="w-4 h-4 text-gray-400" /> Safety
-                  </p>
-                  <p className="text-xs text-gray-400 leading-relaxed mb-3">
-                    Feeling uncomfortable with this conversation? You can report or block {displayName.split(' ')[0]}.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setReportOpen(true)}
-                      className="flex-1 rounded-full border border-gray-200 text-gray-700 text-xs font-semibold py-2 hover:border-gray-300 transition-all duration-200"
-                    >
-                      Report
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleBlock}
-                      className="flex-1 rounded-full border border-rose-100 text-rose-600 text-xs font-semibold py-2 hover:bg-rose-50 transition-all duration-200"
-                    >
-                      Block
-                    </button>
-                  </div>
-                </div>
-              </aside>
-            )}
           </div>
         </div>
       </div>
