@@ -1,4 +1,4 @@
-import { collection, getDocs, limit, orderBy, query, startAt, endAt } from 'firebase/firestore'
+import { collection, getDocs, limit, orderBy, query, startAt, endAt, where } from 'firebase/firestore'
 import { db } from './firebase.js'
 import { searchColleges } from './collegeService.js'
 import { getAvatarColor, getInitials } from './postService.js'
@@ -88,4 +88,32 @@ export async function searchStudents(rawQuery) {
 export async function searchAll(rawQuery) {
   const [students, colleges] = await Promise.all([searchStudents(rawQuery), searchColleges(rawQuery)])
   return { students, colleges }
+}
+
+/**
+ * "People from your course" — a browsable discovery query, distinct
+ * from searchStudents() above (which needs a typed prefix). Real,
+ * server-side, exact-match compound query on the same courseLower
+ * mirror field searchStudents already relies on — no new profile
+ * field. "Department" isn't tracked separately anywhere in this app
+ * (EditProfilePage.jsx's own Department input writes into this exact
+ * `course` field), so this single query already covers both concepts.
+ *
+ * Two equality filters on different fields (collegeId + courseLower)
+ * requires a Firestore composite index — same one-time-setup situation
+ * postService.js's getFeedPosts already documents: the first real run
+ * against production will surface a console link to create it, which
+ * can't be done from application code.
+ */
+export async function getPeopleFromMyCourse(collegeId, course, { excludeUid = null, pageSize = 12 } = {}) {
+  const courseLower = toLower(course)
+  if (!collegeId || !courseLower) return []
+  const usersQuery = query(
+    collection(db, USERS_COLLECTION),
+    where('collegeId', '==', collegeId),
+    where('courseLower', '==', courseLower),
+    limit(pageSize + (excludeUid ? 1 : 0))
+  )
+  const snap = await getDocs(usersQuery)
+  return snap.docs.map(mapUserDoc).filter((u) => u.uid !== excludeUid).slice(0, pageSize)
 }

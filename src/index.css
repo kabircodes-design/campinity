@@ -125,3 +125,20 @@
   0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
   30% { transform: translateY(-4px); opacity: 1; }
 }
+
+/* Double-tap-like heart pop — fast in, gentle settle-and-fade out. */
+@keyframes heartPop {
+  0% { transform: scale(0.4); opacity: 0; }
+  25% { transform: scale(1.15); opacity: 1; }
+  40% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+/* Jump-to-reply highlight — a brief, subtle background pulse on the
+   target message, not a jarring flash. Also covered for free by the
+   global prefers-reduced-motion rule above. */
+@keyframes messageHighlight {
+  0% { background-color: transparent; }
+  15% { background-color: rgba(37, 99, 235, 0.12); }
+  100% { background-color: transparent; }
+}

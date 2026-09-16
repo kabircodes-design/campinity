@@ -20,7 +20,15 @@ import TypingIndicator from '../components/TypingIndicator.jsx'
 import ReportModal from '../components/ReportModal.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
-import { markChatRead, subscribeToUserChats, subscribeToSentPendingChats } from '../firebase/chatService.js'
+import {
+  markChatRead,
+  subscribeToUserChats,
+  subscribeToSentPendingChats,
+  toggleMessageReaction,
+  editMessage,
+  deleteMessageForMe,
+  deleteMessageForEveryone
+} from '../firebase/chatService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
@@ -168,6 +176,56 @@ export default function ChatPage() {
   const messagesContainerRef = useRef(null)
   const [showNewMessagesButton, setShowNewMessagesButton] = useState(false)
   const isNearBottomRef = useRef(true)
+  const [replyingTo, setReplyingTo] = useState(null)
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null)
+  const highlightTimeoutRef = useRef(null)
+
+  // Clears the reply draft on chat switch — otherwise replying in chat A
+  // then navigating to chat B without sending would silently carry the
+  // reply-to reference into the wrong conversation.
+  useEffect(() => {
+    setReplyingTo(null)
+  }, [chatId])
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current)
+    }
+  }, [])
+
+  // "Jump to original" only works for messages already loaded in this
+  // page's real-time subscription (subscribeToMessages' own pageSize) —
+  // reaching further back would need fetching older pages until found,
+  // deliberately out of scope here. If it's not in the DOM, this is a
+  // safe, silent no-op rather than a broken jump.
+  const handleJumpToMessage = (messageId) => {
+    const el = document.getElementById(`msg-${messageId}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current)
+    setHighlightedMessageId(messageId)
+    highlightTimeoutRef.current = setTimeout(() => setHighlightedMessageId(null), 1500)
+  }
+
+  const handleReact = (messageId, emoji) => {
+    if (!currentUid) return
+    toggleMessageReaction(chatId, messageId, currentUid, emoji).catch(() => {})
+  }
+
+  const handleEdit = (messageId, newText) => {
+    if (!currentUid) return
+    editMessage(chatId, messageId, currentUid, newText).catch(() => {})
+  }
+
+  const handleDeleteForMe = (messageId) => {
+    if (!currentUid) return
+    deleteMessageForMe(chatId, messageId, currentUid).catch(() => {})
+  }
+
+  const handleDeleteForEveryone = (messageId) => {
+    if (!currentUid) return
+    deleteMessageForEveryone(chatId, messageId, currentUid).catch(() => {})
+  }
 
   const handleMessagesScroll = () => {
     const el = messagesContainerRef.current
@@ -415,7 +473,20 @@ export default function ChatPage() {
                         </span>
                       </div>
                     ) : (
-                      <MessageBubble key={item.id} message={item.message} isMine={item.message.senderId === currentUid} currentUid={currentUid} onRetry={retryMessage} />
+                      <MessageBubble
+                        key={item.id}
+                        message={item.message}
+                        isMine={item.message.senderId === currentUid}
+                        currentUid={currentUid}
+                        onRetry={retryMessage}
+                        onReply={setReplyingTo}
+                        onReact={handleReact}
+                        onEdit={handleEdit}
+                        onDeleteForMe={handleDeleteForMe}
+                        onDeleteForEveryone={handleDeleteForEveryone}
+                        onJumpToMessage={handleJumpToMessage}
+                        highlighted={highlightedMessageId === item.message.id}
+                      />
                     )
                   )
                 )}
@@ -446,7 +517,13 @@ export default function ChatPage() {
                     You've sent your message — you can reply again once they accept.
                   </p>
                 ) : (
-                  <MessageInput onSend={sendMessage} disabled={sending} chatId={chatId} />
+                  <MessageInput
+                    onSend={sendMessage}
+                    disabled={sending}
+                    chatId={chatId}
+                    replyingTo={replyingTo}
+                    onCancelReply={() => setReplyingTo(null)}
+                  />
                 )}
               </div>
             </div>

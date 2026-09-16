@@ -444,6 +444,48 @@ export function useCall() {
     })
   }, [localStream])
 
+  const facingModeRef = useRef('user')
+  const [switchingCamera, setSwitchingCamera] = useState(false)
+
+  // Front/back camera switch — additive, doesn't touch signaling at all:
+  // acquires one fresh video-only track with the opposite facingMode,
+  // swaps it into the EXISTING peer connection via replaceTrack() (the
+  // standard WebRTC way to change a track mid-call with no renegotiation,
+  // no new offer/answer), and rebuilds localStream as a new MediaStream
+  // so the local preview <video> (keyed off localStream in CallOverlay)
+  // actually updates. Only ever active while a video call is live — a
+  // device with just one camera simply rejects the new getUserMedia
+  // constraint, caught below, current camera stays untouched.
+  const switchCamera = useCallback(async () => {
+    if (!pcRef.current || !localStream || switchingCamera) return
+    const type = activeCallRef.current?.type
+    if (type !== 'video') return
+
+    setSwitchingCamera(true)
+    try {
+      const nextFacingMode = facingModeRef.current === 'user' ? 'environment' : 'user'
+      const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: nextFacingMode } })
+      const newTrack = newStream.getVideoTracks()[0]
+      if (!newTrack) return
+
+      const sender = pcRef.current.getSenders().find((s) => s.track && s.track.kind === 'video')
+      if (sender) await sender.replaceTrack(newTrack)
+
+      const oldVideoTrack = localStream.getVideoTracks()[0]
+      oldVideoTrack?.stop()
+      newTrack.enabled = !cameraOff
+
+      const rebuiltStream = new MediaStream([...localStream.getAudioTracks(), newTrack])
+      setLocalStream(rebuiltStream)
+      facingModeRef.current = nextFacingMode
+    } catch {
+      // No second camera, or permission changed mid-call — current
+      // camera simply stays active, not a fatal call error.
+    } finally {
+      setSwitchingCamera(false)
+    }
+  }, [localStream, switchingCamera, cameraOff])
+
   useEffect(() => {
     return () => {
       clearRingTimeout()
@@ -469,6 +511,8 @@ export function useCall() {
     endCall,
     toggleMute,
     toggleCamera,
+    switchCamera,
+    switchingCamera,
     resetCall
   }
 }

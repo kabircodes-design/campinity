@@ -3,6 +3,7 @@ import {
   arrayUnion,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -291,7 +292,8 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
     mimeType = null,
     callType = null,
     callDurationSec = null,
-    callOutcome = null
+    callOutcome = null,
+    replyTo = null
   } = options
 
   if (!senderId) throw new Error('You need to be signed in to send a message.')
@@ -322,7 +324,23 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
       edited: false,
       editedAt: null,
       deletedFor: [],
+      reactions: {},
       createdAt: serverTimestamp()
+    }
+    // Denormalized snapshot, not a live reference — built by the caller
+    // from the message being replied to (see useMessages.js). This is
+    // deliberate: if the original message is later hard-deleted
+    // (deleteMessageForEveryone), the reply preview still has real
+    // content to show instead of a broken lookup, matching "handle
+    // deleted original messages gracefully" without needing a tombstone
+    // system for every message.
+    if (replyTo) {
+      messageDoc.replyTo = {
+        messageId: replyTo.messageId,
+        senderId: replyTo.senderId,
+        text: (replyTo.text || '').slice(0, 200),
+        type: replyTo.type || 'text'
+      }
     }
     if (imageUrl) messageDoc.imageUrl = imageUrl
     if (sharedPayload) messageDoc.sharedPayload = sharedPayload
@@ -620,6 +638,22 @@ export async function editMessage(chatId, messageId, senderId, newText) {
   if (snap.data().senderId !== senderId) throw new Error('You can only edit your own messages.')
   if (!newText?.trim()) throw new Error('Message cannot be empty.')
   await updateDoc(messageRef, { text: newText.trim(), edited: true, editedAt: serverTimestamp() })
+}
+
+// One reaction per user, matching the rule's own [request.auth.uid]-only
+// carve-out: reactions is a map keyed by uid, so setting it again just
+// overwrites that same key — never adds a second entry for one user.
+// Written via a dotted-path field update (reactions.{uid}), not a
+// read-merge-write of the whole map, so two different users reacting at
+// the same moment can never clobber each other's entry — only the read
+// that decides add-vs-remove for THIS user's own tap needs a get().
+export async function toggleMessageReaction(chatId, messageId, uid, emoji) {
+  const messageRef = doc(db, 'chats', chatId, 'messages', messageId)
+  const snap = await getDoc(messageRef)
+  if (!snap.exists()) return
+  const current = snap.data().reactions || {}
+  const removing = current[uid] === emoji // tapping the same emoji again removes it
+  await updateDoc(messageRef, { [`reactions.${uid}`]: removing ? deleteField() : emoji })
 }
 
 export async function deleteMessageForMe(chatId, messageId, uid) {

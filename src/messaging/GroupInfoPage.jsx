@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Crown, LogOut, Search, UserMinus, UserPlus, Users, X } from 'lucide-react'
+import { ArrowLeft, Check, Crown, LogOut, Pencil, Search, ShieldPlus, UserMinus, UserPlus, Users, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile, searchUsersForShare } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { getChat, addGroupMembers, removeGroupMember, leaveGroup } from '../firebase/chatService.js'
+import { getChat, addGroupMembers, removeGroupMember, leaveGroup, promoteToGroupAdmin, updateGroupInfo } from '../firebase/chatService.js'
 
 /**
  * Client-side admin checks here are a UX convenience (hide buttons a
@@ -28,6 +28,10 @@ export default function GroupInfoPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [error, setError] = useState('')
+  const [editingName, setEditingName] = useState(false)
+  const [groupNameDraft, setGroupNameDraft] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  const [promotingUid, setPromotingUid] = useState(null)
 
   const loadChat = async () => {
     const data = await getChat(chatId, currentUid)
@@ -85,6 +89,43 @@ export default function GroupInfoPage() {
     navigate('/messages')
   }
 
+  const startEditingName = () => {
+    setGroupNameDraft(chat.groupName || '')
+    setEditingName(true)
+  }
+
+  const handleSaveName = async () => {
+    const trimmed = groupNameDraft.trim()
+    if (!trimmed || trimmed === chat.groupName) {
+      setEditingName(false)
+      return
+    }
+    setSavingName(true)
+    setError('')
+    try {
+      await updateGroupInfo(chatId, currentUid, { groupName: trimmed })
+      setEditingName(false)
+      await loadChat()
+    } catch (err) {
+      setError(err?.message || 'Could not rename this group.')
+    } finally {
+      setSavingName(false)
+    }
+  }
+
+  const handlePromote = async (memberUid) => {
+    setError('')
+    setPromotingUid(memberUid)
+    try {
+      await promoteToGroupAdmin(chatId, currentUid, memberUid)
+      await loadChat()
+    } catch (err) {
+      setError(err?.message || 'Could not promote this member.')
+    } finally {
+      setPromotingUid(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -121,7 +162,46 @@ export default function GroupInfoPage() {
               <Users className="w-8 h-8 text-white" />
             </div>
           )}
-          <p className="mt-3 text-lg font-bold text-gray-900">{chat.groupName}</p>
+          {editingName ? (
+            <div className="mt-3 flex items-center gap-1.5">
+              <input
+                type="text"
+                autoFocus
+                value={groupNameDraft}
+                onChange={(event) => setGroupNameDraft(event.target.value)}
+                onKeyDown={(event) => event.key === 'Enter' && handleSaveName()}
+                maxLength={60}
+                disabled={savingName}
+                className="rounded-lg border border-gray-200 px-2.5 py-1 text-center text-lg font-bold text-gray-900 outline-none focus:border-blue-400"
+              />
+              <button
+                type="button"
+                onClick={handleSaveName}
+                disabled={savingName}
+                aria-label="Save group name"
+                className="w-7 h-7 rounded-full flex items-center justify-center text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingName(false)}
+                aria-label="Cancel"
+                className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 flex items-center gap-1.5">
+              <p className="text-lg font-bold text-gray-900">{chat.groupName}</p>
+              {isAdmin && (
+                <button type="button" onClick={startEditingName} aria-label="Rename group" className="text-gray-300 hover:text-gray-500">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
           <p className="text-sm text-gray-400">{chat.participants?.length || 0} members</p>
         </div>
 
@@ -191,9 +271,21 @@ export default function GroupInfoPage() {
                   </span>
                 )}
                 {isAdmin && !isSelf && !memberIsAdmin && (
-                  <button type="button" onClick={() => handleRemoveMember(memberUid)} aria-label="Remove member" className="text-gray-300 hover:text-red-500">
-                    <UserMinus className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handlePromote(memberUid)}
+                      disabled={promotingUid === memberUid}
+                      aria-label="Make admin"
+                      title="Make admin"
+                      className="text-gray-300 hover:text-amber-500 disabled:opacity-50"
+                    >
+                      <ShieldPlus className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={() => handleRemoveMember(memberUid)} aria-label="Remove member" className="text-gray-300 hover:text-red-500">
+                      <UserMinus className="w-4 h-4" />
+                    </button>
+                  </div>
                 )}
               </div>
             )

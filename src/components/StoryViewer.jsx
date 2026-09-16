@@ -1,10 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Eye, Heart, Send, Share2, Trash2, X } from 'lucide-react'
+import { Eye, Heart, MessageCircle, Send, Share2, Trash2, X } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
-import { deleteStory, getStoryLikeCount, getStoryViewers, hasLikedStory, likeStory, recordStoryView, unlikeStory } from '../firebase/storyService.js'
+import {
+  addStoryComment,
+  deleteStory,
+  deleteStoryComment,
+  getStoryLikeCount,
+  getStoryViewers,
+  hasLikedStory,
+  likeStory,
+  recordStoryView,
+  subscribeToStoryComments,
+  unlikeStory
+} from '../firebase/storyService.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import { getOrCreateChat, sendMessage } from '../firebase/chatService.js'
 import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
 import Avatar from './Avatar.jsx'
@@ -43,6 +55,11 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
   const [mediaStatus, setMediaStatus] = useState('loading') // 'loading' | 'ready' | 'error'
   const [showViewers, setShowViewers] = useState(false)
   const [viewers, setViewers] = useState([])
+  const [showComments, setShowComments] = useState(false)
+  const [comments, setComments] = useState([])
+  const [commentText, setCommentText] = useState('')
+  const [commentSending, setCommentSending] = useState(false)
+  const { profile: myProfile } = useAuth()
   const [deleting, setDeleting] = useState(false)
   const [liked, setLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
@@ -180,6 +197,7 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
         : null
 
   const handleShowViewers = async () => {
+    setShowComments(false)
     setPaused(true)
     setShowViewers(true)
     try {
@@ -193,6 +211,57 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
   const handleCloseViewers = () => {
     setShowViewers(false)
     setPaused(false)
+  }
+
+  // Real-time, unlike Viewers' one-shot fetch above — comments left
+  // while the panel is open should appear live, matching how they'd
+  // behave anywhere else in the app. Subscribes only while the panel is
+  // actually open, and unsubscribes on close AND on story change (the
+  // effect's own cleanup), so this never leaks a listener for a story
+  // that's no longer being viewed.
+  useEffect(() => {
+    if (!showComments || !current?.id) {
+      setComments([])
+      return undefined
+    }
+    const unsubscribe = subscribeToStoryComments(current.id, setComments)
+    return () => unsubscribe()
+  }, [showComments, current?.id])
+
+  const handleShowComments = () => {
+    setShowViewers(false)
+    setPaused(true)
+    setShowComments(true)
+  }
+
+  const handleCloseComments = () => {
+    setShowComments(false)
+    setPaused(false)
+  }
+
+  const handleSendComment = async () => {
+    const text = commentText.trim()
+    if (!text || commentSending || !current?.id || !currentUid) return
+    setCommentSending(true)
+    try {
+      await addStoryComment(current.id, {
+        uid: currentUid,
+        displayName: myProfile?.displayName,
+        username: myProfile?.username,
+        avatar: myProfile?.avatar,
+        text
+      })
+      setCommentText('')
+    } catch {
+      // Same as story replies below — the input just keeps its text so the user can retry, no separate error toast for one inline field.
+    } finally {
+      setCommentSending(false)
+    }
+  }
+
+  const handleDeleteComment = (commentId) => {
+    if (!current?.id || !currentUid) return
+    deleteStoryComment(current.id, commentId, currentUid).catch(() => {})
   }
 
   const handleDelete = async () => {
@@ -352,7 +421,7 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
               "sometimes can't be dismissed" bug caused by the
               previous full-height overlay sitting on top of the
               header in DOM order. */}
-          {!showViewers && mediaStatus !== 'error' && (
+          {!showViewers && !showComments && mediaStatus !== 'error' && (
             <>
               <button type="button" aria-label="Previous story" onClick={goPrev} className="absolute top-16 bottom-24 left-0 w-1/3 z-10" />
               <button type="button" aria-label="Next story" onClick={goNext} className="absolute top-16 bottom-24 right-0 w-2/3 z-10" />
@@ -397,20 +466,29 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
           </div>
 
           {isOwn && mediaStatus === 'ready' && (
-            <button
-              type="button"
-              onClick={handleShowViewers}
-              className="absolute bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 rounded-full bg-black/40 text-white text-xs font-medium px-3.5 py-2"
-            >
-              <Eye className="w-3.5 h-3.5" /> Seen
-            </button>
+            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleShowViewers}
+                className="flex items-center gap-1.5 rounded-full bg-black/40 text-white text-xs font-medium px-3.5 py-2"
+              >
+                <Eye className="w-3.5 h-3.5" /> Seen
+              </button>
+              <button
+                type="button"
+                onClick={handleShowComments}
+                className="flex items-center gap-1.5 rounded-full bg-black/40 text-white text-xs font-medium px-3.5 py-2"
+              >
+                <MessageCircle className="w-3.5 h-3.5" /> Comments
+              </button>
+            </div>
           )}
 
           {/* Reply + like + share bar — mirrors Instagram's bottom row,
               never shown on your own story (a "Seen" pill takes that
               spot instead, above). pb-[env(safe-area-inset-bottom)]
               keeps it clear of the home-indicator/notch area. */}
-          {!isOwn && !showViewers && (
+          {!isOwn && !showViewers && !showComments && (
             <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
               <div className="flex-1 flex items-center rounded-full bg-white/15 backdrop-blur-sm px-3.5 py-2.5">
                 <input
@@ -445,6 +523,14 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
                 className="w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform duration-150"
               >
                 <Heart className="w-5.5 h-5.5" fill={liked ? '#3b82f6' : 'none'} stroke={liked ? '#3b82f6' : 'currentColor'} />
+              </button>
+              <button
+                type="button"
+                onClick={handleShowComments}
+                aria-label="Comments"
+                className="w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform duration-150"
+              >
+                <MessageCircle className="w-5 h-5" />
               </button>
               <button
                 type="button"
@@ -495,6 +581,70 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {showComments && (
+            <div className="absolute inset-x-0 bottom-0 z-30 max-h-[65%] bg-black/90 rounded-t-2xl px-4 pt-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex flex-col">
+              <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                <span className="text-white text-sm font-semibold">Comments ({comments.length})</span>
+                <button type="button" onClick={handleCloseComments} aria-label="Close comments" className="text-white/70 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto min-h-[60px]">
+                {comments.length === 0 ? (
+                  <p className="text-white/50 text-sm text-center py-4">No comments yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {comments.map((c) => (
+                      <div key={c.id} className="flex items-start gap-2.5">
+                        <Avatar initials={getInitials(c.displayName)} colorClass={getAvatarColor(c.uid)} size="sm" src={c.avatar || undefined} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-white text-sm">
+                            <span className="font-semibold">{c.displayName}</span>{' '}
+                            <span className="text-white/80">{c.text}</span>
+                          </p>
+                        </div>
+                        {c.uid === currentUid && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteComment(c.id)}
+                            aria-label="Delete comment"
+                            className="flex-shrink-0 text-white/40 hover:text-white/80"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-3 flex-shrink-0">
+                <div className="flex-1 flex items-center rounded-full bg-white/15 px-3.5 py-2">
+                  <input
+                    type="text"
+                    value={commentText}
+                    onChange={(event) => setCommentText(event.target.value)}
+                    onKeyDown={(event) => event.key === 'Enter' && handleSendComment()}
+                    placeholder="Add a comment..."
+                    aria-label="Add a comment"
+                    className="flex-1 bg-transparent text-sm text-white placeholder:text-white/60 outline-none"
+                  />
+                </div>
+                {commentText.trim() && (
+                  <button
+                    type="button"
+                    onClick={handleSendComment}
+                    disabled={commentSending}
+                    aria-label="Post comment"
+                    className="w-9 h-9 flex-shrink-0 rounded-full bg-blue-600 flex items-center justify-center text-white disabled:opacity-50 transition-all duration-200 active:scale-95"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

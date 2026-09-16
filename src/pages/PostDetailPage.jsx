@@ -17,6 +17,8 @@ import {
   ShoppingBag
 } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
+import MentionText from '../components/MentionText.jsx'
+import PostPoll from '../components/PostPoll.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 import CommentCard from '../components/CommentCard.jsx'
 import CommentComposer from '../components/CommentComposer.jsx'
@@ -437,7 +439,7 @@ export default function PostDetailPage() {
           ) : (
             post.text && (
               <p className="px-4 mt-3 text-[15px] text-gray-700 leading-relaxed whitespace-pre-wrap">
-                {post.text}
+                <MentionText text={post.text} />
                 {post.edited && <span className="ml-1.5 text-xs text-gray-400 font-normal">· Edited</span>}
               </p>
             )
@@ -448,6 +450,8 @@ export default function PostDetailPage() {
               <img src={post.imagePreviewUrl} alt="Post attachment" className="w-full max-h-80 object-cover" />
             </div>
           )}
+
+          {post.poll && <PostPoll postId={post.id} poll={post.poll} />}
 
           {post.file && (
             <button

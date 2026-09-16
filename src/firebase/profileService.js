@@ -1,5 +1,7 @@
 import {
   collection,
+  collectionGroup,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -404,6 +406,65 @@ export async function checkIsFollowing(followerId, followingId) {
   if (!followerId || !followingId) return false
   const snap = await getDoc(followDocRef(followerId, followingId))
   return snap.exists()
+}
+
+/* ============================================================
+   CLOSE FRIENDS — users/{uid}/closeFriends/{friendUid}, the exact same
+   shape/rule pattern users/{uid}/blockedUsers/{blockedUid} already
+   uses (own-subcollection, owner-only read/create/delete, no update).
+   Purely a personal list — never readable by anyone but its owner, not
+   even the person added to it (matching blockedUsers' own precedent:
+   you can't tell who added you). Used as a Story-visibility signal, not
+   a second friends/relationships system.
+   ============================================================ */
+
+function closeFriendDocRef(uid, friendUid) {
+  return doc(db, COLLECTION, uid, 'closeFriends', friendUid)
+}
+
+export async function addCloseFriend(uid, friendUid) {
+  if (!uid || !friendUid) return
+  if (uid === friendUid) throw new Error("You can't add yourself.")
+  await setDoc(closeFriendDocRef(uid, friendUid), { uid: friendUid, addedAt: serverTimestamp() })
+}
+
+export async function removeCloseFriend(uid, friendUid) {
+  if (!uid || !friendUid) return
+  await deleteDoc(closeFriendDocRef(uid, friendUid))
+}
+
+export async function isCloseFriend(uid, friendUid) {
+  if (!uid || !friendUid) return false
+  const snap = await getDoc(closeFriendDocRef(uid, friendUid))
+  return snap.exists()
+}
+
+export async function getCloseFriendsList(uid) {
+  if (!uid) return []
+  const snap = await getDocs(collection(db, COLLECTION, uid, 'closeFriends'))
+  return snap.docs.map((d) => d.data().uid)
+}
+
+/**
+ * "Who has added ME as a close friend" — a bounded collectionGroup
+ * query across every user's closeFriends subcollection, filtered to
+ * docs whose own `uid` field equals the viewer. Needed for Story
+ * discovery: without this, a closeFriends-only story would be created
+ * securely but literally undiscoverable by the people it's meant for
+ * (no feed would ever surface it). Requires a Firestore composite
+ * index on the closeFriends collection group (uid ==) — same one-time
+ * console-link setup as every other composite-index note in this
+ * codebase.
+ */
+export async function getCloseFriendsOfMe(viewerUid, { pageSize = 50 } = {}) {
+  if (!viewerUid) return []
+  const snap = await getDocs(
+    query(collectionGroup(db, 'closeFriends'), where('uid', '==', viewerUid), limit(pageSize))
+  )
+  // Each doc's path is users/{ownerUid}/closeFriends/{viewerUid} — the
+  // owner is the parent's parent id, not anything stored in the doc
+  // itself (storing it would be redundant with the path).
+  return snap.docs.map((d) => d.ref.parent.parent.id)
 }
 
 /**

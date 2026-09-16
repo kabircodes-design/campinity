@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react'
+import { Maximize2, Mic, MicOff, Minimize2, PhoneOff, RefreshCw, Video, VideoOff } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
@@ -36,10 +36,13 @@ export default function CallOverlay({ call }) {
     endCall,
     toggleMute,
     toggleCamera,
+    switchCamera,
+    switchingCamera,
     resetCall
   } = call
 
   const [otherProfile, setOtherProfile] = useState(null)
+  const [minimized, setMinimized] = useState(false)
   const localVideoRef = useRef(null)
   const remoteVideoRef = useRef(null)
   const remoteAudioRef = useRef(null)
@@ -74,6 +77,12 @@ export default function CallOverlay({ call }) {
 
   const isEndedState = ['ended', 'declined', 'missed', 'failed'].includes(callState)
 
+  // A fresh call always starts full-screen — minimized is a per-call UI
+  // preference, not something that should carry over from the last one.
+  useEffect(() => {
+    if (activeCall?.callId) setMinimized(false)
+  }, [activeCall?.callId])
+
   // Auto-dismiss a terminal state after a moment, so "Call ended" /
   // "Call declined" / "No answer" / "Call failed" doesn't sit on screen
   // forever with no button to clear it.
@@ -100,8 +109,54 @@ export default function CallOverlay({ call }) {
   else if (callState === 'failed') statusLabel = callError || 'Call failed'
   else if (callState === 'ended') statusLabel = 'Call ended'
 
+  // Minimized: a small corner pill (avatar/name/status + end call), not
+  // the full-bleed remote <video> — that element is only ever mounted
+  // in the full-screen branch below, so toggling minimized on/off never
+  // remounts/re-attaches the video ref (which only updates srcObject
+  // when remoteStream itself changes, not on remount) and can't show a
+  // stale blank frame either way. Never offered during a terminal state
+  // — those already auto-dismiss in ~2s, minimizing one would be
+  // pointless UI.
+  if (minimized && !isEndedState) {
+    return (
+      <div className="fixed bottom-24 right-4 lg:bottom-6 lg:right-6 z-[10000] w-56 rounded-2xl bg-gray-900 text-white shadow-2xl px-3 py-2.5 flex items-center gap-2.5 [animation:modalIn_200ms_cubic-bezier(0.16,1,0.3,1)]">
+        <Avatar initials={getInitials(displayName)} colorClass={getAvatarColor(otherUid)} size="sm" src={getProfileIdentityImage(otherProfile) || undefined} />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold truncate">{displayName}</p>
+          <p className="text-[10px] text-white/60">{statusLabel}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setMinimized(false)}
+          aria-label="Expand call"
+          className="flex-shrink-0 w-7 h-7 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors duration-200"
+        >
+          <Maximize2 className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={endCall}
+          aria-label="End call"
+          className="flex-shrink-0 w-7 h-7 rounded-full bg-rose-500 hover:bg-rose-600 flex items-center justify-center transition-colors duration-200"
+        >
+          <PhoneOff className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-[10000] bg-gray-900 flex flex-col items-center justify-center text-white">
+      {!isEndedState && (
+        <button
+          type="button"
+          onClick={() => setMinimized(true)}
+          aria-label="Minimize call"
+          className="absolute top-4 left-4 z-20 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors duration-200"
+        >
+          <Minimize2 className="w-4 h-4" />
+        </button>
+      )}
       {isVideo && isActive && (
         <video ref={remoteVideoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover bg-gray-900" />
       )}
@@ -155,6 +210,17 @@ export default function CallOverlay({ call }) {
                 }`}
               >
                 {cameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+              </button>
+            )}
+            {isVideo && isActive && !cameraOff && (
+              <button
+                type="button"
+                onClick={switchCamera}
+                disabled={switchingCamera}
+                aria-label="Switch camera"
+                className="w-12 h-12 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-white active:scale-95 disabled:opacity-50 transition-all duration-200"
+              >
+                <RefreshCw className={`w-5 h-5 ${switchingCamera ? 'animate-spin' : ''}`} />
               </button>
             )}
             <button

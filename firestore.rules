@@ -100,6 +100,32 @@ service cloud.firestore {
         allow read, create, delete: if isOwner(uid);
         allow update: if false;
       }
+      // closeFriends/{friendUid} — mostly the same shape as
+      // blockedUsers above, with one deliberate, narrow exception:
+      // getCloseFriendsOfMe() (profileService.js) needs to answer "who
+      // has added ME," which means reading (only) the specific
+      // documents where THIS caller is the named friend, across other
+      // people's subcollections — a pure owner-only rule (like
+      // blockedUsers) would make that collectionGroup query return
+      // nothing, since Firestore evaluates each matched document
+      // against this same rule and a non-owner would be rejected on
+      // every one. The second read clause grants exactly that: a
+      // signed-in user may read a closeFriends doc if THEY are the
+      // uid it names — this does not expose the rest of that owner's
+      // list (a query naming a different friendUid still only matches
+      // documents with a different `uid` field, which this same clause
+      // rejects for anyone but that other friend), and it still never
+      // reveals WHO the doc's owner is beyond the collectionGroup
+      // result's own path (already the point of getCloseFriendsOfMe
+      // existing at all — mirrors WhatsApp/Instagram's own "you can't
+      // see who added you to their close friends unless it's you"
+      // semantics only in the sense that this doesn't ADD unwanted
+      // visibility, it's the minimum needed for the feature to work).
+      match /closeFriends/{friendUid} {
+        allow read: if isOwner(uid) || (isSignedIn() && resource.data.uid == request.auth.uid);
+        allow create, delete: if isOwner(uid);
+        allow update: if false;
+      }
       match /mutedUsers/{mutedUid} {
         allow read, write: if isOwner(uid);
       }
@@ -153,14 +179,85 @@ service cloud.firestore {
           get(/databases/$(database)/documents/posts/$(postId)).data.userId == request.auth.uid
         );
       }
+
+      // posts/{postId}/pollVotes/{uid} — Phase 4 polls. Doc id IS the
+      // voter's own uid (no impersonation possible), and the ONLY
+      // allowed operation is create — never update or delete — which is
+      // the actual "one vote per user" enforcement: once a vote doc
+      // exists, this same rule rejects any attempt to write to that
+      // same id again, so a user can never change their vote or vote a
+      // second time by racing the client. `optionId` isn't validated
+      // against the post's real poll.options list here (would need a
+      // get() on the parent post to check membership) — a vote for a
+      // nonexistent option is a data-quality non-issue since
+      // getPollResults() only ever counts votes matching the real
+      // options it already knows about; an invalid optionId simply
+      // never gets counted anywhere, not a security bypass. Read is any
+      // signed-in user — a NECESSARY tradeoff, not an oversight:
+      // getPollResults() uses a count() aggregation query
+      // (where('optionId','==',X)), and Firestore can only allow an
+      // aggregation/list query when its rule is provably true for every
+      // possible matched document without depending on fields the query
+      // itself doesn't filter by — an owner-only rule here would be
+      // unprovable against a cross-uid optionId filter and break vote
+      // counting outright. Stated honestly: individual pollVotes/{uid}
+      // documents (who voted for which option) are technically
+      // queryable by any signed-in user directly, even though no UI in
+      // this app ever surfaces that — only aggregate counts are shown.
+      // Tightening this would need routing counts through a Cloud
+      // Function (Admin SDK) instead of a client aggregation query, not
+      // attempted in this pass.
+      match /pollVotes/{uid} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.auth.uid == uid;
+        allow update, delete: if false;
+      }
     }
 
-    // stories/{storyId} — same read/write pattern as posts. Unchanged.
+      // Story privacy pass: visibility can now be 'public' (unchanged
+      // behavior — any signed-in user), 'followers' (the owner, or
+      // someone with a real follows/{viewerUid}_{ownerId} doc, matching
+      // profileService.js's own doc-id convention), or 'closeFriends'
+      // (the owner, or someone listed in the owner's own
+      // users/{ownerId}/closeFriends/{viewerUid} subcollection). Either
+      // restricted tier additionally requires the two parties not be
+      // blocked in either direction (chatIsBlocked, already defined
+      // above) — "blocked users must never see restricted Stories" is
+      // enforced here, not just hidden in the UI, and a direct
+      // getStoryById() call for a story the viewer isn't authorized for
+      // now genuinely fails at the rules layer instead of just not
+      // being surfaced by the feed query.
     match /stories/{storyId} {
-      allow read: if isSignedIn() && resource.data.visibility == 'public';
+      allow read: if isSignedIn() && (
+        resource.data.visibility == 'public' ||
+        resource.data.userId == request.auth.uid ||
+        (
+          resource.data.visibility == 'followers' &&
+          exists(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + resource.data.userId)) &&
+          !chatIsBlocked(request.auth.uid, resource.data.userId)
+        ) ||
+        (
+          resource.data.visibility == 'closeFriends' &&
+          exists(/databases/$(database)/documents/users/$(resource.data.userId)/closeFriends/$(request.auth.uid)) &&
+          !chatIsBlocked(request.auth.uid, resource.data.userId)
+        )
+      );
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // stories/{storyId}/comments/{commentId} — same shape and same
+      // rule pattern as posts/{postId}/comments/{commentId} above (own-
+      // comment create/delete, open read), deliberately not gated by
+      // verification or blocks — post comments aren't either today, so
+      // this mirrors the existing, already-accepted precedent rather
+      // than introducing a new, inconsistent restriction.
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+        allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+        allow update: if false;
+      }
     }
 
     // storyViews/{storyId}_{viewerUid} — idempotent per-viewer record
@@ -267,9 +364,32 @@ service cloud.firestore {
       // may only increase by exactly 1 per update, and only by the
       // requester while still pending — closing the "reset my own
       // counter back to 0 to send more" loophole the same way.
+      // Group-admin fields (Phase 3 group-chat pass): the comment above
+      // this block previously claimed "group membership changes are
+      // the already-existing, separately-gated admin concern below" —
+      // that gate never actually existed. Any current participant could
+      // add themselves to `admins` (self-promote), rename the group, or
+      // change its avatar via a direct write, bypassing
+      // chatService.js's own client-side admin checks entirely. Fixed
+      // narrowly: a non-admin may update anything else on a group chat
+      // exactly as before (lastMessage/readBy/pinnedBy/mutedBy/
+      // archivedBy/participants), but `admins`/`groupName`/
+      // `groupAvatar` may only change if the requester is already
+      // listed in `admins`. Direct (non-group) chats are unaffected —
+      // this condition is a no-op for them since it's already
+      // satisfied by the "not a group" branch.
       allow update: if isSignedIn() && request.auth.uid in resource.data.participants &&
         request.resource.data.get('requestedBy', null) == resource.data.get('requestedBy', null) &&
         (resource.data.get('type', 'direct') == 'group' || request.resource.data.participants == resource.data.participants) &&
+        (
+          resource.data.get('type', 'direct') != 'group' ||
+          request.auth.uid in resource.data.get('admins', []) ||
+          (
+            request.resource.data.get('admins', resource.data.get('admins', [])) == resource.data.get('admins', []) &&
+            request.resource.data.get('groupName', resource.data.get('groupName', '')) == resource.data.get('groupName', '') &&
+            request.resource.data.get('groupAvatar', resource.data.get('groupAvatar', '')) == resource.data.get('groupAvatar', '')
+          )
+        ) &&
         (
           request.resource.data.status == resource.data.status ||
           (resource.data.status == 'pending' && request.resource.data.status == 'accepted' &&
@@ -307,7 +427,29 @@ service cloud.firestore {
               get(/databases/$(database)/documents/chats/$(chatId)).data.get('pendingMessageCount', 0) < 1
             )
           );
-        allow update: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        // Tightened for the reactions/edit/delete pass — the previous
+        // rule let ANY participant update ANY field of ANY message
+        // (needed at the time only because read receipts are written by
+        // the RECIPIENT, not the sender). editMessage()/
+        // deleteMessageForMe() already enforced their own restrictions
+        // client-side, but that's a UI-layer check only — a client
+        // calling Firestore directly could have edited someone else's
+        // message text. Now scoped to exactly the 4 real update shapes
+        // this app ever performs on a message: (1) the sender editing
+        // their own text, (2) any participant marking `read` (existing
+        // markChatRead batch + realtime receipts, unchanged), (3) any
+        // participant adding ONLY their own uid to `deletedFor` ("delete
+        // for me"), (4) any participant toggling ONLY their own key in
+        // `reactions` (one reaction per user — a second reaction from
+        // the same uid overwrites their own key, never adds a new one).
+        allow update: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants &&
+          (
+            (resource.data.senderId == request.auth.uid && onlyChanged(['text', 'edited', 'editedAt'])) ||
+            onlyChanged(['read']) ||
+            (onlyChanged(['deletedFor']) && request.auth.uid in request.resource.data.deletedFor) ||
+            (onlyChanged(['reactions']) &&
+              request.resource.data.reactions.diff(resource.data.get('reactions', {})).affectedKeys().hasOnly([request.auth.uid]))
+          );
         allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
       }
 
@@ -503,6 +645,23 @@ service cloud.firestore {
     match /reports/{reportId} {
       allow create: if isSignedIn() && request.resource.data.reporterUid == request.auth.uid;
       allow read, update, delete: if false;
+    }
+
+    // announcements/{announcementId} — Phase 2 campus announcements.
+    // Write is admin-only, same shape as reports/verificationRequests'
+    // admin-side above: every write (create/pin/delete) goes through
+    // adminSendNotification/adminSetAnnouncementPinned/
+    // adminDeleteAnnouncement (Cloud Functions, Admin SDK, bypasses
+    // this rule entirely), never a direct client write — "do NOT let
+    // every random user create official-looking announcements" is
+    // enforced here, not just hidden in the UI. Read is open to any
+    // signed-in user; the client query itself scopes to the viewer's
+    // own collegeId (or the null/platform-wide ones) — this rule
+    // doesn't restrict by college because it's public campus-notice
+    // content, not private data.
+    match /announcements/{announcementId} {
+      allow read: if isSignedIn();
+      allow write: if false;
     }
 
     // radarLocations/{uid} — radarLocationService.js's own comment

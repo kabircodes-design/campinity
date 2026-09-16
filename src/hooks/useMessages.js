@@ -88,7 +88,7 @@ export function useMessages(chatId, otherUid) {
   }
 
   const sendMessage = async (text, options = {}) => {
-    const { type = 'text', imageUrl = null, fileUrl = null, fileName = null, fileSize = null, mimeType = null } = options
+    const { type = 'text', imageUrl = null, fileUrl = null, fileName = null, fileSize = null, mimeType = null, replyTo = null } = options
     if (!chatId || !uid) return
     if (type === 'text' && !text?.trim()) return
     setSending(true)
@@ -104,6 +104,8 @@ export function useMessages(chatId, otherUid) {
       fileName,
       fileSize,
       mimeType,
+      replyTo,
+      reactions: {},
       read: false,
       edited: false,
       deletedFor: [],
@@ -129,7 +131,7 @@ export function useMessages(chatId, otherUid) {
     setOptimisticMessages((prev) =>
       prev.map((m) => (m.id === optimisticId ? { ...m, pending: true, failed: false } : m))
     )
-    await attemptSend(entry, entry.text, { type: entry.type, imageUrl: entry.imageUrl })
+    await attemptSend(entry, entry.text, { type: entry.type, imageUrl: entry.imageUrl, replyTo: entry.replyTo })
     setSending(false)
   }
 

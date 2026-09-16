@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, ChevronRight, UserX } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, Star, UserX } from 'lucide-react'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
@@ -122,6 +122,22 @@ export default function PrivacySettingsPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-50">Blocked users</p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Manage accounts you've blocked</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+              </button>
+
+              <p className="px-1 pt-6 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Stories</p>
+              <button
+                type="button"
+                onClick={() => navigate('/settings/close-friends')}
+                className="w-full flex items-center gap-3 rounded-2xl border border-gray-100 px-4 py-3.5 text-left hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5 transition-all duration-200"
+              >
+                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 dark:bg-amber-500/15 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+                  <Star className="w-[18px] h-[18px]" strokeWidth={1.8} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-50">Close Friends</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Manage who sees your Close Friends stories</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
               </button>

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { FileText, Paperclip, Send, X } from 'lucide-react'
+import { CornerUpLeft, FileText, Paperclip, Send, X } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
 import { uploadChatFile, uploadChatImage } from '../firebase/chatService.js'
 import { useTypingBroadcast } from '../hooks/useTypingIndicator.js'
@@ -24,7 +24,7 @@ function formatFileSize(bytes) {
  * card) — both go through the same sendMessage() call, just with
  * different `options`.
  */
-export default function MessageInput({ onSend, disabled, chatId }) {
+export default function MessageInput({ onSend, disabled, chatId, replyingTo, onCancelReply }) {
   const [text, setText] = useState('')
   const [attachment, setAttachment] = useState(null) // { file, kind: 'image' | 'file', previewUrl? }
   const [uploading, setUploading] = useState(false)
@@ -32,6 +32,13 @@ export default function MessageInput({ onSend, disabled, chatId }) {
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
   const { notifyTyping, stopTyping } = useTypingBroadcast(chatId, auth.currentUser?.uid)
+
+  // Denormalized snapshot only — matches sendMessage()'s own expected
+  // shape (chatService.js builds the actual stored replyTo from these
+  // same 4 fields), never a live reference to the original doc.
+  const replyToPayload = replyingTo
+    ? { messageId: replyingTo.id, senderId: replyingTo.senderId, text: replyingTo.text, type: replyingTo.type || 'text' }
+    : null
 
   const handleSend = async () => {
     if (disabled || uploading) return
@@ -46,7 +53,7 @@ export default function MessageInput({ onSend, disabled, chatId }) {
       try {
         if (attachment.kind === 'image') {
           const imageUrl = await uploadChatImage(chatId, uid, attachment.file)
-          onSend(text.trim(), { type: 'image', imageUrl })
+          onSend(text.trim(), { type: 'image', imageUrl, replyTo: replyToPayload })
         } else {
           const uploaded = await uploadChatFile(chatId, uid, attachment.file)
           onSend(text.trim(), {
@@ -54,12 +61,14 @@ export default function MessageInput({ onSend, disabled, chatId }) {
             fileUrl: uploaded.url,
             fileName: uploaded.name,
             fileSize: uploaded.size,
-            mimeType: uploaded.mimeType
+            mimeType: uploaded.mimeType,
+            replyTo: replyToPayload
           })
         }
         if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl)
         setAttachment(null)
         setText('')
+        onCancelReply?.()
       } catch (err) {
         setUploadError(err?.message || "Couldn't send attachment. Try again.")
         setUploading(false)
@@ -69,8 +78,9 @@ export default function MessageInput({ onSend, disabled, chatId }) {
       return
     }
 
-    onSend(text.trim())
+    onSend(text.trim(), { replyTo: replyToPayload })
     setText('')
+    onCancelReply?.()
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }
 
@@ -134,6 +144,25 @@ export default function MessageInput({ onSend, disabled, chatId }) {
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
     >
+      {replyingTo && (
+        <div className="flex items-center gap-2 rounded-xl bg-gray-50 border border-gray-100 pl-2.5 pr-1.5 py-1.5 mb-2 [animation:fadeIn_150ms_ease-out]">
+          <CornerUpLeft className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold text-blue-600">Replying to {replyingTo.senderId === auth.currentUser?.uid ? 'yourself' : 'this message'}</p>
+            <p className="text-xs text-gray-500 truncate">
+              {replyingTo.text || (replyingTo.type === 'image' ? 'Photo' : 'Attachment')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            aria-label="Cancel reply"
+            className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 transition-colors duration-150"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
       {attachment && (
         <div className="mb-2">
           {attachment.kind === 'image' ? (

@@ -23,6 +23,8 @@ import {
   Users
 } from 'lucide-react'
 import Avatar from './Avatar.jsx'
+import MentionText from './MentionText.jsx'
+import PostPoll from './PostPoll.jsx'
 import VerifiedBadge from './VerifiedBadge.jsx'
 import ReportModal from './ReportModal.jsx'
 import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
@@ -171,6 +173,30 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
     }
   }
 
+  // Double-tap-to-like is idempotent, never a toggle — matches the
+  // reference apps' own behavior (double-tapping an already-liked post
+  // just re-plays the heart pop for delight, it never unlikes). Reuses
+  // the exact same likePost() + optimistic/rollback pattern as
+  // toggleLike above, and reuses that same justLiked state, so the
+  // like-button icon pops in sync too, not a second, disconnected
+  // animation system.
+  const handleDoubleTapLike = async () => {
+    if (liked) return
+    setLiked(true)
+    setLikeCount((prev) => prev + 1)
+    setJustLiked(true)
+    window.setTimeout(() => setJustLiked(false), 300)
+
+    const uid = auth.currentUser?.uid
+    if (!uid) return
+    try {
+      await likePost(post.id, uid)
+    } catch {
+      setLiked(false)
+      setLikeCount((prev) => prev - 1)
+    }
+  }
+
   const handleShare = () => {
     setShareSheetOpen(true)
   }
@@ -314,13 +340,38 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
           </div>
         </div>
       ) : (
-        <button type="button" onClick={goToPost} className="block w-full text-left">
-          <p className="px-4 lg:px-6 mt-3 text-[14.5px] text-gray-700 dark:text-gray-300 leading-relaxed">
-            {currentText}
-            {isEdited && <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500 font-normal">· Edited</span>}
-          </p>
-          {post.imageUrl && <PostImage src={post.imageUrl} />}
-        </button>
+        <>
+          {/* Not a <button> here (Mentions pass) — MentionText below
+              renders its own nested <button> per @mention, which is
+              invalid inside another <button>; a div with the same
+              role/keyboard handling avoids that while MentionText's own
+              stopPropagation() still keeps a mention tap from also
+              triggering this row's navigate. */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={goToPost}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                goToPost()
+              }
+            }}
+            className="block w-full text-left cursor-pointer"
+          >
+            <p className="px-4 lg:px-6 mt-3 text-[14.5px] text-gray-700 dark:text-gray-300 leading-relaxed">
+              <MentionText text={currentText} />
+              {isEdited && <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500 font-normal">· Edited</span>}
+            </p>
+          </div>
+          {/* Image is deliberately NOT inside the tap-to-open button — it
+              responds to double-tap-to-like only (matching the reference
+              apps' own actual feed behavior: the photo itself isn't a
+              single-tap navigation target, avoiding a click-delay hack
+              that would otherwise make every single tap feel slower). */}
+          {post.imageUrl && <PostImage src={post.imageUrl} onDoubleTapLike={handleDoubleTapLike} />}
+          {post.poll && <PostPoll postId={post.id} poll={post.poll} />}
+        </>
       )}
 
       {post.file && (
@@ -539,8 +590,9 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
  * lg:overflow-y-auto center column) — an unbounded image here would
  * otherwise force that column taller than intended.
  */
-function PostImage({ src }) {
+function PostImage({ src, onDoubleTapLike }) {
   const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
+  const [heartPop, setHeartPop] = useState(false)
 
   if (status === 'error') {
     return (
@@ -550,18 +602,36 @@ function PostImage({ src }) {
     )
   }
 
+  const handleDoubleClick = () => {
+    onDoubleTapLike?.()
+    setHeartPop(true)
+    window.setTimeout(() => setHeartPop(false), 700)
+  }
+
   return (
-    <div className="mx-4 lg:mx-6 mt-3 rounded-2xl overflow-hidden bg-gray-100 dark:bg-white/10 relative">
+    <div
+      onDoubleClick={handleDoubleClick}
+      className="mx-4 lg:mx-6 mt-3 rounded-2xl overflow-hidden bg-gray-100 dark:bg-white/10 relative select-none"
+    >
       {status === 'loading' && <div className="absolute inset-0 animate-pulse bg-gray-100 dark:bg-white/10" />}
       <img
         src={src}
         alt=""
         onLoad={() => setStatus('ready')}
         onError={() => setStatus('error')}
+        draggable={false}
         className={`w-full max-h-[420px] lg:max-h-[520px] object-cover transition-opacity duration-300 ${
           status === 'ready' ? 'opacity-100' : 'opacity-0'
         }`}
       />
+      {heartPop && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <Heart
+            className="w-20 h-20 text-white drop-shadow-lg [animation:heartPop_700ms_cubic-bezier(0.16,1,0.3,1)]"
+            fill="currentColor"
+          />
+        </div>
+      )}
     </div>
   )
 }

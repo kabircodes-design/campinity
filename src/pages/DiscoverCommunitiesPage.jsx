@@ -5,7 +5,14 @@ import Avatar from '../components/Avatar.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
-import { getTrendingCommunities, getUserCommunityMemberships, getUserPendingRequests, searchCommunitiesByName } from '../firebase/communityService.js'
+import {
+  getCollegeCommunities,
+  getTrendingCommunities,
+  getUserCommunityMemberships,
+  getUserPendingRequests,
+  searchCommunitiesByCategory,
+  searchCommunitiesByName
+} from '../firebase/communityService.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
@@ -46,6 +53,9 @@ export default function DiscoverCommunitiesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState(null)
   const [searching, setSearching] = useState(false)
+  const [campusCommunities, setCampusCommunities] = useState([])
+  const [categoryResults, setCategoryResults] = useState(null)
+  const [categoryLoading, setCategoryLoading] = useState(false)
   const { profile } = useAuth()
 
   useEffect(() => {
@@ -83,6 +93,58 @@ export default function DiscoverCommunitiesPage() {
     }
   }, [reloadKey])
 
+  // "For Your Campus" — real, server-side, college-scoped query
+  // (getCollegeCommunities already existed, unused by this page until
+  // now). Separate effect keyed on profile?.collegeId rather than
+  // folded into the effect above: profile loads asynchronously from
+  // AuthContext and may not be ready on first mount, so this simply
+  // re-fires once it is, instead of the page needing to coordinate two
+  // different loading conditions in one effect.
+  useEffect(() => {
+    if (!profile?.collegeId) {
+      setCampusCommunities([])
+      return
+    }
+    let cancelled = false
+    getCollegeCommunities(profile.collegeId)
+      .then((data) => {
+        if (!cancelled) setCampusCommunities(data)
+      })
+      .catch(() => {
+        if (!cancelled) setCampusCommunities([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.collegeId])
+
+  // Category chips now query the real, unbounded, server-side
+  // searchCommunitiesByCategory() instead of client-filtering the
+  // capped 40-item trending list below — a study group ranked #55 by
+  // members was previously undiscoverable through this filter no
+  // matter what, since it would never be in that top-40 set at all.
+  useEffect(() => {
+    if (typeFilter === 'all') {
+      setCategoryResults(null)
+      return
+    }
+    let cancelled = false
+    setCategoryLoading(true)
+    searchCommunitiesByCategory(typeFilter)
+      .then((data) => {
+        if (!cancelled) setCategoryResults(data)
+      })
+      .catch(() => {
+        if (!cancelled) setCategoryResults([])
+      })
+      .finally(() => {
+        if (!cancelled) setCategoryLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [typeFilter])
+
   // Search is local to this page — a real Firestore query
   // (searchCommunitiesByName), completely separate from the app's
   // global search, never touching it.
@@ -107,9 +169,17 @@ export default function DiscoverCommunitiesPage() {
   }, [searchTerm])
 
   const filteredCommunities = useMemo(() => {
-    const base = searchResults !== null ? searchResults : communities
-    return typeFilter === 'all' ? base : base.filter((c) => c.type === typeFilter)
-  }, [communities, searchResults, typeFilter])
+    // Actively text-searching: keep filtering that (already small,
+    // already-fetched) result set client-side by type — introducing a
+    // second server query here would just race the name search for no
+    // benefit. Only when NOT text-searching does a type filter use the
+    // real category query above (categoryResults).
+    if (searchResults !== null) {
+      return typeFilter === 'all' ? searchResults : searchResults.filter((c) => c.type === typeFilter)
+    }
+    if (typeFilter !== 'all') return categoryResults || []
+    return communities
+  }, [communities, searchResults, typeFilter, categoryResults])
 
   // "Your Communities" is derived from the already-fetched trending
   // list filtered by membership, NOT a second Firestore fetch — this
@@ -270,7 +340,25 @@ export default function DiscoverCommunitiesPage() {
                   </div>
                 )}
 
-                {searching ? (
+                {!isSearchingOrFiltering && campusCommunities.length > 0 && (
+                  <div className="mb-5">
+                    <p className="mb-2.5 text-sm font-bold text-gray-900">For Your Campus</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {campusCommunities.slice(0, 6).map((community) => (
+                        <CommunityCard
+                          key={community.id}
+                          community={community}
+                          membershipState={membershipStates.get(community.id) || null}
+                          onStateChange={(id, newState) =>
+                            setMembershipStates((prev) => new Map(prev).set(id, newState))
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {searching || categoryLoading ? (
                   <div className="py-10 flex justify-center">
                     <Loader size="sm" tone="dark" />
                   </div>
@@ -288,11 +376,13 @@ export default function DiscoverCommunitiesPage() {
                   </div>
                 ) : (
                   <div>
-                    {!isSearchingOrFiltering && (
+                    {!isSearchingOrFiltering ? (
                       <p className="mb-2.5 text-sm font-bold text-gray-900">
-                        {yourCommunities.length > 0 ? 'Popular on Campus' : 'Discover Communities'}
+                        {yourCommunities.length > 0 || campusCommunities.length > 0 ? 'Popular Communities' : 'Discover Communities'}
                       </p>
-                    )}
+                    ) : typeFilter !== 'all' ? (
+                      <p className="mb-2.5 text-sm font-bold text-gray-900">{TYPE_FILTERS.find((f) => f.id === typeFilter)?.label}</p>
+                    ) : null}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {discoverCommunities.map((community) => (
                         <CommunityCard

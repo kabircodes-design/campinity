@@ -72,6 +72,8 @@ export function getNotificationText(notification) {
       return { lead: name, action: 'sent you a message request', preview: null }
     case 'message_request_accepted':
       return { lead: name, action: 'accepted your message request', preview: null }
+    case 'lostFoundClaim':
+      return { lead: name, action: 'thinks they found your lost item', preview: null }
     default:
       return { lead: name, action: 'sent you a notification', preview: null }
   }

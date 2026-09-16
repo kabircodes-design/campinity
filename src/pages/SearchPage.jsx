@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Clock, Compass, Flame, PackageSearch, PenSquare, Search as SearchIcon, ShoppingBag, Sparkles, Users, X, Zap } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Clock, Compass, Flame, PackageSearch, PenSquare, Search as SearchIcon, ShoppingBag, Sparkles, UserRound, Users, X, Zap } from 'lucide-react'
 import StudentCard from '../components/StudentCard.jsx'
 import CollegeResultCard from '../components/CollegeResultCard.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
@@ -8,20 +8,25 @@ import PostCard from '../components/PostCard.jsx'
 import SearchSkeleton from '../components/SearchSkeleton.jsx'
 import SearchEmptyState from '../components/SearchEmptyState.jsx'
 import Avatar from '../components/Avatar.jsx'
+import Loader from '../auth/components/Loader.jsx'
 import { getAvatarColor, getInitials, getFeedPosts } from '../firebase/postService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { searchAll } from '../firebase/searchService.js'
+import { searchAll, getPeopleFromMyCourse } from '../firebase/searchService.js'
 import { searchCommunitiesByName, getTrendingCommunities } from '../firebase/communityService.js'
-import { searchPostsByText } from '../firebase/postService.js'
+import { searchPostsByText, searchPostsByHashtag } from '../firebase/postService.js'
+import { searchLostFoundItems } from '../firebase/lostFoundService.js'
 import { auth } from '../firebase/firebase.js'
 import { addRecentSearch, clearRecentSearches, getRecentSearches, removeRecentSearch } from '../utils/recentSearches.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const tabs = [
   { label: 'All', key: 'all' },
   { label: 'Students', key: 'students' },
   { label: 'Colleges', key: 'colleges' },
   { label: 'Communities', key: 'communities' },
-  { label: 'Posts', key: 'posts' }
+  { label: 'Posts', key: 'posts' },
+  { label: 'Notes', key: 'notes' },
+  { label: 'Lost & Found', key: 'lostfound' }
 ]
 
 // Discovery-hub category shortcuts (the "not searching yet" state) —
@@ -32,6 +37,7 @@ const tabs = [
 // exactly the "dead button" this task explicitly forbids.
 const DISCOVER_CATEGORIES = [
   { key: 'all', label: 'All', icon: Compass },
+  { key: 'people', label: 'People', icon: UserRound },
   { key: 'communities', label: 'Communities', icon: Users },
   { key: 'posts', label: 'Posts', icon: PenSquare },
   { key: 'marketplace', label: 'Marketplace', icon: ShoppingBag, to: '/marketplace' },
@@ -69,21 +75,85 @@ export default function SearchPage() {
   const navigate = useNavigate()
   const inputRef = useRef(null)
   const requestIdRef = useRef(0)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState('all')
   const [recent, setRecent] = useState([])
 
+  // #hashtag deep link (MentionText's hashtag click, notification
+  // deep-links, etc.) — a dedicated view, not folded into the normal
+  // debounced-query search below, since it's a different query shape
+  // (array-contains on a stored hashtags field, not a text prefix
+  // range) with its own loading/empty/error states.
+  const activeTag = searchParams.get('tag') || ''
+  const [tagResults, setTagResults] = useState([])
+  const [tagStatus, setTagStatus] = useState('idle') // 'idle' | 'loading' | 'success' | 'error'
+
+  useEffect(() => {
+    if (!activeTag) {
+      setTagResults([])
+      setTagStatus('idle')
+      return undefined
+    }
+    let cancelled = false
+    setTagStatus('loading')
+    searchPostsByHashtag(activeTag, auth.currentUser?.uid)
+      .then((results) => {
+        if (!cancelled) {
+          setTagResults(results)
+          setTagStatus('success')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTagStatus('error')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTag])
+
   const [students, setStudents] = useState([])
   const [colleges, setColleges] = useState([])
   const [communities, setCommunities] = useState([])
   const [posts, setPosts] = useState([])
+  const [lostFoundItems, setLostFoundItems] = useState([])
   const [status, setStatus] = useState('idle') // 'idle' | 'loading' | 'success' | 'error'
+
+  // Notes aren't a separate collection — NotesView.jsx already treats
+  // "a post with a document attached" as the definition of a note, so
+  // this is a derived filter over the SAME posts search results above,
+  // not a second search call or a duplicated data source.
+  const noteResults = posts.filter((post) => post.file)
 
   const [popularCommunities, setPopularCommunities] = useState([])
   const [latestPosts, setLatestPosts] = useState([])
   const [latestPostsLoading, setLatestPostsLoading] = useState(true)
   const [discoverCategory, setDiscoverCategory] = useState('all')
+  const [coursemates, setCoursemates] = useState([])
+  const { profile } = useAuth()
+
+  // "People from your course" — real, server-side, exact-match query
+  // (getPeopleFromMyCourse, new), only fires once profile.collegeId/
+  // .course are actually loaded. Shown in the discovery hub (empty
+  // query state) only — never touches the typed-search results below.
+  useEffect(() => {
+    if (!profile?.collegeId || !profile?.course) {
+      setCoursemates([])
+      return
+    }
+    let cancelled = false
+    getPeopleFromMyCourse(profile.collegeId, profile.course, { excludeUid: auth.currentUser?.uid })
+      .then((data) => {
+        if (!cancelled) setCoursemates(data)
+      })
+      .catch(() => {
+        if (!cancelled) setCoursemates([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.collegeId, profile?.course])
 
   useEffect(() => {
     getTrendingCommunities({ pageSize: 5 }).then(setPopularCommunities).catch(() => {})
@@ -111,6 +181,7 @@ export default function SearchPage() {
       setColleges([])
       setCommunities([])
       setPosts([])
+      setLostFoundItems([])
       return undefined
     }
 
@@ -119,16 +190,18 @@ export default function SearchPage() {
 
     const timer = window.setTimeout(async () => {
       try {
-        const [result, communityResults, postResults] = await Promise.all([
+        const [result, communityResults, postResults, lostFoundResults] = await Promise.all([
           searchAll(trimmed),
           searchCommunitiesByName(trimmed).catch(() => []),
-          searchPostsByText(trimmed, auth.currentUser?.uid).catch(() => [])
+          searchPostsByText(trimmed, auth.currentUser?.uid).catch(() => []),
+          searchLostFoundItems(trimmed).catch(() => [])
         ])
         if (requestIdRef.current !== requestId) return // a newer keystroke superseded this search
         setStudents(result.students)
         setColleges(result.colleges)
         setCommunities(communityResults)
         setPosts(postResults)
+        setLostFoundItems(lostFoundResults)
         setStatus('success')
       } catch {
         if (requestIdRef.current !== requestId) return
@@ -140,12 +213,15 @@ export default function SearchPage() {
   }, [query])
 
   const isSearching = query.trim().length > 0
-  const hasResults = students.length > 0 || colleges.length > 0 || communities.length > 0 || posts.length > 0
+  const hasResults =
+    students.length > 0 || colleges.length > 0 || communities.length > 0 || posts.length > 0 || lostFoundItems.length > 0
 
   const showStudents = activeTab === 'all' || activeTab === 'students'
   const showColleges = activeTab === 'all' || activeTab === 'colleges'
   const showCommunities = activeTab === 'all' || activeTab === 'communities'
   const showPosts = activeTab === 'all' || activeTab === 'posts'
+  const showNotes = activeTab === 'notes'
+  const showLostFound = activeTab === 'all' || activeTab === 'lostfound'
 
   const runSearch = (value) => {
     setQuery(value)
@@ -169,14 +245,16 @@ export default function SearchPage() {
     Promise.all([
       searchAll(query.trim()),
       searchCommunitiesByName(query.trim()).catch(() => []),
-      searchPostsByText(query.trim(), auth.currentUser?.uid).catch(() => [])
+      searchPostsByText(query.trim(), auth.currentUser?.uid).catch(() => []),
+      searchLostFoundItems(query.trim()).catch(() => [])
     ])
-      .then(([result, communityResults, postResults]) => {
+      .then(([result, communityResults, postResults, lostFoundResults]) => {
         if (requestIdRef.current !== requestId) return
         setStudents(result.students)
         setColleges(result.colleges)
         setCommunities(communityResults)
         setPosts(postResults)
+        setLostFoundItems(lostFoundResults)
         setStatus('success')
       })
       .catch(() => {
@@ -193,8 +271,44 @@ export default function SearchPage() {
     setDiscoverCategory(category.key)
   }
 
+  const showPeopleSection = discoverCategory === 'all' || discoverCategory === 'people'
   const showCommunitiesSection = discoverCategory === 'all' || discoverCategory === 'communities'
   const showLatestPostsSection = discoverCategory === 'all' || discoverCategory === 'posts'
+
+  // #hashtag deep-link mode — a fully separate, self-contained render
+  // path (not woven into the tab/discovery JSX below) so the existing
+  // query-based search experience is byte-for-byte unchanged; this only
+  // ever renders when arriving via a hashtag click/deep-link (?tag=).
+  if (activeTag) {
+    return (
+      <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
+        <div className="mx-auto max-w-[480px] lg:max-w-[680px] px-4 lg:px-6 py-5">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50">#{activeTag}</h1>
+            <button
+              type="button"
+              onClick={() => setSearchParams({}, { replace: true })}
+              className="flex items-center gap-1 text-xs font-semibold text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              <X className="w-3.5 h-3.5" /> Clear
+            </button>
+          </div>
+
+          {tagStatus === 'loading' ? (
+            <div className="py-16 flex justify-center">
+              <Loader size="md" tone="dark" />
+            </div>
+          ) : tagStatus === 'error' ? (
+            <p className="py-16 text-center text-sm text-gray-400">Couldn't load posts for this tag.</p>
+          ) : tagResults.length === 0 ? (
+            <p className="py-16 text-center text-sm text-gray-400">No posts tagged #{activeTag} yet.</p>
+          ) : (
+            tagResults.map((post) => <PostCard key={post.id} post={post} />)
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
@@ -397,6 +511,24 @@ export default function SearchPage() {
                     </section>
                   )}
 
+                  {showPeopleSection && coursemates.length > 0 && (
+                    <section className="px-4 lg:px-6 pt-2 pb-3">
+                      <div className="flex items-center gap-1.5 mb-2.5">
+                        <UserRound className="w-4 h-4 text-blue-600" />
+                        <p className="text-sm font-bold text-gray-900 dark:text-gray-50">People from your course</p>
+                      </div>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
+                        {profile.course}
+                        {profile.year ? ` · ${profile.year}` : ''} at your campus.
+                      </p>
+                      <div className="space-y-1">
+                        {coursemates.map((student) => (
+                          <StudentCard key={student.uid} student={student} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
                   {showCommunitiesSection && popularCommunities.length > 0 && (
                     <section className="px-4 lg:px-6 pt-2 pb-3">
                       <div className="flex items-center justify-between mb-2.5">
@@ -440,7 +572,7 @@ export default function SearchPage() {
                     </section>
                   )}
 
-                  {recent.length === 0 && popularCommunities.length === 0 && latestPosts.length === 0 && !latestPostsLoading && (
+                  {recent.length === 0 && coursemates.length === 0 && popularCommunities.length === 0 && latestPosts.length === 0 && !latestPostsLoading && (
                     <div className="px-6 py-16 text-center">
                       <p className="text-sm text-gray-400 dark:text-gray-500">Search for students, colleges or communities to get started.</p>
                     </div>
@@ -529,6 +661,54 @@ export default function SearchPage() {
                       {posts.map((post) => (
                         <PostCard key={post.id} post={post} />
                       ))}
+                    </section>
+                  )}
+
+                  {showNotes && (
+                    noteResults.length > 0 ? (
+                      <section>
+                        {noteResults.map((post) => (
+                          <PostCard key={post.id} post={post} />
+                        ))}
+                      </section>
+                    ) : (
+                      <p className="px-4 lg:px-6 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
+                        No notes matched "{query.trim()}".
+                      </p>
+                    )
+                  )}
+
+                  {showLostFound && lostFoundItems.length > 0 && (
+                    <section className="px-4 lg:px-6">
+                      {activeTab === 'all' && (
+                        <p className="pt-3 pb-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                          Lost &amp; Found
+                        </p>
+                      )}
+                      <div className="space-y-2 pb-3">
+                        {lostFoundItems.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => navigate(`/lost-found?item=${item.id}`)}
+                            className="w-full flex items-center gap-3 text-left rounded-xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#151721] p-2.5 hover:border-gray-200 dark:hover:border-white/20 transition-all duration-200"
+                          >
+                            <div className="w-11 h-11 rounded-lg overflow-hidden bg-gray-100 dark:bg-white/10 flex-shrink-0 flex items-center justify-center">
+                              {item.imageUrl ? (
+                                <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <PackageSearch className="w-5 h-5 text-gray-300 dark:text-gray-600" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-gray-50 truncate">{item.title}</p>
+                              <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                                {item.type === 'lost' ? 'Lost' : 'Found'} · {item.location || item.category}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </section>
                   )}
                 </div>

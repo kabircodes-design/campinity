@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Backpack,
   BarChart3,
@@ -38,6 +38,7 @@ import {
   LOST_FOUND_CATEGORIES,
   LOST_FOUND_LOCATIONS,
   createLostFoundItem,
+  getLostFoundItem,
   getLostFoundItems,
   getRecentlyResolvedItems,
   resolveLostFoundItem,
@@ -123,6 +124,35 @@ export default function LostFoundPage() {
   const [detailItem, setDetailItem] = useState(null)
   const [claimItem, setClaimItem] = useState(null)
   const [messageGateOpen, setMessageGateOpen] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Deep-link support (notification tap / search result) — ?item=<id>
+  // opens that listing's EXISTING detail modal rather than a new route,
+  // since there's no per-item page in this app to link to yet. Fetches
+  // the item directly instead of relying on the already-loaded items[]
+  // array, so this also works for a resolved/older listing that
+  // wouldn't be in the current page's fetch window. A missing/deleted
+  // item is a silent no-op, not a broken navigation.
+  useEffect(() => {
+    const itemId = searchParams.get('item')
+    if (!itemId) return
+    getLostFoundItem(itemId)
+      .then((item) => {
+        if (item) setDetailItem(item)
+      })
+      .catch(() => {})
+      .finally(() => {
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev)
+            next.delete('item')
+            return next
+          },
+          { replace: true }
+        )
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get('item')])
 
   const loadItems = () => {
     setLoading(true)

@@ -21,6 +21,7 @@ import { useForYouFeed } from '../hooks/useForYouFeed.js'
 import { useCampusVerificationReminder } from '../hooks/useCampusVerificationReminder.js'
 import CampusVerificationModal from '../components/CampusVerificationModal.jsx'
 import CampusVerificationBanner from '../components/CampusVerificationBanner.jsx'
+import CampusAnnouncementBanner from '../components/CampusAnnouncementBanner.jsx'
 import PostingStatusPill from '../components/PostingStatusPill.jsx'
 import { usePostingStatus } from '../context/PostingStatusContext.jsx'
 import CampinityIntro from '../components/CampinityIntro.jsx'
@@ -117,7 +118,7 @@ export default function HomePage() {
 
     const loadStories = async () => {
       try {
-        const [storiesData, viewedIds] = await Promise.all([getFeedStories(), getViewedStoryIds(uid)])
+        const [storiesData, viewedIds] = await Promise.all([getFeedStories(uid), getViewedStoryIds(uid)])
         if (!cancelled) {
           setStories(storiesData)
           setViewedStoryIds(viewedIds)
@@ -138,10 +139,23 @@ export default function HomePage() {
     }
   }, [])
 
-  const visiblePosts = useMemo(
-    () => posts.filter((post) => post.feedCategories.includes(activeTab)),
-    [posts, activeTab]
-  )
+  // Campus-feed scoping pass: the 'campus' tab used the exact same
+  // unfiltered getFeedPosts() query as everywhere else in the app — it
+  // wasn't actually campus-specific at all, just mislabeled. A hard
+  // where('collegeId'==mine) filter isn't safe here (posts created
+  // before this field existed have no collegeId at all, and would
+  // simply vanish from Campus entirely on day one) — this instead
+  // PRIORITIZES same-college posts via a stable partition-sort, same
+  // read cost as before (zero new queries), same posts still shown,
+  // just reordered. Grows more accurate as more posts carry a real
+  // collegeId going forward; a stated limitation, not solved with a
+  // migration this pass didn't attempt.
+  const myCollegeId = profile?.collegeId
+  const visiblePosts = useMemo(() => {
+    const matching = posts.filter((post) => post.feedCategories.includes(activeTab))
+    if (activeTab !== 'campus' || !myCollegeId) return matching
+    return [...matching].sort((a, b) => (b.collegeId === myCollegeId ? 1 : 0) - (a.collegeId === myCollegeId ? 1 : 0))
+  }, [posts, activeTab, myCollegeId])
 
   const {
     posts: followingPosts,
@@ -416,6 +430,8 @@ export default function HomePage() {
             }}
           />
         )}
+
+        <CampusAnnouncementBanner collegeId={profile?.collegeId} />
 
         {/* top-14 (not top-0) is intentional and mobile-only: on mobile
             this nav shares ONE document-level scroll with AppShell's own

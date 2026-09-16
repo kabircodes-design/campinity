@@ -21,6 +21,7 @@ const CreateCampaignPage = lazy(() => import('./ads/CreateCampaignPage.jsx'))
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage.jsx'))
 const DeleteAccountPage = lazy(() => import('./pages/DeleteAccountPage.jsx'))
 const BlockedUsersPage = lazy(() => import('./pages/BlockedUsersPage.jsx'))
+const CloseFriendsPage = lazy(() => import('./pages/CloseFriendsPage.jsx'))
 const NotificationSettingsPage = lazy(() => import('./pages/NotificationSettingsPage.jsx'))
 const PrivacySettingsPage = lazy(() => import('./pages/PrivacySettingsPage.jsx'))
 const HelpSettingsPage = lazy(() => import('./pages/HelpSettingsPage.jsx'))
@@ -400,6 +401,14 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <BlockedUsersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings/close-friends"
+          element={
+            <ProtectedRoute stage="home">
+              <CloseFriendsPage />
             </ProtectedRoute>
           }
         />

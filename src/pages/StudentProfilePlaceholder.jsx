@@ -5,6 +5,8 @@ import BottomNav from '../components/BottomNav.jsx'
 import ProfileHeader from '../components/ProfileHeader.jsx'
 import PostCard from '../components/PostCard.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
+import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import Loader from '../auth/components/Loader.jsx'
 import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
@@ -55,6 +57,7 @@ export default function StudentProfilePlaceholder() {
 
   const [isFollowing, setIsFollowing] = useState(false)
   const [mutualFollowers, setMutualFollowers] = useState([])
+  const [shareOpen, setShareOpen] = useState(false)
   const [chatStatusInfo, setChatStatusInfo] = useState(null)
   const [messageError, setMessageError] = useState('')
   const [messageBusy, setMessageBusy] = useState(false)
@@ -216,13 +219,11 @@ export default function StudentProfilePlaceholder() {
         ? 'pending_outgoing'
         : 'pending_incoming'
 
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({ title: profile?.displayName, url: window.location.href }).catch(() => {})
-    } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(window.location.href).catch(() => {})
-    }
-  }
+  // Reuses the existing sharing architecture (ShareBottomSheet +
+  // shareService.js's already-registered `profile` canonical pattern)
+  // instead of a second, ad-hoc share mechanism — see ProfilePage.jsx's
+  // identical comment for the same reasoning.
+  const handleShare = () => setShareOpen(true)
 
   if (loading) {
     return (
@@ -324,6 +325,14 @@ export default function StudentProfilePlaceholder() {
         )}
 
         <VerificationGate open={messageGateOpen} onClose={() => setMessageGateOpen(false)} feature={FEATURES.SEND_MESSAGE} />
+
+        <ShareBottomSheet
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          referenceType="profile"
+          referenceId={profile?.username}
+          preview={{ title: profile?.displayName, subtitle: profile?.username ? `@${profile.username}` : '', image: getProfileIdentityImage(profile) || null }}
+        />
 
         <nav className="sticky top-14 z-30 flex items-center bg-white border-b border-gray-100">
           {tabs.map((tab) => (

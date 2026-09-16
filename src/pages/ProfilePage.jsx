@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Calendar, Grid3x3, LinkIcon, List, Settings } from 'lucide-react'
 import ProfileHeader from '../components/ProfileHeader.jsx'
 import ProfileRightRail from '../components/ProfileRightRail.jsx'
+import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
 import ProgressCard from '../gamification/ProgressCard.jsx'
 import PostComposer from '../components/PostComposer.jsx'
 import PostCard from '../components/PostCard.jsx'
@@ -12,6 +13,7 @@ import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
 import { getAvatarColor, getInitials, getUserPosts, getUserPostCount, getPostById } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById, getOwnedCommunities } from '../firebase/communityService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 const GRID_LAYOUT_KEY = 'campinity:profileGridLayout'
@@ -73,6 +75,7 @@ export default function ProfilePage() {
   const [postCount, setPostCount] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [shareOpen, setShareOpen] = useState(false)
 
   const [pinnedPosts, setPinnedPosts] = useState([])
   const [pinnedLoading, setPinnedLoading] = useState(false)
@@ -289,13 +292,13 @@ export default function ProfilePage() {
     setPostCount((prev) => (typeof prev === 'number' ? Math.max(0, prev - 1) : prev))
   }
 
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({ title: profile.displayName, url: window.location.href }).catch(() => {})
-    } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(window.location.href).catch(() => {})
-    }
-  }
+  // Reuses the existing sharing architecture (ShareBottomSheet +
+  // shareService.js's already-registered `profile` canonical pattern,
+  // /student/:username) instead of a second, ad-hoc share mechanism —
+  // gets "share to a Campinity chat," "copy link" (with real visible
+  // feedback, not a silent clipboard write), and native share for free,
+  // all through the one component every other share entry point uses.
+  const handleShare = () => setShareOpen(true)
 
   const firstName = (displayProfile.displayName || '').split(' ')[0] || 'there'
 
@@ -564,6 +567,14 @@ export default function ProfilePage() {
             onEditAbout={() => navigate('/profile/edit')}
           />
         </div>
+
+        <ShareBottomSheet
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          referenceType="profile"
+          referenceId={profile.username}
+          preview={{ title: displayProfile.displayName, subtitle: profile.username ? `@${profile.username}` : '', image: getProfileIdentityImage(profile) || null }}
+        />
     </div>
   )
 }

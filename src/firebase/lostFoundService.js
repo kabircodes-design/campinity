@@ -140,6 +140,26 @@ export async function getLostFoundItems({ status = 'active', pageSize = 20, curs
   }
 }
 
+/**
+ * Search entry point for SearchPage.jsx. Lost & Found items have no
+ * precomputed lowercase field the way posts' textLower does, so a real
+ * Firestore range query isn't available here without a schema
+ * migration older items wouldn't have — instead this mirrors
+ * LostFoundPage.jsx's OWN existing in-page search exactly: a single
+ * bounded fetch (same pageSize that page already uses) filtered
+ * client-side, not a second, different search strategy invented for
+ * this entry point.
+ */
+export async function searchLostFoundItems(term, { pageSize = 60 } = {}) {
+  const normalized = term.trim().toLowerCase()
+  if (!normalized) return []
+  const { items } = await getLostFoundItems({ status: 'active', pageSize })
+  return items.filter((item) => {
+    const haystack = `${item.title} ${item.description} ${item.location} ${item.category}`.toLowerCase()
+    return haystack.includes(normalized)
+  })
+}
+
 export async function getLostFoundItem(itemId) {
   const snap = await getDoc(itemDoc(itemId))
   if (!snap.exists()) return null

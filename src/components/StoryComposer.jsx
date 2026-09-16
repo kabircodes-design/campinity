@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { Globe, Star, Users, X } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
@@ -21,6 +21,7 @@ export default function StoryComposer({ onClose, onCreated }) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [author, setAuthor] = useState(null)
+  const [visibility, setVisibility] = useState('public')
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
@@ -58,7 +59,7 @@ export default function StoryComposer({ onClose, onCreated }) {
     setError('')
     try {
       const { mediaUrl, storagePath } = await uploadStoryMedia(uid, file)
-      await createStory({ uid, mediaUrl, storagePath, mediaType, author })
+      await createStory({ uid, mediaUrl, storagePath, mediaType, author, visibility })
       onCreated?.()
       onClose()
     } catch (err) {
@@ -97,6 +98,28 @@ export default function StoryComposer({ onClose, onCreated }) {
       </div>
 
       {error && <p className="px-4 pb-2 text-center text-sm text-red-400">{error}</p>}
+
+      {preview && (
+        <div className="px-4 pb-2 flex-shrink-0 flex items-center justify-center gap-2">
+          {[
+            { key: 'public', label: 'Everyone', icon: Globe },
+            { key: 'followers', label: 'Followers', icon: Users },
+            { key: 'closeFriends', label: 'Close Friends', icon: Star }
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setVisibility(key)}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${
+                visibility === key ? 'bg-white text-gray-900' : 'bg-white/10 text-white/70 hover:bg-white/15'
+              }`}
+            >
+              <Icon className="w-3 h-3" fill={visibility === key && key === 'closeFriends' ? 'currentColor' : 'none'} />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="p-4 flex-shrink-0">
         {preview ? (

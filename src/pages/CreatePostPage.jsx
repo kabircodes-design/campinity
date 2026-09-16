@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Clock, FileText, Image as ImageIcon, X } from 'lucide-react'
+import { BarChart3, Clock, FileText, Image as ImageIcon, Plus, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import Switch from '../components/Switch.jsx'
 import { auth } from '../firebase/firebase.js'
@@ -8,6 +8,11 @@ import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { computeExpiresAt, createPost, getAvatarColor, getInitials, uploadPostDocument, uploadPostImage } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
+import { createMentionNotification } from '../firebase/notificationService.js'
+import { useMentionAutocomplete } from '../hooks/useMentionAutocomplete.js'
+import MentionSuggestions from '../components/MentionSuggestions.jsx'
+import { savePostDraft, getPostDraft, clearPostDraft } from '../utils/postDraft.js'
+import { extractHashtags } from '../utils/hashtags.js'
 import { moderateText } from '../moderation/profanityFilter.js'
 import { usePostingStatus } from '../context/PostingStatusContext.jsx'
 import { awardXP, getUserProgress } from '../gamification/xpService.js'
@@ -54,6 +59,13 @@ export default function CreatePostPage() {
   const [profile, setProfile] = useState(null)
 
   const [postText, setPostText] = useState('')
+  const postTextareaRef = useRef(null)
+  const { mentionedUids, mentionQuery, mentionResults, mentionActiveIndex, detectMentionTrigger, selectMention, handleMentionKeyDown } =
+    useMentionAutocomplete(postText, setPostText, postTextareaRef)
+  const [pendingDraft, setPendingDraft] = useState(null)
+  const [pollEnabled, setPollEnabled] = useState(false)
+  const [pollQuestion, setPollQuestion] = useState('')
+  const [pollOptions, setPollOptions] = useState(['', ''])
   const [category, setCategory] = useState('general')
   const [expirationType, setExpirationType] = useState('7d')
   const [noteSubject, setNoteSubject] = useState('')
@@ -128,6 +140,44 @@ export default function CreatePostPage() {
     }
   }, [])
 
+  // Offers a restore, never auto-applies — silently overwriting whatever
+  // the user is about to type with an old draft would be worse than not
+  // having one. Only offered once, on mount, while the composer is
+  // still genuinely empty.
+  useEffect(() => {
+    if (postText.trim()) return
+    const draft = getPostDraft()
+    if (draft) setPendingDraft(draft)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Debounced local-only autosave — text plus the couple of simple
+  // fields needed to restore the same composer state; never the
+  // image/PDF File objects (can't survive localStorage, and re-picking
+  // a file is a one-tap action anyway). Skips entirely while a restore
+  // offer is still on screen, so it can't overwrite the very draft it's
+  // about to offer before the user has chosen to keep or discard it.
+  useEffect(() => {
+    if (pendingDraft) return undefined
+    const timer = window.setTimeout(() => {
+      savePostDraft({ text: postText, category, isAnonymous })
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [postText, category, isAnonymous, pendingDraft])
+
+  const handleRestoreDraft = () => {
+    if (!pendingDraft) return
+    setPostText(pendingDraft.text || '')
+    if (pendingDraft.category) setCategory(pendingDraft.category)
+    if (typeof pendingDraft.isAnonymous === 'boolean') setIsAnonymous(pendingDraft.isAnonymous)
+    setPendingDraft(null)
+  }
+
+  const handleDiscardDraft = () => {
+    clearPostDraft()
+    setPendingDraft(null)
+  }
+
   useEffect(() => {
     let cancelled = false
     const uid = auth.currentUser?.uid
@@ -188,8 +238,29 @@ export default function CreatePostPage() {
     if (pdfInputRef.current) pdfInputRef.current.value = ''
   }
 
-  const hasContent = postText.trim().length > 0 || Boolean(imageFile) || Boolean(pdfFile)
-  const isValid = hasContent
+  const updatePollOption = (index, value) => {
+    setPollOptions((prev) => prev.map((o, i) => (i === index ? value : o)))
+  }
+
+  const addPollOption = () => {
+    setPollOptions((prev) => (prev.length >= 6 ? prev : [...prev, '']))
+  }
+
+  const removePollOption = (index) => {
+    setPollOptions((prev) => (prev.length <= 2 ? prev : prev.filter((_, i) => i !== index)))
+  }
+
+  const removePoll = () => {
+    setPollEnabled(false)
+    setPollQuestion('')
+    setPollOptions(['', ''])
+  }
+
+  const trimmedPollOptions = pollOptions.map((o) => o.trim()).filter(Boolean)
+  const pollIsValid = !pollEnabled || (pollQuestion.trim().length > 0 && trimmedPollOptions.length >= 2)
+
+  const hasContent = postText.trim().length > 0 || Boolean(imageFile) || Boolean(pdfFile) || pollEnabled
+  const isValid = hasContent && pollIsValid
 
   const displayName = profile?.displayName || ''
   const username = profile?.username || ''
@@ -239,14 +310,23 @@ export default function CreatePostPage() {
       displayName,
       username,
       avatar: profile?.avatar || '',
+      collegeId: profile?.collegeId || null,
       category,
       expirationType,
       noteSubject,
       noteCollection,
       noteChapter,
-      selectedCommunity: postTarget !== 'public' ? myCommunities.find((c) => c.id === postTarget) : null
+      selectedCommunity: postTarget !== 'public' ? myCommunities.find((c) => c.id === postTarget) : null,
+      mentionedUids: mentionedUids.filter((mentionedUid) => mentionedUid !== uid), // never notify yourself for @-ing your own username
+      poll: pollEnabled
+        ? {
+            question: pollQuestion.trim(),
+            options: trimmedPollOptions.slice(0, 6).map((text, i) => ({ id: `opt-${i}`, text }))
+          }
+        : null
     }
 
+    clearPostDraft()
     startPosting(imageFile ? 'Posting your photo…' : 'Posting…')
     navigate('/home')
 
@@ -291,6 +371,16 @@ export default function CreatePostPage() {
         author,
         extra: {
           category: publishData.category,
+          // Campus-feed scoping pass — best-effort only, going forward:
+          // posts created before this field existed simply don't have
+          // it, matching this exact file's own established, already-
+          // documented pattern for textLower (searchPostsByText's
+          // comment above states the same honest limitation for
+          // pre-existing posts). No backfill migration attempted.
+          collegeId: publishData.collegeId,
+          mentions: publishData.mentionedUids,
+          hashtags: extractHashtags(publishData.text),
+          ...(publishData.poll && { poll: publishData.poll }),
           isAnonymous: publishData.isAnonymous,
           expirationType: publishData.expirationType,
           expiresAt: computeExpiresAt(publishData.expirationType),
@@ -306,6 +396,30 @@ export default function CreatePostPage() {
           })
         }
       })
+
+      // Reuses the exact same createMentionNotification comments already
+      // rely on — NotificationCard.jsx's click handler already falls
+      // back to navigate(`/post/${postId}`) when there's no commentId
+      // (nothing needed there), so a post-level mention deep-links
+      // correctly with zero changes to notification routing. Never the
+      // real name/avatar for an anonymous post — the whole point of
+      // isAnonymous is that identity stays hidden, including from
+      // someone who gets mentioned in it.
+      if (publishData.mentionedUids.length > 0) {
+        Promise.all(
+          publishData.mentionedUids.map((mentionedUid) =>
+            createMentionNotification({
+              targetUid: mentionedUid,
+              actorUid: publishData.uid,
+              actorName: publishData.isAnonymous ? 'Someone' : publishData.displayName,
+              actorAvatar: publishData.isAnonymous ? '' : publishData.avatar,
+              postId: newPostId,
+              commentId: null,
+              commentText: publishData.text
+            }).catch(() => {})
+          )
+        )
+      }
 
       const postAward = await awardXP(publishData.uid, 'post_created', {
         campusPoints: POINTS_REWARDS.post_created || 0,
@@ -403,6 +517,29 @@ export default function CreatePostPage() {
         </header>
 
         <div className="px-4 py-4 pb-24 space-y-5">
+          {pendingDraft && (
+            <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-3 [animation:fadeIn_150ms_ease-out]">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12.5px] font-semibold text-blue-900">Restore your draft?</p>
+                <p className="text-[11.5px] text-blue-700 truncate">{pendingDraft.text}</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDiscardDraft}
+                className="flex-shrink-0 rounded-full border border-blue-200 text-blue-700 text-[11px] font-semibold px-3 py-1.5 hover:bg-blue-100 transition-all duration-200"
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={handleRestoreDraft}
+                className="flex-shrink-0 rounded-full bg-blue-600 text-white text-[11px] font-semibold px-3 py-1.5 hover:bg-blue-700 transition-all duration-200"
+              >
+                Restore
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-3">
             <Avatar
               initials={isAnonymous ? '?' : initials}
@@ -422,8 +559,9 @@ export default function CreatePostPage() {
             </div>
           </div>
 
-          <div>
+          <div className="relative">
             <textarea
+              ref={postTextareaRef}
               autoFocus
               rows={5}
               maxLength={MAX_LENGTH}
@@ -431,13 +569,25 @@ export default function CreatePostPage() {
               onChange={(event) => {
                 setPostText(event.target.value)
                 setError('')
+                detectMentionTrigger(event.target.value, event.target.selectionStart)
               }}
-              placeholder="What's happening on campus?"
+              onKeyDown={(event) => {
+                handleMentionKeyDown(event)
+              }}
+              placeholder="What's happening on campus? Use @ to mention someone."
               className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
             />
             <p className="mt-1 text-right text-xs text-gray-400">
               {postText.length}/{MAX_LENGTH}
             </p>
+            {mentionQuery !== null && (
+              <MentionSuggestions
+                results={mentionResults}
+                activeIndex={mentionActiveIndex}
+                onSelect={selectMention}
+                className="absolute top-full left-0 w-64 -mt-4"
+              />
+            )}
           </div>
 
           <div className="space-y-2.5">
@@ -494,6 +644,58 @@ export default function CreatePostPage() {
               </button>
             )}
             <input ref={pdfInputRef} type="file" accept="application/pdf" className="sr-only" onChange={handlePdfChange} />
+
+            {pollEnabled ? (
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-3.5 space-y-2.5 [animation:fadeIn_150ms_ease-out]">
+                <div className="flex items-center justify-between">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <BarChart3 className="w-3.5 h-3.5" /> Poll
+                  </p>
+                  <button type="button" onClick={removePoll} aria-label="Remove poll" className="text-gray-400 hover:text-gray-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={pollQuestion}
+                  onChange={(event) => setPollQuestion(event.target.value)}
+                  maxLength={140}
+                  placeholder="Ask a question..."
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-400 transition-all duration-200"
+                />
+                {pollOptions.map((option, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={option}
+                      onChange={(event) => updatePollOption(index, event.target.value)}
+                      maxLength={60}
+                      placeholder={`Option ${index + 1}`}
+                      className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-400 transition-all duration-200"
+                    />
+                    {pollOptions.length > 2 && (
+                      <button type="button" onClick={() => removePollOption(index)} aria-label="Remove option" className="text-gray-300 hover:text-red-500">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {pollOptions.length < 6 && (
+                  <button type="button" onClick={addPollOption} className="flex items-center gap-1 text-xs font-semibold text-blue-600">
+                    <Plus className="w-3.5 h-3.5" /> Add option
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPollEnabled(true)}
+                className="w-full flex items-center gap-3 rounded-xl border border-dashed border-gray-200 px-4 py-3.5 hover:border-blue-200 hover:bg-blue-50/40 transition-all duration-300"
+              >
+                <BarChart3 className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-gray-500">Add a poll</span>
+              </button>
+            )}
           </div>
 
           <div>

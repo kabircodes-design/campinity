@@ -1313,22 +1313,42 @@ exports.adminModerateProduct = onCall({ region: 'us-central1' }, async (request)
  * bound, not silently unlimited.
  * =====================================================================
  */
+/**
+ * Phase 2 campus-announcements pass: this function already was a real
+ * admin-only broadcast (notification-only). Extended, not duplicated:
+ * - optional `collegeId` scopes the recipient list to one college
+ *   instead of every user on the platform — the actual "campus-wide"
+ *   half of "Campus Announcements."
+ * - optional `title`/`pinned`/`priority`/`expiresAt` are new, and a
+ *   broadcast (never a single targetUsername — that stays a private
+ *   notification, not a public notice) now ALSO persists a real
+ *   announcements/{id} document, so students can see it as a standing
+ *   "Campus Notice" even after the notification itself is read/missed,
+ *   not just a one-shot toast. No second notification system — the
+ *   per-user fan-out below is byte-for-byte the same batched write this
+ *   function already did.
+ */
 exports.adminSendNotification = onCall({ region: 'us-central1' }, async (request) => {
-  const { sessionToken, message, targetUsername } = request.data || {}
+  const { sessionToken, message, targetUsername, collegeId, title, pinned, priority, expiresAt } = request.data || {}
   const session = await requireValidAdminSession(sessionToken)
   const trimmed = (message || '').trim()
   if (!trimmed) throw new HttpsError('invalid-argument', 'Message is required.')
   if (trimmed.length > 280) throw new HttpsError('invalid-argument', 'Message must be 280 characters or fewer.')
+  const isBroadcast = !targetUsername || !targetUsername.trim()
+  const VALID_PRIORITIES = ['normal', 'important', 'urgent']
+  const normalizedPriority = VALID_PRIORITIES.includes(priority) ? priority : 'normal'
 
   try {
     let recipientUids = []
-    if (targetUsername && targetUsername.trim()) {
+    if (!isBroadcast) {
       const userSnap = await db().collection('users').where('username', '==', targetUsername.trim()).limit(1).get()
       if (userSnap.empty) throw new HttpsError('not-found', 'No user found with that username.')
       recipientUids = [userSnap.docs[0].id]
     } else {
       const MAX_RECIPIENTS = 5000
-      const usersSnap = await db().collection('users').limit(MAX_RECIPIENTS).get()
+      let usersQuery = db().collection('users').limit(MAX_RECIPIENTS)
+      if (collegeId && collegeId.trim()) usersQuery = db().collection('users').where('collegeId', '==', collegeId.trim()).limit(MAX_RECIPIENTS)
+      const usersSnap = await usersQuery.get()
       recipientUids = usersSnap.docs.map((d) => d.id)
     }
 
@@ -1351,19 +1371,84 @@ exports.adminSendNotification = onCall({ region: 'us-central1' }, async (request
       await batch.commit()
     }
 
+    let announcementId = null
+    if (isBroadcast) {
+      const expiresAtTimestamp = expiresAt ? admin.firestore.Timestamp.fromMillis(Number(expiresAt)) : null
+      const announcementRef = await db().collection('announcements').add({
+        title: (title || '').trim().slice(0, 120) || null,
+        body: trimmed,
+        authorId: session.createdByUid,
+        collegeId: collegeId && collegeId.trim() ? collegeId.trim() : null,
+        pinned: Boolean(pinned),
+        priority: normalizedPriority,
+        visibility: 'public',
+        expiresAt: expiresAtTimestamp,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      })
+      announcementId = announcementRef.id
+    }
+
     await logAdminAction({
       adminUid: session.createdByUid,
       action: 'notification_sent',
       targetType: targetUsername ? 'user' : 'all_users',
-      targetId: null,
+      targetId: announcementId,
       targetUid: targetUsername ? recipientUids[0] : null,
       reason: trimmed.slice(0, 100)
     })
-    return { ok: true, recipientCount: recipientUids.length }
+    return { ok: true, recipientCount: recipientUids.length, announcementId }
   } catch (err) {
     if (err instanceof HttpsError) throw err
     console.error('[adminSendNotification] unexpected error', { message: err?.message })
     throw new HttpsError('internal', 'Could not send this notification. Please try again.')
+  }
+})
+
+/** Toggle pin on a campus announcement — same admin-session pattern as every other admin write here. */
+exports.adminSetAnnouncementPinned = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, announcementId, pinned } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  if (!announcementId) throw new HttpsError('invalid-argument', 'Missing announcementId.')
+
+  try {
+    const ref = db().collection('announcements').doc(announcementId)
+    const snap = await ref.get()
+    if (!snap.exists) throw new HttpsError('not-found', 'This announcement no longer exists.')
+    await ref.update({ pinned: Boolean(pinned), updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: pinned ? 'announcement_pinned' : 'announcement_unpinned',
+      targetType: 'announcement',
+      targetId: announcementId
+    })
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminSetAnnouncementPinned] unexpected error', { announcementId, message: err?.message })
+    throw new HttpsError('internal', 'Could not update this announcement. Please try again.')
+  }
+})
+
+/** Remove a campus announcement — the notifications already sent are unaffected, only the persisted "Campus Notice" record is deleted. */
+exports.adminDeleteAnnouncement = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, announcementId } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  if (!announcementId) throw new HttpsError('invalid-argument', 'Missing announcementId.')
+
+  try {
+    await db().collection('announcements').doc(announcementId).delete()
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: 'announcement_removed',
+      targetType: 'announcement',
+      targetId: announcementId
+    })
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminDeleteAnnouncement] unexpected error', { announcementId, message: err?.message })
+    throw new HttpsError('internal', 'Could not remove this announcement. Please try again.')
   }
 })
 

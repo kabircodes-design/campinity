@@ -2,6 +2,7 @@ import { addDoc, collection, doc, getCountFromServer, getDoc, getDocs, limit, or
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { db, storage } from './firebase.js'
+import { normalizeHashtag } from '../utils/hashtags.js'
 
 const COLLECTION = 'posts'
 
@@ -88,7 +89,18 @@ function mapPostDoc(docSnap, currentUid) {
     likes: data.likesCount || 0,
     comments: data.commentsCount || 0,
     likedByMe: currentUid ? likedBy.includes(currentUid) : false,
-    feedCategories: ['forYou']
+    poll: data.poll || null,
+    collegeId: data.collegeId || null,
+    // PRE-EXISTING BUG FOUND while adding campus-feed scoping: this was
+    // hardcoded to ['forYou'] only, so HomePage.jsx's Campus tab filter
+    // (post.feedCategories.includes('campus')) could never match a
+    // single post — the Campus tab has always rendered empty, for every
+    // user, regardless of real post volume. Fixed by including 'campus'
+    // too, restoring what getFeedPosts' own broad "every public post"
+    // query already implies. HomePage.jsx's own campus-priority sort
+    // (added alongside this) then reorders THIS now-populated list by
+    // collegeId match, rather than the tab having nothing to reorder.
+    feedCategories: ['forYou', 'campus']
   }
 }
 
@@ -345,6 +357,34 @@ export async function createPost({ uid, text, imageUrl, author, extra = {} }) {
  * and writing to documents this function has no legitimate reason to
  * touch otherwise), so this is stated as a limitation, not solved here.
  */
+/**
+ * Bounded, indexed query — array-contains on `hashtags` combined with
+ * the `visibility` equality filter and an orderBy on createdAt needs a
+ * Firestore COMPOSITE index (array-contains + equality + orderBy on a
+ * third field isn't covered by Firestore's automatic single-field
+ * indexes). Same one-time-setup situation getFeedPosts already
+ * documents: Firestore's own error, the first time this runs for
+ * real, includes a direct console link to create it — not something
+ * this pass can do from application code. Normalization
+ * (normalizeHashtag) matches exactly what CreatePostPage.jsx's
+ * extractHashtags() already writes, so a search for "#CampusLife" or
+ * "campuslife" or "#campuslife" all resolve to the same stored value.
+ */
+export async function searchPostsByHashtag(tag, currentUid, { resultLimit = 20 } = {}) {
+  const normalized = normalizeHashtag(tag)
+  if (!normalized) return []
+
+  const postsQuery = query(
+    collection(db, COLLECTION),
+    where('visibility', '==', 'public'),
+    where('hashtags', 'array-contains', normalized),
+    orderBy('createdAt', 'desc'),
+    limit(resultLimit)
+  )
+  const snap = await getDocs(postsQuery)
+  return snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+}
+
 export async function searchPostsByText(term, currentUid, { resultLimit = 20 } = {}) {
   const normalized = term.trim().toLowerCase()
   if (!normalized) return []
