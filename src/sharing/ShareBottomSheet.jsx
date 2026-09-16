@@ -11,6 +11,9 @@ import { useShareRecipients } from './useShareRecipients.js'
 import { shareContentToRecipients } from './shareService.js'
 import { getCanonicalUrl } from './shareTypes.js'
 import ExternalShareRow from './ExternalShareRow.jsx'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 /**
  * Root cause of "share button pops the bottom nav, no overlay opens":
@@ -72,6 +75,8 @@ function buildRecipient(selection) {
 export default function ShareBottomSheet({ open, onClose, referenceType, referenceId, preview }) {
   const currentUid = auth.currentUser?.uid
   const [currentUserProfile, setCurrentUserProfile] = useState(null)
+  const verified = useMyVerification()
+  const [gateOpen, setGateOpen] = useState(false)
 
   const { recentChats, recentLoading, searchTerm, setSearchTerm, searchResults, searchLoading, isSearching } =
     useShareRecipients(currentUid)
@@ -138,6 +143,10 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
 
   const performSend = async (itemsToSend) => {
     if (itemsToSend.length === 0) return
+    if (verified === false) {
+      setGateOpen(true)
+      return
+    }
     setSending(true)
     setError('')
     setRecipientStatus((prev) => {
@@ -428,6 +437,7 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
           </button>
         </div>
       </motion.div>
+      <VerificationGate open={gateOpen} onClose={() => setGateOpen(false)} feature={FEATURES.SEND_MESSAGE} />
     </div>
   )
 

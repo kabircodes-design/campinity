@@ -1,5 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Zap } from 'lucide-react'
+import { useMyVerification } from '../access/useMyVerification.js'
+import { useOpenPostDocument } from '../hooks/useOpenPostDocument.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 const SUBJECT_META = {
   physics: { label: 'Physics', emoji: '⚡' },
@@ -22,6 +26,9 @@ const SUBJECT_META = {
  * data for.
  */
 export default function LastMinutePreview({ notes, onViewAll }) {
+  const verified = useMyVerification()
+  const [gateOpen, setGateOpen] = useState(false)
+  const { openDocument, opening: openingDocument } = useOpenPostDocument()
   const items = useMemo(() => {
     const now = Date.now()
     const twoDaysMs = 48 * 60 * 60 * 1000
@@ -51,8 +58,15 @@ export default function LastMinutePreview({ notes, onViewAll }) {
             <button
               key={note.id}
               type="button"
-              onClick={() => note.file?.url && window.open(note.file.url, '_blank', 'noopener,noreferrer')}
-              className="w-full flex items-center gap-3 rounded-xl border border-amber-100 bg-gradient-to-r from-amber-50/60 to-white px-3.5 py-2.5 text-left hover:border-amber-200 transition-all duration-200"
+              disabled={openingDocument}
+              onClick={() => {
+                if (verified === false) {
+                  setGateOpen(true)
+                  return
+                }
+                openDocument(note)
+              }}
+              className="w-full flex items-center gap-3 rounded-xl border border-amber-100 bg-gradient-to-r from-amber-50/60 to-white px-3.5 py-2.5 text-left hover:border-amber-200 disabled:opacity-60 transition-all duration-200"
             >
               <div className="w-9 h-9 rounded-lg bg-white border border-amber-100 flex items-center justify-center flex-shrink-0 text-base">
                 {subject?.emoji || '📄'}
@@ -70,6 +84,8 @@ export default function LastMinutePreview({ notes, onViewAll }) {
           )
         })}
       </div>
+
+      <VerificationGate open={gateOpen} onClose={() => setGateOpen(false)} feature={FEATURES.VIEW_CAMPUS_PDF} />
     </div>
   )
 }

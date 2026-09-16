@@ -20,7 +20,12 @@ const MESSAGES = {
   DOWNLOAD_CAMPUS_PDF: 'Verify your campus to download this resource.',
   SAVE_CAMPUS_RESOURCE: 'Save it for later — verify your campus first.',
   JOIN_PRIVATE_COMMUNITY: 'Private campus communities are available to verified members.',
-  CREATE_COMMUNITY: 'Verify your campus before creating a community.'
+  CREATE_COMMUNITY: 'Verify your campus before creating a community.',
+  CREATE_POST: 'Verify your account to start posting on Campinity.',
+  UPLOAD_POST_MEDIA: 'Verify your account to attach photos or files to a post.',
+  SEND_MESSAGE: 'Verify your account to start messaging other students.',
+  CREATE_MARKETPLACE_LISTING: 'Verify your account to sell items on Campinity.',
+  CREATE_LOST_FOUND: 'Verify your account to create a Lost & Found listing.'
 }
 
 export default function VerificationGate({ open, onClose, feature }) {

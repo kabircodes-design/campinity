@@ -191,6 +191,58 @@ async function handleModerateProfilePhoto(request) {
 }
 
 /**
+ * =====================================================================
+ * getVerifiedPostDocumentUrl — verification-access-control pass, Phase 2
+ * (the PDF/document security gap).
+ *
+ * postService.js's uploadPostDocument used to call getDownloadURL() and
+ * that permanent, bearer-token-bearing URL got stored directly on the
+ * posts/{postId} document — readable by any signed-in user regardless
+ * of verification status, since Storage rules only ever gated the ACT
+ * of calling getDownloadURL(), never the token it hands back once
+ * extracted. This function is the real fix: the post document now
+ * stores only a Storage PATH (see uploadPostDocument's own comment),
+ * and this is the ONLY way that path ever turns into something openable
+ * — server-verifies auth, verifiedCampus, and that the requested path
+ * genuinely belongs to a post the caller identified by ID (never a
+ * client-supplied arbitrary path), then mints a short-lived signed URL
+ * exactly the way adminGetVerificationDocumentUrl already does for ID
+ * documents below — same pattern, not a new one.
+ * =====================================================================
+ */
+exports.getVerifiedPostDocumentUrl = onCall({ region: 'us-central1' }, async (request) => {
+  const uid = request.auth?.uid
+  if (!uid) throw new HttpsError('unauthenticated', 'You need to be signed in.')
+
+  const { postId } = request.data || {}
+  if (!postId || typeof postId !== 'string') {
+    throw new HttpsError('invalid-argument', 'Missing postId.')
+  }
+
+  try {
+    const userSnap = await db().collection('users').doc(uid).get()
+    if (!userSnap.exists || userSnap.data().verifiedCampus !== true) {
+      throw new HttpsError('permission-denied', 'Verify your campus to open this document.')
+    }
+
+    const postSnap = await db().collection('posts').doc(postId).get()
+    if (!postSnap.exists) throw new HttpsError('not-found', 'This post no longer exists.')
+
+    const filePath = postSnap.data().file?.path
+    if (!filePath || typeof filePath !== 'string') {
+      throw new HttpsError('not-found', 'This post has no document attached.')
+    }
+
+    const [url] = await bucket().file(filePath).getSignedUrl({ action: 'read', expires: Date.now() + 10 * 60 * 1000 })
+    return { url }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[getVerifiedPostDocumentUrl] unexpected error', { postId, message: err?.message })
+    throw new HttpsError('internal', 'Could not open this document. Please try again.')
+  }
+})
+
+/**
  * checkAdminStatus — new this pass, added on top of the original
  * moderateProfilePhoto above (which is otherwise unchanged, restored
  * verbatim from the original source). The only safe way for a client
@@ -757,7 +809,22 @@ async function logAdminAction({ adminUid, action, targetType, targetId, targetUi
   }
 }
 
-/** adminGetOverviewCounts — real counts via Firestore's count() aggregation (one small read per collection, not a full document fetch), replacing AdminOverviewPage.jsx's "Unavailable" placeholders with real numbers. */
+/**
+ * adminGetOverviewCounts — real counts via Firestore's count() aggregation
+ * (one small read per collection, not a full document fetch), replacing
+ * AdminOverviewPage.jsx's "Unavailable" placeholders with real numbers.
+ *
+ * Extended (admin Overview dashboard upgrade) with two more cheap counts
+ * on the SAME function rather than a second one — `newUsersToday` (a
+ * range count() on users.createdAt, which createInitialUserDoc has
+ * written on every signup since that field existed) and
+ * `marketplaceListings` (a plain unfiltered count() on products — there
+ * is no "pending moderation" queue for Marketplace, just hide/unhide on
+ * any listing, so a total count is the only honest metric here). Both
+ * are additive: the response shape only grows, nothing existing changes,
+ * so AdminOverviewPage.jsx's older-if-not-yet-redeployed callers keep
+ * working exactly as before.
+ */
 exports.adminGetOverviewCounts = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken } = request.data || {}
   await requireValidAdminSession(sessionToken)
@@ -769,16 +836,31 @@ exports.adminGetOverviewCounts = onCall({ region: 'us-central1' }, async (reques
     return snap.data().count
   }
 
+  const countSince = async (path, field, sinceDate) => {
+    const snap = await db()
+      .collection(path)
+      .where(field, '>=', admin.firestore.Timestamp.fromDate(sinceDate))
+      .count()
+      .get()
+    return snap.data().count
+  }
+
   try {
-    const [reports, verification, college, lostFound, totalUsers, verifiedUsers] = await Promise.all([
-      countOf('reports', 'status', 'pending'),
-      countOf('verificationRequests', 'status', 'pending'),
-      countOf('collegeRequests', 'status', 'pending'),
-      countOf('lostFound', 'status', 'active'),
-      countOf('users'),
-      countOf('users', 'verifiedCampus', true)
-    ])
-    return { reports, verification, college, lostFound, totalUsers, verifiedUsers }
+    const startOfTodayUtc = new Date()
+    startOfTodayUtc.setUTCHours(0, 0, 0, 0)
+
+    const [reports, verification, college, lostFound, totalUsers, verifiedUsers, newUsersToday, marketplaceListings] =
+      await Promise.all([
+        countOf('reports', 'status', 'pending'),
+        countOf('verificationRequests', 'status', 'pending'),
+        countOf('collegeRequests', 'status', 'pending'),
+        countOf('lostFound', 'status', 'active'),
+        countOf('users'),
+        countOf('users', 'verifiedCampus', true),
+        countSince('users', 'createdAt', startOfTodayUtc),
+        countOf('products')
+      ])
+    return { reports, verification, college, lostFound, totalUsers, verifiedUsers, newUsersToday, marketplaceListings }
   } catch (err) {
     console.error('[adminGetOverviewCounts] unexpected error', { message: err?.message })
     throw new HttpsError('internal', 'Could not load overview stats. Please try again.')

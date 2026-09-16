@@ -6,6 +6,7 @@ import { getNotesPosts } from '../firebase/postService.js'
 import { subscribeToIsItemSaved } from '../saved/savedService.js'
 import SaveBottomSheet from '../saved/SaveBottomSheet.jsx'
 import { useMyVerification } from '../access/useMyVerification.js'
+import { useOpenPostDocument } from '../hooks/useOpenPostDocument.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
@@ -56,6 +57,7 @@ function NoteCard({ note, verified }) {
   const [isSaved, setIsSaved] = useState(false)
   const [saveSheetOpen, setSaveSheetOpen] = useState(false)
   const [gateFeature, setGateFeature] = useState(null)
+  const { openDocument, opening: openingDocument } = useOpenPostDocument()
   const subjectMeta = SUBJECTS.find((s) => s.key === resolveSubject(note))
 
   useEffect(() => {
@@ -69,7 +71,8 @@ function NoteCard({ note, verified }) {
       setGateFeature(FEATURES.VIEW_CAMPUS_PDF)
       return
     }
-    if (note.file?.url) window.open(note.file.url, '_blank', 'noopener,noreferrer')
+    if (openingDocument) return
+    openDocument(note)
   }
 
   const handleSave = () => {

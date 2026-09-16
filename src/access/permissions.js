@@ -18,7 +18,16 @@ export const FEATURES = {
   DOWNLOAD_CAMPUS_PDF: 'DOWNLOAD_CAMPUS_PDF',
   SAVE_CAMPUS_RESOURCE: 'SAVE_CAMPUS_RESOURCE',
   JOIN_PRIVATE_COMMUNITY: 'JOIN_PRIVATE_COMMUNITY',
-  CREATE_COMMUNITY: 'CREATE_COMMUNITY'
+  CREATE_COMMUNITY: 'CREATE_COMMUNITY',
+  // Added for the verification-gated access control pass — every one of
+  // these has a matching server-side enforcement point (a Firestore
+  // create rule, or a Storage write rule) documented in that rule's own
+  // comment; this file is the UI-layer convenience, not the boundary.
+  CREATE_POST: 'CREATE_POST',
+  UPLOAD_POST_MEDIA: 'UPLOAD_POST_MEDIA',
+  SEND_MESSAGE: 'SEND_MESSAGE',
+  CREATE_MARKETPLACE_LISTING: 'CREATE_MARKETPLACE_LISTING',
+  CREATE_LOST_FOUND: 'CREATE_LOST_FOUND'
 }
 
 // Every listed feature currently requires verification. Kept as an

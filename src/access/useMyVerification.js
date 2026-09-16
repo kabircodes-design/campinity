@@ -1,42 +1,23 @@
-import { useEffect, useState } from 'react'
-import { auth } from '../firebase/firebase.js'
-import { getUserProfile } from '../firebase/profileService.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
-// Module-level cache: many PostCard instances on one feed page would
-// otherwise each independently fetch the SAME current-user profile
-// just to read one boolean. One in-flight promise is shared across
-// every simultaneous caller instead. Cleared on auth change so a
-// logout/login (or verification completing) doesn't serve stale data.
-let cachedPromise = null
-let cachedForUid = null
-
+/**
+ * REBUILT for the verification-gated access control pass — this used to
+ * run its own separate, module-cached getUserProfile() fetch, entirely
+ * independent of AuthContext's own profile (which useAuthUser.js already
+ * keeps live via a Firestore onSnapshot() listener on users/{uid}, not a
+ * one-time read). That meant two real problems: every PostCard etc.
+ * duplicated a fetch AuthContext already had in hand, and — more
+ * importantly — a user who gets verified (or unverified) while the app
+ * is open never saw it reflected here without an explicit
+ * invalidateVerificationCache() call, which nothing in the codebase
+ * actually made (confirmed by grep: that function was exported but
+ * never imported anywhere). Reading directly from the shared, already-
+ * live subscription fixes both: one source of truth, zero extra reads,
+ * and it updates in real time the moment the underlying document does —
+ * including the moment an admin approves or revokes verification.
+ */
 export function useMyVerification() {
-  const [verified, setVerified] = useState(null) // null = still loading
-
-  useEffect(() => {
-    const uid = auth.currentUser?.uid
-    if (!uid) {
-      setVerified(false)
-      return
-    }
-    if (cachedForUid !== uid) {
-      cachedForUid = uid
-      cachedPromise = getUserProfile(uid).catch(() => null)
-    }
-    let cancelled = false
-    cachedPromise.then((profile) => {
-      if (!cancelled) setVerified(Boolean(profile?.verifiedCampus))
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  return verified
-}
-
-/** Called after a successful verification so already-mounted PostCards pick up the new status without a full page reload. */
-export function invalidateVerificationCache() {
-  cachedPromise = null
-  cachedForUid = null
+  const { profile, loading } = useAuth()
+  if (loading) return null // null = still loading, same contract as before
+  return Boolean(profile?.verifiedCampus)
 }

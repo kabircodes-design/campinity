@@ -267,6 +267,7 @@ export async function deleteAccount(password) {
   await deleteStorageFileIfExists(`profileImages/${uid}`)
   await deleteStorageFileIfExists(`studentIds/${uid}`)
   await deleteStorageFolder(`postImages/${uid}`)
+  await deleteStorageFolder(`postDocuments/${uid}`)
 
   // 4. Delete the Firebase Auth account. Must be last — every step above
   // needs request.auth.uid to still resolve to this user.

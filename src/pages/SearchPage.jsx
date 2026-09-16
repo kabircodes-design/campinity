@@ -198,7 +198,7 @@ export default function SearchPage() {
 
   return (
     <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
-        <div className="lg:flex lg:items-start lg:gap-5 lg:px-6 lg:py-4 lg:max-w-[1280px]">
+        <div className="lg:flex lg:items-start lg:gap-5 lg:px-6 lg:py-4 lg:max-w-[1280px] lg:mx-auto">
           <div className="mx-auto max-w-[480px] lg:mx-0 lg:max-w-[740px] lg:flex-1 lg:min-w-0 bg-white dark:bg-[#11131a] min-h-full lg:min-h-0 lg:rounded-2xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
             {/* Mobile header — search input only. AppShell's own persistent
                 header already provides the way back to Home on mobile

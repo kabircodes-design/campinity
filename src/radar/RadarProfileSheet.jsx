@@ -6,8 +6,10 @@ import Avatar from '../components/Avatar.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { auth } from '../firebase/firebase.js'
-import { getOrCreateChat } from '../firebase/chatService.js'
 import { matchTier } from './radarService.js'
+import { useStartConversation } from '../hooks/useStartConversation.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 const TIER_LABEL = { high: 'High match', medium: 'Medium match', low: 'Some overlap' }
 const TIER_COLOR = { high: 'text-emerald-600 bg-emerald-50', medium: 'text-blue-600 bg-blue-50', low: 'text-gray-500 bg-gray-100' }
@@ -16,19 +18,13 @@ const TIER_COLOR = { high: 'text-emerald-600 bg-emerald-50', medium: 'text-blue-
 export default function RadarProfileSheet({ match, onClose }) {
   const navigate = useNavigate()
   const currentUid = auth.currentUser?.uid
+  const { startConversation, busy: messageBusy, gateOpen, setGateOpen } = useStartConversation()
 
   if (!match) return null
 
   const tier = matchTier(match.score)
 
-  const handleMessage = async () => {
-    try {
-      const { chatId } = await getOrCreateChat(currentUid, match.uid)
-      navigate(`/messages/${chatId}`)
-    } catch (err) {
-      console.error('Could not open or start this conversation:', err)
-    }
-  }
+  const handleMessage = () => startConversation(currentUid, match.uid)
 
   const sheet = (
     <div className="fixed inset-0 z-[9999] flex items-end justify-center">
@@ -97,7 +93,8 @@ export default function RadarProfileSheet({ match, onClose }) {
             <button
               type="button"
               onClick={handleMessage}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-full bg-blue-600 text-white text-sm font-semibold py-2.5 hover:bg-blue-700 transition-all duration-300"
+              disabled={messageBusy}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-full bg-blue-600 text-white text-sm font-semibold py-2.5 hover:bg-blue-700 disabled:opacity-60 transition-all duration-300"
             >
               <MessageCircle className="w-4 h-4" />
               Message
@@ -112,6 +109,7 @@ export default function RadarProfileSheet({ match, onClose }) {
           </div>
         </div>
       </motion.div>
+      <VerificationGate open={gateOpen} onClose={() => setGateOpen(false)} feature={FEATURES.SEND_MESSAGE} />
     </div>
   )
 

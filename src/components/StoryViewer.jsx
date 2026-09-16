@@ -8,6 +8,9 @@ import { deleteStory, getStoryLikeCount, getStoryViewers, hasLikedStory, likeSto
 import { getOrCreateChat, sendMessage } from '../firebase/chatService.js'
 import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
 import Avatar from './Avatar.jsx'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 const STORY_DURATION_MS = 5000
 
@@ -46,6 +49,8 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
   const [likeBusy, setLikeBusy] = useState(false)
   const [replyText, setReplyText] = useState('')
   const [replySending, setReplySending] = useState(false)
+  const verified = useMyVerification()
+  const [gateOpen, setGateOpen] = useState(false)
   const [replySent, setReplySent] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const startRef = useRef(null)
@@ -234,6 +239,10 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
   const handleSendReply = async () => {
     const text = replyText.trim()
     if (!text || replySending || !current || !currentUid || isOwn) return
+    if (verified === false) {
+      setGateOpen(true)
+      return
+    }
     setReplySending(true)
     try {
       const { chatId } = await getOrCreateChat(currentUid, current.userId)
@@ -508,6 +517,8 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
           image: current.mediaType === 'image' ? current.mediaUrl : null
         }}
       />
+
+      <VerificationGate open={gateOpen} onClose={() => setGateOpen(false)} feature={FEATURES.SEND_MESSAGE} />
     </>
   )
 }

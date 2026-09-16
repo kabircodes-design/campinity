@@ -5,9 +5,13 @@ import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { createProduct, uploadProductImage, CATEGORIES } from '../firebase/marketplaceService.js'
 import { getCollegeById } from '../data/dummyColleges.js'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 export default function CreateProductPage() {
   const navigate = useNavigate()
+  const verified = useMyVerification()
   const fileInputRef = useRef(null)
   const [profile, setProfile] = useState(null)
   const [collegeName, setCollegeName] = useState('')
@@ -75,6 +79,26 @@ export default function CreateProductPage() {
   }
 
   const canPublish = name.trim().length > 0 && Number(price) > 0 && !publishing
+
+  // Defense in depth against direct navigation to /marketplace/create —
+  // the real boundary is products/{productId}'s create rule in
+  // firestore.rules, not this check.
+  if (verified === false) {
+    return (
+      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden" style={{ backgroundColor: '#f8fafc' }}>
+        <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-[0_1px_3px_rgba(15,23,42,0.04)] lg:border-x lg:border-gray-100">
+          <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
+            <div className="h-14 flex items-center px-3">
+              <button type="button" aria-label="Back" onClick={() => navigate(-1)} className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100">
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            </div>
+          </header>
+          <VerificationGate open onClose={() => navigate(-1)} feature={FEATURES.CREATE_MARKETPLACE_LISTING} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden" style={{ backgroundColor: '#f8fafc' }}>

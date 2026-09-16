@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Users } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
 import { COMMUNITY_TYPES, createCommunity } from '../firebase/communityService.js'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 const typeLabels = {
   official_club: 'Official Club',
@@ -37,6 +40,7 @@ const privacyOptions = [
  */
 export default function CreateCommunityPage() {
   const navigate = useNavigate()
+  const verified = useMyVerification()
 
   const [name, setName] = useState('')
   const [handle, setHandle] = useState('')
@@ -97,6 +101,32 @@ export default function CreateCommunityPage() {
       setSubmitError(err?.message || 'Could not create this community. Please try again.')
       setIsSubmitting(false)
     }
+  }
+
+  // Defense in depth against direct navigation to /community/create —
+  // DesktopRightRail.jsx's own "Create Community" button already gates
+  // itself with the same feature, but that only covers that one entry
+  // point; the real boundary is communities/{communityId}'s create rule.
+  if (verified === false) {
+    return (
+      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
+        <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
+          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+            <div className="h-14 flex items-center px-3">
+              <button
+                type="button"
+                aria-label="Back"
+                onClick={() => navigate(-1)}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            </div>
+          </header>
+          <VerificationGate open onClose={() => navigate(-1)} feature={FEATURES.CREATE_COMMUNITY} />
+        </div>
+      </div>
+    )
   }
 
   return (

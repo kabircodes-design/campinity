@@ -1,7 +1,11 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarDays, FileText, Image as ImageIcon, PenSquare } from 'lucide-react'
+import { CalendarDays, FileText, Image as ImageIcon, Lock, PenSquare } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 /**
  * Compact composer launcher for the Home feed. Every action here opens
@@ -21,6 +25,8 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
  */
 export default function PostComposer({ profile, initials, colorClass, firstName }) {
   const navigate = useNavigate()
+  const verified = useMyVerification()
+  const [gateOpen, setGateOpen] = useState(false)
 
   const actions = [
     { key: 'photo', label: 'Photo', icon: ImageIcon, color: 'text-emerald-500' },
@@ -28,17 +34,30 @@ export default function PostComposer({ profile, initials, colorClass, firstName 
     { key: 'event', label: 'Event', icon: CalendarDays, color: 'text-amber-500' }
   ]
 
+  // Same feature gate CreatePostPage.jsx itself enforces (both as a
+  // page-level guard for direct navigation, and here so an unverified
+  // user never even leaves Home to find out — see permissions.js/
+  // firestore.rules for where this is actually enforced server-side.
+  const handleOpenComposer = () => {
+    if (verified === false) {
+      setGateOpen(true)
+      return
+    }
+    navigate('/create')
+  }
+
   return (
     <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-3.5 dark:border-white/10 dark:bg-[#11131a] dark:shadow-none">
       <button
         type="button"
-        onClick={() => navigate('/create')}
+        onClick={handleOpenComposer}
         className="group flex w-full items-center gap-3 text-left"
-        aria-label="Create a post"
+        aria-label={verified === false ? 'Create a post — verify your account first' : 'Create a post'}
       >
         <Avatar initials={initials} colorClass={colorClass} size="sm" src={getProfileIdentityImage(profile) || undefined} />
-        <span className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-400 transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 dark:border-white/10 dark:bg-white/5 dark:text-gray-500 dark:group-hover:bg-white/10 dark:group-hover:border-white/20">
-          What's on your mind{firstName ? `, ${firstName}` : ''}?
+        <span className="flex-1 flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-400 transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 dark:border-white/10 dark:bg-white/5 dark:text-gray-500 dark:group-hover:bg-white/10 dark:group-hover:border-white/20">
+          {verified === false && <Lock className="w-3.5 h-3.5 flex-shrink-0" />}
+          {verified === false ? 'Verify to post' : `What's on your mind${firstName ? `, ${firstName}` : ''}?`}
         </span>
         <span className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white group-hover:bg-blue-700 transition-all duration-200 group-active:scale-95">
           <PenSquare className="w-4 h-4" />
@@ -50,7 +69,7 @@ export default function PostComposer({ profile, initials, colorClass, firstName 
           <button
             key={key}
             type="button"
-            onClick={() => navigate('/create')}
+            onClick={handleOpenComposer}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-white/5 transition-all duration-200"
           >
             <Icon className={`w-4 h-4 ${color}`} />
@@ -58,6 +77,8 @@ export default function PostComposer({ profile, initials, colorClass, firstName 
           </button>
         ))}
       </div>
+
+      <VerificationGate open={gateOpen} onClose={() => setGateOpen(false)} feature={FEATURES.CREATE_POST} />
     </div>
   )
 }

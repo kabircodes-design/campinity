@@ -7,8 +7,10 @@ import ReportModal from '../components/ReportModal.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { auth } from '../firebase/firebase.js'
 import { deleteProduct, getProductById } from '../firebase/marketplaceService.js'
-import { getOrCreateChat } from '../firebase/chatService.js'
 import { saveItem, subscribeToIsItemSaved, unsaveItem } from '../saved/savedService.js'
+import { useStartConversation } from '../hooks/useStartConversation.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 function timeAgoFromMs(ms) {
   if (!ms) return ''
@@ -40,9 +42,9 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState(null)
   const [status, setStatus] = useState('loading') // 'loading' | 'success' | 'notfound' | 'error'
   const [saved, setSaved] = useState(false)
-  const [messaging, setMessaging] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const { startConversation, busy: messaging, gateOpen, setGateOpen } = useStartConversation()
 
   const uid = auth.currentUser?.uid
 
@@ -85,16 +87,9 @@ export default function ProductDetailPage() {
     }
   }
 
-  const handleMessageSeller = async () => {
-    if (!uid || !product || isOwner || messaging) return
-    setMessaging(true)
-    try {
-      const chatId = await getOrCreateChat(uid, product.sellerId)
-      navigate(`/messages/${chatId}`)
-    } catch (err) {
-      console.error('Could not start chat with seller:', err)
-      setMessaging(false)
-    }
+  const handleMessageSeller = () => {
+    if (!uid || !product || isOwner) return
+    startConversation(uid, product.sellerId)
   }
 
   const handleDelete = async () => {
@@ -231,6 +226,8 @@ export default function ProductDetailPage() {
           targetOwnerUid={product.sellerId}
         />
       )}
+
+      <VerificationGate open={gateOpen} onClose={() => setGateOpen(false)} feature={FEATURES.SEND_MESSAGE} />
     </div>
   )
 }

@@ -2,14 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
-  Bell,
   Clock,
   Download,
   FileText,
-  MessageCircle,
   Phone,
-  Radar,
-  Search,
   ShieldAlert,
   Users,
   Video
@@ -21,7 +17,6 @@ import ChatListPanel from '../components/ChatListPanel.jsx'
 import MessageBubble from '../components/MessageBubble.jsx'
 import MessageInput from '../components/MessageInput.jsx'
 import ReportModal from '../components/ReportModal.jsx'
-import Logo from '../components/Logo.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { markChatRead, subscribeToUserChats, subscribeToSentPendingChats } from '../firebase/chatService.js'
@@ -296,51 +291,12 @@ export default function ChatPage() {
         <DesktopSidebar unreadNotifications={unreadNotifCount} profile={profile} />
 
         <div className="flex flex-col h-screen overflow-hidden min-w-0">
-          {/* Global header — identical treatment to Home/Messages, duplicated (not extracted) so Home's own file stays untouched. */}
-          <header className="sticky top-0 z-40 bg-white border-b border-gray-100 flex-shrink-0 hidden lg:block">
-            <div className="h-14 flex items-center gap-3 px-4 lg:px-6">
-              <button
-                type="button"
-                onClick={() => navigate('/home')}
-                aria-label="Campinity — go to Home"
-                className="flex items-center flex-shrink-0"
-              >
-                <Logo className="w-7 h-7" withWordmark />
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/search')}
-                className="group relative flex flex-1 max-w-md mx-auto items-center text-left"
-                aria-label="Search Campinity"
-              >
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 transition-colors duration-200 group-hover:text-gray-500" />
-                <span className="flex items-center justify-between w-full rounded-full border border-gray-200 bg-gray-50 pl-10 pr-2.5 py-2 text-sm text-gray-400 transition-all duration-200 group-hover:bg-white group-hover:border-gray-300 group-hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)]">
-                  Search for people, communities, posts...
-                  <kbd className="flex-shrink-0 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">
-                    Ctrl K
-                  </kbd>
-                </span>
-              </button>
-              <div className="flex items-center gap-1 ml-auto">
-                <button type="button" aria-label="Radar" onClick={() => navigate('/radar')} className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200">
-                  <Radar className="w-5 h-5" />
-                </button>
-                <button type="button" aria-label="Messages" onClick={() => navigate('/messages')} className="w-9 h-9 rounded-full flex items-center justify-center text-blue-600 bg-blue-50 transition-all duration-200">
-                  <MessageCircle className="w-5 h-5" />
-                </button>
-                <button type="button" aria-label="Notifications" onClick={() => navigate('/notifications')} className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200">
-                  <Bell className="w-5 h-5" />
-                  {unreadNotifCount > 0 && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />}
-                </button>
-                {profile && (
-                  <button type="button" onClick={() => navigate('/profile')} aria-label="Your profile" className="flex items-center ml-1 rounded-full hover:bg-gray-100 p-0.5 transition-all duration-200">
-                    <Avatar initials={initials} colorClass={myColorClass} size="sm" src={getProfileIdentityImage(profile) || undefined} />
-                  </button>
-                )}
-              </div>
-            </div>
-          </header>
-
+          {/* No page-specific desktop header here (deliberately, per a
+              layout-bug fix) — it used to duplicate DesktopSidebar's own
+              logo/nav one row down, showing two Campinity logos and two
+              search bars on desktop at once. DesktopSidebar already
+              covers navigation; the active conversation's own header
+              below covers this page's specific chat context. */}
           <div className="flex-1 flex overflow-hidden min-h-0">
             {/* Desktop chat-list column — same panel MessagesPage.jsx uses. */}
             <div className="hidden lg:flex lg:flex-col w-[320px] flex-shrink-0 h-full border-r border-gray-100 bg-white overflow-y-auto">

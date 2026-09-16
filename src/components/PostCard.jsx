@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useMyVerification } from '../access/useMyVerification.js'
+import { useOpenPostDocument } from '../hooks/useOpenPostDocument.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
 import {
@@ -69,6 +70,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
   const expiryBadgeText = formatExpiryBadge(post.expiresAtMs)
   const verified = useMyVerification()
   const [verificationGateOpen, setVerificationGateOpen] = useState(false)
+  const { openDocument, opening: openingDocument } = useOpenPostDocument()
   const navigate = useNavigate()
   const config = postTypeConfig[post.type]
   const TypeIcon = typeIcons[post.type]
@@ -324,18 +326,15 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
       {post.file && (
         <button
           type="button"
+          disabled={openingDocument}
           onClick={() => {
             if (verified === false) {
               setVerificationGateOpen(true)
               return
             }
-            if (post.file.url) {
-              window.open(post.file.url, '_blank', 'noopener,noreferrer')
-            } else {
-              goToPost()
-            }
+            openDocument(post)
           }}
-          className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-3 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left hover:border-blue-100 dark:hover:border-blue-500/30 hover:bg-gray-100/70 dark:hover:bg-white/10 transition-all duration-300"
+          className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-3 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left hover:border-blue-100 dark:hover:border-blue-500/30 hover:bg-gray-100/70 dark:hover:bg-white/10 disabled:opacity-60 transition-all duration-300"
         >
           <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
             <FileText className="w-5 h-5 text-white" />

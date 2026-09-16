@@ -301,8 +301,15 @@ export default function ProfilePage() {
 
   return (
     <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
-        <div className="lg:flex lg:items-start lg:gap-5 lg:px-6 lg:py-4 lg:max-w-[1180px]">
-          <div className="mx-auto max-w-[480px] lg:mx-0 lg:max-w-[680px] lg:flex-1 lg:min-w-0 bg-white dark:bg-[#11131a] min-h-full lg:min-h-0 lg:rounded-2xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
+        {/* Grid, not flex-with-a-max-width — the row itself now fills
+            whatever width AppShell's own 1fr column actually gives it
+            (no independent 1180px cap fighting that), and the main
+            column is a real minmax(0,1fr) track instead of a flex item
+            capped at 680px, so it grows to fill whatever's left after
+            the fixed-width right rail. Same pattern HomePage.jsx's own
+            outer AppShell-column already uses successfully. */}
+        <div className="lg:grid lg:items-start lg:gap-5 lg:px-6 lg:py-4 lg:[grid-template-columns:minmax(0,1fr)_300px]">
+          <div className="mx-auto max-w-[480px] lg:mx-0 lg:max-w-none lg:min-w-0 bg-white dark:bg-[#11131a] min-h-full lg:min-h-0 lg:rounded-2xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
             <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#11131a]/95 backdrop-blur-md border-b border-gray-100 dark:border-white/10 lg:rounded-t-2xl">
               <div className="h-14 flex items-center justify-between px-4 lg:px-6">
                 <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">Profile</span>

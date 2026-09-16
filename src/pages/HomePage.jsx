@@ -417,7 +417,27 @@ export default function HomePage() {
           />
         )}
 
-        <nav className={`sticky top-14 z-30 bg-white dark:bg-[#09090f] flex items-center gap-6 px-4 lg:px-6 border-b border-gray-100 dark:border-white/10 mb-3 ${entranceClass(140)}`}>
+        {/* top-14 (not top-0) is intentional and mobile-only: on mobile
+            this nav shares ONE document-level scroll with AppShell's own
+            sticky h-14 header (that div has no `lg:overflow-y-auto` of
+            its own below `lg:`), so top-14 is what clears that header.
+            On desktop, AppShell's header lives in a separate flex row
+            outside this page's own `lg:overflow-y-auto` container — that
+            container's top edge already starts below the header, so a
+            sticky child inside it only needs top-0. Leaving this at
+            top-14 unconditionally was the actual cause of "content peeks
+            through a gap while scrolling on desktop" — the nav was
+            sticking 56px lower than the container's real top. */}
+        {/* Equal-width grid, not content-sized flex children — the nav
+            itself was already full-width (a direct child of Home's own
+            correctly-sized feed column, no extra wrapper capping it);
+            the actual bug was that 4 plain flex buttons only ever took
+            up as much width as their own text needed, leaving the rest
+            of that already-full-width row blank on the right. Active
+            state now matches DesktopSidebar.jsx's own real treatment
+            (bg-blue-50/text-blue-600 — confirmed by reading it, not a
+            new "pink" language) instead of the old underline indicator. */}
+        <nav className={`sticky top-14 lg:top-0 z-30 bg-white dark:bg-[#11131a] grid grid-cols-4 gap-1 px-4 lg:px-6 py-1.5 border-b border-gray-100 dark:border-white/10 mb-3 ${entranceClass(140)}`}>
           {feedTabs.map((tab) => {
             const isActive = activeTab === tab.key
             return (
@@ -425,17 +445,13 @@ export default function HomePage() {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`relative py-3 text-[14px] font-semibold transition-colors duration-200 ${
-                  isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
+                className={`rounded-xl py-2 text-[14px] font-semibold text-center transition-all duration-200 ${
+                  isActive
+                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400'
+                    : 'text-gray-500 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-white/5'
                 }`}
               >
                 {tab.label}
-                <span
-                  className={`absolute left-0 right-0 -bottom-px h-[2px] bg-blue-600 transition-opacity duration-200 ${
-                    isActive ? 'opacity-100' : 'opacity-0'
-                  }`}
-                  aria-hidden="true"
-                />
               </button>
             )
           })}

@@ -18,6 +18,9 @@ import {
 import { getAvatarColor, getInitials, getUserPosts, getUserPostCount, getPostById } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
 import { getOrCreateChat, getExistingChatStatus } from '../firebase/chatService.js'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 /**
  * Real implementation — this file's own name ("Placeholder") confirms
@@ -55,6 +58,8 @@ export default function StudentProfilePlaceholder() {
   const [chatStatusInfo, setChatStatusInfo] = useState(null)
   const [messageError, setMessageError] = useState('')
   const [messageBusy, setMessageBusy] = useState(false)
+  const [messageGateOpen, setMessageGateOpen] = useState(false)
+  const verified = useMyVerification()
 
   const [pinnedPosts, setPinnedPosts] = useState([])
   const [pinnedLoading, setPinnedLoading] = useState(false)
@@ -171,6 +176,15 @@ export default function StudentProfilePlaceholder() {
 
   const handleMessage = async () => {
     if (!currentUid || !profile) return
+    // Gate only a genuinely NEW conversation (no chat/request exists
+    // yet) — reopening an existing accepted chat or pending request
+    // must keep working regardless of the CURRENT verification status,
+    // per "do not break existing chats." The real boundary either way
+    // is chats/{chatId}'s own create rule in firestore.rules.
+    if (!chatStatusInfo && verified === false) {
+      setMessageGateOpen(true)
+      return
+    }
     setMessageError('')
     setMessageBusy(true)
     try {
@@ -308,6 +322,8 @@ export default function StudentProfilePlaceholder() {
             </div>
           </div>
         )}
+
+        <VerificationGate open={messageGateOpen} onClose={() => setMessageGateOpen(false)} feature={FEATURES.SEND_MESSAGE} />
 
         <nav className="sticky top-14 z-30 flex items-center bg-white border-b border-gray-100">
           {tabs.map((tab) => (

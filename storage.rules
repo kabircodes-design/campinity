@@ -1,0 +1,164 @@
+rules_version = '2';
+
+// =============================================================================
+// NEW FILE — no storage.rules existed anywhere in this repo before this pass,
+// even though firebase.json already referenced one (`"storage": { "rules":
+// "storage.rules" }`). Whatever access rule is actually live on Storage today
+// was configured directly in the Firebase Console and is NOT visible from
+// here — this file was authored purely from the real upload paths found by
+// grepping every `ref(storage, ...)` call in src/ (see this feature's final
+// report for the exact list). It has NOT been deployed and has NOT been
+// validated against a running emulator (this environment's Java is 1.8; the
+// Firestore/Storage emulator requires JDK 21+). Review this file yourself
+// and deploy it deliberately (`firebase deploy --only storage`) — do not
+// assume it is already protecting anything until you do.
+// =============================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Same field, same source of truth as firestore.rules' isVerified() —
+    // Storage rules can call into Firestore via firestore.get(), so this
+    // is a real cross-service check, not a client-trusted flag.
+    function isVerified() {
+      return isSignedIn() &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('verifiedCampus', false) == true;
+    }
+
+    // profileImages/{uid} — single file, auth/utils/storage.js.
+    // Not verification-gated: a profile photo is part of the onboarding
+    // identity itself, not a "restricted action" in the task's list, and
+    // gating it could make onboarding circular for a brand-new user.
+    match /profileImages/{uid} {
+      allow read: if isSignedIn();
+      allow write, delete: if isOwner(uid);
+    }
+
+    // studentIds/{uid} and verificationDocuments/{uid}/{requestId}/{file} —
+    // the ID-document upload that submitVerificationRequest()/
+    // CampusVerificationOptions.jsx write to. Deliberately NEVER gated by
+    // isVerified() — this is the one upload an UNVERIFIED user must always
+    // be able to make, since it's what unlocks verification in the first
+    // place. Read is owner-only; admin review goes through
+    // adminGetVerificationDocumentUrl (a Cloud Function using the Admin
+    // SDK, which bypasses these rules entirely) — never a direct client
+    // read, so no admin-read branch is needed here.
+    match /studentIds/{uid} {
+      allow read, write, delete: if isOwner(uid);
+    }
+    match /verificationDocuments/{uid}/{requestId}/{fileName} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // campusAvatars/{uid}/{file} — avatarStorage.js. Same reasoning as
+    // profileImages: identity-setup content, not gated.
+    match /campusAvatars/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write, delete: if isOwner(uid);
+    }
+
+    // quarantine/profilePhotos/{uid}/{file} — quarantineUpload.js's
+    // pre-moderation staging area. Owner-only in both directions; this is
+    // explicitly NOT meant to be publicly viewable content yet.
+    match /quarantine/profilePhotos/{uid}/{fileName} {
+      allow read, write, delete: if isOwner(uid);
+    }
+
+    // postImages/{uid}/{file} — postService.js, post PHOTOS only.
+    // Verification-gated on write (matches FEATURES.CREATE_POST /
+    // UPLOAD_POST_MEDIA and posts/{postId}'s own now-gated create rule
+    // in firestore.rules), but read stays isSignedIn()-only on purpose —
+    // a post photo is meant to render inline in the feed for any
+    // signed-in browser, per "browsing allowed for everyone."
+    match /postImages/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid) && isVerified();
+      allow delete: if isOwner(uid);
+    }
+
+    // postDocuments/{uid}/{file} — postService.js, post PDFs/documents
+    // only. Deliberately a SEPARATE prefix from postImages/ (see
+    // uploadPostDocument's own comment in postService.js for why) so
+    // read can be genuinely gated by isVerified() here — this is the
+    // real security boundary for the "PDF public-URL bypass" fix, not
+    // just the Cloud Function's own check. getVerifiedPostDocumentUrl
+    // (functions/index.js) uses the Admin SDK, which bypasses these
+    // rules entirely, so this restriction only affects direct client
+    // SDK calls attempting to skip that function.
+    match /postDocuments/{uid}/{fileName} {
+      allow read: if isVerified();
+      allow write: if isOwner(uid) && isVerified();
+      allow delete: if isOwner(uid);
+    }
+
+    // products/{uid}/{file} — marketplaceService.js. Verification-gated,
+    // mirrors products/{productId}'s create rule.
+    match /products/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid) && isVerified();
+      allow delete: if isOwner(uid);
+    }
+
+    // lostFound/{uid}/{file} — lostFoundService.js. Verification-gated,
+    // mirrors lostFound/{itemId}'s create rule.
+    match /lostFound/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid) && isVerified();
+      allow delete: if isOwner(uid);
+    }
+
+    // communities/{communityId}/{kind}-{file} — communityService.js.
+    // Verification-gated (matches communities/{communityId}'s create
+    // rule) — full owner/admin precision for an EXISTING community's
+    // media is enforced by that community's own Firestore document and
+    // the app's own UI flow, not duplicated here; this only requires the
+    // uploader to be a real, verified, signed-in user, which is already
+    // guaranteed for anyone who could have created or been promoted
+    // admin on a community in the first place.
+    match /communities/{communityId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isVerified();
+    }
+
+    // chatMedia/{chatId}/{uid}/{file} — chatService.js. NOT verification-
+    // gated (only starting a NEW conversation is restricted per this
+    // task's own scope — see firestore.rules' chats/{chatId} create rule
+    // comment); the {uid} path segment must match the uploader, so only
+    // a chat's own participant can write under their own folder.
+    // KNOWN LIMITATION, stated rather than hidden: `read` here is any
+    // signed-in user, not a true participant-only check — replicating
+    // chats/{chatId}'s participant list would need a firestore.get() on
+    // the parent chat doc, which this pass didn't add given the
+    // real-world exposure is low (the exact file path includes a
+    // per-upload timestamp, so it isn't guessable/listable without
+    // already having it from within the chat itself) — but it is not
+    // truly participant-scoped the way the Firestore messages
+    // subcollection already is. Tightening this is a reasonable follow-up,
+    // not something this pass silently pretends is already solved.
+    match /chatMedia/{chatId}/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid);
+    }
+
+    // stories/{uid}/{file} — storyService.js. Not in this task's
+    // restricted-action list; left exactly as permissive as every other
+    // currently-working upload path, not newly restricted.
+    match /stories/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write, delete: if isOwner(uid);
+    }
+
+    // Deny everything else by default — Storage is NOT public.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

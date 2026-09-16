@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { MapPin, MessageCircle, Sparkles } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
@@ -8,8 +7,10 @@ import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { auth } from '../firebase/firebase.js'
 import { followUser, unfollowUser } from '../firebase/profileService.js'
-import { getOrCreateChat } from '../firebase/chatService.js'
 import { matchTier } from './radarService.js'
+import { useStartConversation } from '../hooks/useStartConversation.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 const TIER_COLOR = { high: 'text-emerald-600 bg-emerald-50', medium: 'text-blue-600 bg-blue-50', low: 'text-gray-500 bg-gray-100' }
 
@@ -38,12 +39,11 @@ function formatDistance(meters) {
  * (getOrCreateChat + navigate) — no duplicate follow/message system.
  */
 export default function RadarUserCard({ match, onOpen }) {
-  const navigate = useNavigate()
   const currentUid = auth.currentUser?.uid
+  const { startConversation, busy: messageBusy, gateOpen, setGateOpen } = useStartConversation()
 
   const [isFollowing, setIsFollowing] = useState(Boolean(match.isFollowing))
   const [followBusy, setFollowBusy] = useState(false)
-  const [messageBusy, setMessageBusy] = useState(false)
 
   const tier = matchTier(match.score)
   const subtitle = [match.course, match.year].filter(Boolean).join(' · ')
@@ -64,17 +64,9 @@ export default function RadarUserCard({ match, onOpen }) {
     }
   }
 
-  const handleMessage = async (event) => {
+  const handleMessage = (event) => {
     event.stopPropagation()
-    if (!currentUid || messageBusy) return
-    setMessageBusy(true)
-    try {
-      const { chatId } = await getOrCreateChat(currentUid, match.uid)
-      navigate(`/messages/${chatId}`)
-    } catch (err) {
-      console.error('Could not open or start this conversation:', err)
-      setMessageBusy(false)
-    }
+    startConversation(currentUid, match.uid)
   }
 
   return (
@@ -145,6 +137,10 @@ export default function RadarUserCard({ match, onOpen }) {
           <MessageCircle className="w-3.5 h-3.5" />
           Message
         </button>
+      </div>
+      {/* stopPropagation wrapper: React portals still bubble synthetic events through the JSX tree, not the DOM tree — without this, a click inside the gate (which the card's own onOpen onClick sits above) would also fire onOpen(match). */}
+      <div onClick={(event) => event.stopPropagation()}>
+        <VerificationGate open={gateOpen} onClose={() => setGateOpen(false)} feature={FEATURES.SEND_MESSAGE} />
       </div>
     </motion.div>
   )

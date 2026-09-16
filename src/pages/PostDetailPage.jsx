@@ -29,6 +29,10 @@ import { getCommunityById } from '../firebase/communityService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { addComment, getComments, likePost, unlikePost, deletePost, editPost } from '../firebase/engagementService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
+import { useMyVerification } from '../access/useMyVerification.js'
+import { useOpenPostDocument } from '../hooks/useOpenPostDocument.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 /**
  * Complete replacement of the old flat comment section — no
@@ -73,6 +77,9 @@ function useScrollToCommentAnchor(commentsLoaded) {
 export default function PostDetailPage() {
   const { postId } = useParams()
   const navigate = useNavigate()
+  const verified = useMyVerification()
+  const [documentGateOpen, setDocumentGateOpen] = useState(false)
+  const { openDocument, opening: openingDocument } = useOpenPostDocument()
 
   const [post, setPost] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
@@ -445,8 +452,15 @@ export default function PostDetailPage() {
           {post.file && (
             <button
               type="button"
-              onClick={() => post.file.url && window.open(post.file.url, '_blank', 'noopener,noreferrer')}
-              className="mx-4 mt-3 w-[calc(100%-2rem)] flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-left hover:border-blue-100 transition-all duration-300"
+              disabled={openingDocument}
+              onClick={() => {
+                if (verified === false) {
+                  setDocumentGateOpen(true)
+                  return
+                }
+                openDocument(post)
+              }}
+              className="mx-4 mt-3 w-[calc(100%-2rem)] flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-left hover:border-blue-100 disabled:opacity-60 transition-all duration-300"
             >
               <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
                 <Download className="w-5 h-5 text-white" />
@@ -454,9 +468,12 @@ export default function PostDetailPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{post.file.name}</p>
                 <p className="text-xs text-gray-400">PDF{post.file.size ? ` · ${post.file.size}` : ''}</p>
+                {verified === false && <p className="text-[11px] text-blue-600 font-medium mt-0.5">🔒 Verified members · Verify to open →</p>}
               </div>
             </button>
           )}
+
+          <VerificationGate open={documentGateOpen} onClose={() => setDocumentGateOpen(false)} feature={FEATURES.VIEW_CAMPUS_PDF} />
 
           {post.event && (
             <div className="mx-4 mt-3 rounded-xl overflow-hidden border border-gray-100">

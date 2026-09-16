@@ -1,31 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAdminSession } from '../hooks/useAdminSession.jsx'
 import { callAdmin } from '../services/adminCallable.js'
-
-const ACTION_LABELS = {
-  verification_approved: 'Verification approved',
-  verification_rejected: 'Verification rejected',
-  college_request_approved: 'College request approved',
-  college_request_rejected: 'College request rejected',
-  user_verified_manual: 'User manually verified',
-  user_unverified_manual: 'User verification revoked',
-  resolved: 'Report resolved',
-  dismissed: 'Report dismissed',
-  content_removed: 'Content removed',
-  restricted: 'User restricted',
-  suspended: 'User suspended',
-  lostfound_removed: 'Lost & Found listing removed',
-  lostfound_restored: 'Lost & Found listing restored',
-  product_hidden: 'Marketplace listing hidden',
-  product_unhidden: 'Marketplace listing unhidden',
-  notification_sent: 'Notification sent'
-}
-
-function formatWhen(ts) {
-  if (!ts?._seconds && !ts?.seconds) return ''
-  const ms = (ts._seconds ?? ts.seconds) * 1000
-  return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-}
+import { ACTION_LABELS, formatAuditWhen } from '../utils/auditLogFormat.js'
 
 /**
  * Real read side of every logAdminAction() call across all the new
@@ -78,7 +54,7 @@ export default function AdminAuditLogPage() {
               <div key={entry.id} className="px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-gray-900">{ACTION_LABELS[entry.action] || entry.action}</p>
-                  <p className="flex-shrink-0 text-[11px] text-gray-400">{formatWhen(entry.createdAt)}</p>
+                  <p className="flex-shrink-0 text-[11px] text-gray-400">{formatAuditWhen(entry.createdAt)}</p>
                 </div>
                 <p className="mt-0.5 text-xs text-gray-400">
                   {entry.targetType && `${entry.targetType}`}

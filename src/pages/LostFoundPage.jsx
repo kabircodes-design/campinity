@@ -31,6 +31,9 @@ import { getOrCreateChat, sendMessage } from '../firebase/chatService.js'
 import { createLostFoundClaimNotification } from '../firebase/notificationService.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { enrichWithAuthors } from '../hooks/useAuthorEnrichment.js'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 import {
   LOST_FOUND_CATEGORIES,
   LOST_FOUND_LOCATIONS,
@@ -105,6 +108,7 @@ function timeAgo(timestamp) {
 export default function LostFoundPage() {
   const navigate = useNavigate()
   const { profile } = useAuth()
+  const verified = useMyVerification()
   const [items, setItems] = useState([])
   const [resolvedPreview, setResolvedPreview] = useState([])
   const [loading, setLoading] = useState(true)
@@ -118,6 +122,7 @@ export default function LostFoundPage() {
   const [createType, setCreateType] = useState('lost')
   const [detailItem, setDetailItem] = useState(null)
   const [claimItem, setClaimItem] = useState(null)
+  const [messageGateOpen, setMessageGateOpen] = useState(false)
 
   const loadItems = () => {
     setLoading(true)
@@ -193,8 +198,12 @@ export default function LostFoundPage() {
   const handleMessagePoster = async (posterUid) => {
     const uid = auth.currentUser?.uid
     if (!uid || !posterUid || uid === posterUid) return
+    if (verified === false) {
+      setMessageGateOpen(true)
+      return
+    }
     try {
-      const chatId = await getOrCreateChat(uid, posterUid)
+      const { chatId } = await getOrCreateChat(uid, posterUid)
       navigate(`/messages/${chatId}`)
     } catch {
       // Navigation just doesn't happen — no crash, no silent-looking success either.
@@ -204,8 +213,12 @@ export default function LostFoundPage() {
   const handleClaimSubmit = async (detail) => {
     const uid = auth.currentUser?.uid
     if (!uid || !claimItem) return
+    if (verified === false) {
+      setMessageGateOpen(true)
+      return
+    }
     try {
-      const chatId = await getOrCreateChat(uid, claimItem.createdBy)
+      const { chatId } = await getOrCreateChat(uid, claimItem.createdBy)
       await sendMessage(
         chatId,
         uid,
@@ -515,15 +528,22 @@ export default function LostFoundPage() {
         </aside>
     </div>
 
-      {createOpen && (
-        <CreateListingModal
-          type={createType}
-          onClose={() => setCreateOpen(false)}
-          onCreated={() => {
-            setCreateOpen(false)
-            loadItems()
-          }}
-        />
+      {createOpen && verified === false ? (
+        // Same gate as every other creation flow — covers all 3 "Report"
+        // entry points in one place since they all just set createOpen
+        // true; the real boundary is lostFound/{itemId}'s create rule.
+        <VerificationGate open onClose={() => setCreateOpen(false)} feature={FEATURES.CREATE_LOST_FOUND} />
+      ) : (
+        createOpen && (
+          <CreateListingModal
+            type={createType}
+            onClose={() => setCreateOpen(false)}
+            onCreated={() => {
+              setCreateOpen(false)
+              loadItems()
+            }}
+          />
+        )
       )}
 
       {detailItem && (
@@ -547,6 +567,8 @@ export default function LostFoundPage() {
       {claimItem && (
         <ClaimModal item={claimItem} onClose={() => setClaimItem(null)} onSubmit={handleClaimSubmit} />
       )}
+
+      <VerificationGate open={messageGateOpen} onClose={() => setMessageGateOpen(false)} feature={FEATURES.SEND_MESSAGE} />
     </>
   )
 }

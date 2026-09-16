@@ -33,8 +33,12 @@ function AdminDashboard() {
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
       <AdminSidebar activeSection={activeSection} onSelectSection={setActiveSection} />
-      <main className="flex-1 min-w-0 px-6 py-6 lg:px-10 lg:py-8 max-w-[900px]">
-        <ActiveSection />
+      <main className="flex-1 min-w-0 px-6 py-6 lg:px-10 lg:py-8 max-w-[1000px]">
+        {/* Only Overview needs to programmatically switch sections (its
+            clickable cards / quick actions) — every other section is
+            reached exclusively via AdminSidebar, so this prop stays
+            scoped to the one component that actually uses it. */}
+        {activeSection === 'overview' ? <ActiveSection onNavigateSection={setActiveSection} /> : <ActiveSection />}
       </main>
     </div>
   )

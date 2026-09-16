@@ -54,7 +54,7 @@ export default function ProgressCard({ uid }) {
     <button
       type="button"
       onClick={() => navigate('/leaderboard')}
-      className="group block mx-4 mt-3 text-left rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-4 text-white shadow-lg shadow-blue-600/20 hover:shadow-xl hover:shadow-blue-600/30 hover:-translate-y-0.5 active:scale-[0.99] transition-all duration-200"
+      className="group block w-[calc(100%-2rem)] mx-4 mt-3 text-left rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-4 text-white shadow-lg shadow-blue-600/20 hover:shadow-xl hover:shadow-blue-600/30 hover:-translate-y-0.5 active:scale-[0.99] transition-all duration-200"
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

@@ -13,6 +13,9 @@ import { usePostingStatus } from '../context/PostingStatusContext.jsx'
 import { awardXP, getUserProgress } from '../gamification/xpService.js'
 import { checkAndAwardBadges } from '../gamification/badgeService.js'
 import { POINTS_REWARDS } from '../gamification/config.js'
+import { useMyVerification } from '../access/useMyVerification.js'
+import VerificationGate from '../access/VerificationGate.jsx'
+import { FEATURES } from '../access/permissions.js'
 
 const categories = ['general', 'study', 'notes', 'event', 'club', 'marketplace']
 
@@ -43,6 +46,7 @@ function formatFileSize(bytes) {
 
 export default function CreatePostPage() {
   const navigate = useNavigate()
+  const verified = useMyVerification()
   const { startPosting, markSuccess, markError } = usePostingStatus()
   const imageInputRef = useRef(null)
   const pdfInputRef = useRef(null)
@@ -260,11 +264,18 @@ export default function CreatePostPage() {
 
       let fileData = null
       if (publishData.pdfFile) {
-        const fileUrl = await uploadPostDocument(publishData.uid, publishData.pdfFile)
+        // Storage PATH only — never a usable URL. See
+        // uploadPostDocument's own comment in postService.js for why:
+        // a getDownloadURL() result is a permanent bearer token, so
+        // storing it here would have been the same bypass this whole
+        // pass exists to close. getVerifiedPostDocumentUrl (Cloud
+        // Function) resolves this path into a real, short-lived URL
+        // on demand, only for verified users.
+        const filePath = await uploadPostDocument(publishData.uid, publishData.pdfFile)
         fileData = {
           name: publishData.pdfFile.name,
           size: formatFileSize(publishData.pdfFile.size),
-          url: fileUrl,
+          path: filePath,
           mimeType: 'application/pdf'
         }
       }
@@ -336,6 +347,34 @@ export default function CreatePostPage() {
     } catch (err) {
       markError(err?.message || "Couldn't post. Try again.")
     }
+  }
+
+  // Defense in depth against direct navigation to /create — the actual
+  // security boundary is Firestore's own posts/{postId} create rule
+  // (see firestore.rules), not this check; this just replaces a
+  // confusing "why did my post silently fail" experience with the same
+  // gate PostComposer.jsx already shows before ever letting someone
+  // reach this page in the normal flow.
+  if (verified === false) {
+    return (
+      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
+        <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
+          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+            <div className="h-14 flex items-center px-3">
+              <button
+                type="button"
+                aria-label="Back"
+                onClick={() => navigate('/home')}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </header>
+          <VerificationGate open onClose={() => navigate('/home')} feature={FEATURES.CREATE_POST} />
+        </div>
+      </div>
+    )
   }
 
   return (
