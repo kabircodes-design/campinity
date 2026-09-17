@@ -18,6 +18,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   PackageSearch,
+  Pin,
   Share,
   ShoppingBag,
   Users
@@ -32,7 +33,7 @@ import SaveBottomSheet from '../saved/SaveBottomSheet.jsx'
 import { subscribeToIsItemSaved } from '../saved/savedService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
 import { auth } from '../firebase/firebase.js'
-import { likePost, unlikePost, subscribeToPostShareCount, deletePost, editPost } from '../firebase/engagementService.js'
+import { likePost, unlikePost, subscribeToPostShareCount, deletePost, editPost, pinPost, unpinPost } from '../firebase/engagementService.js'
 
 /**
  * 'general' and 'study' were added for Feature 4B (Create Post) — every
@@ -68,7 +69,7 @@ function formatExpiryBadge(expiresAtMs) {
   return `Expires in ${days}d`
 }
 
-export default function PostCard({ post, onDeleted = () => {}, canModerate = false }) {
+export default function PostCard({ post, onDeleted = () => {}, canModerate = false, onPinChanged = () => {} }) {
   const expiryBadgeText = formatExpiryBadge(post.expiresAtMs)
   const verified = useMyVerification()
   const [verificationGateOpen, setVerificationGateOpen] = useState(false)
@@ -102,6 +103,30 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
   const [editError, setEditError] = useState('')
   const [currentText, setCurrentText] = useState(post.text || '')
   const [isEdited, setIsEdited] = useState(Boolean(post.edited))
+  const [isPinned, setIsPinned] = useState(Boolean(post.pinned))
+  const [pinBusy, setPinBusy] = useState(false)
+  const [pinError, setPinError] = useState('')
+
+  const handleTogglePin = async () => {
+    if (pinBusy) return
+    setPinBusy(true)
+    setPinError('')
+    const nextPinned = !isPinned
+    try {
+      if (nextPinned) {
+        await pinPost(post.id, auth.currentUser?.uid)
+      } else {
+        await unpinPost(post.id)
+      }
+      setIsPinned(nextPinned)
+      onPinChanged(post.id, nextPinned)
+    } catch (err) {
+      setPinError(err?.message || 'Could not update pin.')
+      window.setTimeout(() => setPinError(''), 3000)
+    } finally {
+      setPinBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (!isOwner) return undefined
@@ -213,15 +238,24 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
           above the post per the brief, and stops click propagation so
           tapping the badge opens the community, not the post. */}
       {post.communityId && (
-        <button
-          type="button"
-          onClick={goToCommunity}
-          className="flex items-center gap-1.5 px-4 lg:px-6 pt-3 text-[12px] font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-all duration-300"
-        >
-          <Users className="w-3.5 h-3.5" />
-          Posted in {post.communityName || 'a community'}
-        </button>
+        <div className="flex items-center justify-between gap-2 px-4 lg:px-6 pt-3">
+          <button
+            type="button"
+            onClick={goToCommunity}
+            className="flex items-center gap-1.5 text-[12px] font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-all duration-300"
+          >
+            <Users className="w-3.5 h-3.5" />
+            Posted in {post.communityName || 'a community'}
+          </button>
+          {isPinned && (
+            <span className="flex-shrink-0 flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+              <Pin className="w-3 h-3" fill="currentColor" />
+              Pinned
+            </span>
+          )}
+        </div>
       )}
+      {pinError && <p className="px-4 lg:px-6 pt-1.5 text-[11px] text-red-500">{pinError}</p>}
 
       <div className={`flex items-start gap-3 px-4 lg:px-6 ${post.communityId ? 'pt-2' : 'pt-4'}`}>
         <button type="button" onClick={goToProfile} aria-label={`Open ${post.name}'s profile`}>
@@ -250,7 +284,20 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
                   <MoreHorizontal className="w-[18px] h-[18px]" />
                 </button>
                 {menuOpen && (
-                  <div className="absolute right-0 top-6 w-36 rounded-xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#181b24] shadow-lg py-1 z-30">
+                  <div className="absolute right-0 top-6 w-44 rounded-xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#181b24] shadow-lg py-1 z-30">
+                    {canModerate && post.communityId && (
+                      <button
+                        type="button"
+                        disabled={pinBusy}
+                        onClick={() => {
+                          setMenuOpen(false)
+                          handleTogglePin()
+                        }}
+                        className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5 disabled:opacity-50 transition-all duration-150"
+                      >
+                        {isPinned ? 'Unpin from community' : 'Pin to community'}
+                      </button>
+                    )}
                     {isOwner && (
                       <button
                         type="button"

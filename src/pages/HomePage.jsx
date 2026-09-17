@@ -269,6 +269,13 @@ export default function HomePage() {
   // "Campus," until those hooks' own next real reload picks it up.
   useEffect(() => {
     if (postingStatus !== 'success' || !postingNewPost) return
+    // A community post belongs to that community's own feed, not
+    // Home's Campus tab — same exclusion getFeedPosts()/postFeedShared.js
+    // now apply at the query level, but this is a local optimistic
+    // insert that never goes through either query, so it needs its own
+    // guard or a freshly-created community post would flash into Home
+    // for the rest of this session until the next real reload.
+    if (postingNewPost.communityId) return
     setPosts((prev) => {
       if (prev.some((p) => String(p.id) === String(postingNewPost.id))) return prev
       return [postingNewPost, ...prev]

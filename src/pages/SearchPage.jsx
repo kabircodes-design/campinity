@@ -7,9 +7,8 @@ import CommunityCard from '../components/CommunityCard.jsx'
 import PostCard from '../components/PostCard.jsx'
 import SearchSkeleton from '../components/SearchSkeleton.jsx'
 import SearchEmptyState from '../components/SearchEmptyState.jsx'
-import Avatar from '../components/Avatar.jsx'
 import Loader from '../auth/components/Loader.jsx'
-import { getAvatarColor, getInitials, getFeedPosts } from '../firebase/postService.js'
+import { getFeedPosts } from '../firebase/postService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { searchAll, getPeopleFromMyCourse } from '../firebase/searchService.js'
 import { searchCommunitiesByName, getTrendingCommunities } from '../firebase/communityService.js'
@@ -312,8 +311,8 @@ export default function SearchPage() {
 
   return (
     <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
-        <div className="lg:flex lg:items-start lg:gap-5 lg:px-6 lg:py-4 lg:max-w-[1280px] lg:mx-auto">
-          <div className="mx-auto max-w-[480px] lg:mx-0 lg:max-w-[740px] lg:flex-1 lg:min-w-0 bg-white dark:bg-[#11131a] min-h-full lg:min-h-0 lg:rounded-2xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
+        <div className="lg:px-6 lg:py-4 lg:max-w-[900px] lg:mx-auto">
+          <div className="mx-auto max-w-[480px] lg:mx-0 lg:max-w-none bg-white dark:bg-[#11131a] min-h-full lg:min-h-0 lg:rounded-2xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
             {/* Mobile header — search input only. AppShell's own persistent
                 header already provides the way back to Home on mobile
                 (the Logo button) — a second "back" button here would be
@@ -577,6 +576,38 @@ export default function SearchPage() {
                       <p className="text-sm text-gray-400 dark:text-gray-500">Search for students, colleges or communities to get started.</p>
                     </div>
                   )}
+
+                  {/* Folded in from the old detached right sidebar — same 4
+                      real destinations (no dead buttons, no fabricated
+                      content), now part of the main discovery flow instead
+                      of a separate column that left a giant empty gap on
+                      any viewport narrower than ~1280px. */}
+                  <section className="px-4 lg:px-6 pt-2 pb-4">
+                    <div className="flex items-center gap-1.5 mb-2.5">
+                      <Zap className="w-4 h-4 text-blue-600" />
+                      <p className="text-sm font-bold text-gray-900 dark:text-gray-50">Quick Actions</p>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {[
+                        { label: 'Create Post', to: '/create', icon: PenSquare },
+                        { label: 'Browse Communities', to: '/communities', icon: Users },
+                        { label: 'Marketplace', to: '/marketplace', icon: ShoppingBag },
+                        { label: 'Lost & Found', to: '/lost-found', icon: PackageSearch }
+                      ].map((action) => (
+                        <button
+                          key={action.to}
+                          type="button"
+                          onClick={() => navigate(action.to)}
+                          className="flex flex-col items-start gap-2 rounded-2xl border border-gray-100 dark:border-white/10 p-3.5 text-left hover:border-gray-200 dark:hover:border-white/20 hover:shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all duration-200"
+                        >
+                          <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
+                            <action.icon className="w-4 h-4" />
+                          </span>
+                          <span className="text-[13px] font-semibold text-gray-900 dark:text-gray-50">{action.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
                 </div>
               )}
 
@@ -715,84 +746,6 @@ export default function SearchPage() {
               )}
             </main>
           </div>
-
-          <aside className="hidden lg:flex lg:flex-col w-[300px] flex-shrink-0 gap-4 py-4">
-            {popularCommunities.length > 0 && (
-              <section className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#11131a] p-4">
-                <div className="flex items-center gap-1.5 mb-3">
-                  <Flame className="w-4 h-4 text-orange-500" />
-                  <p className="text-sm font-bold text-gray-900 dark:text-gray-50">Trending Now</p>
-                </div>
-                <div className="space-y-3">
-                  {popularCommunities.slice(0, 5).map((community, index) => (
-                    <button
-                      key={community.id}
-                      type="button"
-                      onClick={() => navigate(`/community/${community.id}`)}
-                      className="w-full flex items-center gap-2.5 text-left group"
-                    >
-                      <span className="w-5 flex-shrink-0 text-sm font-bold text-gray-300 dark:text-gray-600">{index + 1}</span>
-                      <Avatar
-                        initials={getInitials(community.name)}
-                        colorClass={getAvatarColor(community.id)}
-                        size="sm"
-                        src={community.icon || undefined}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-semibold text-gray-900 dark:text-gray-50 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-200">
-                          {community.name}
-                        </p>
-                        <p className="text-[11px] text-gray-400 dark:text-gray-500">{community.membersCount} members</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <section className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#11131a] p-4">
-              <div className="flex items-center gap-1.5 mb-3">
-                <Zap className="w-4 h-4 text-blue-600" />
-                <p className="text-sm font-bold text-gray-900 dark:text-gray-50">Quick Actions</p>
-              </div>
-              <div className="space-y-1">
-                {[
-                  { label: 'Create Post', to: '/create', icon: PenSquare },
-                  { label: 'Browse Communities', to: '/communities', icon: Users },
-                  { label: 'Explore Marketplace', to: '/marketplace', icon: ShoppingBag },
-                  { label: 'Lost & Found', to: '/lost-found', icon: PackageSearch }
-                ].map((action) => (
-                  <button
-                    key={action.to}
-                    type="button"
-                    onClick={() => navigate(action.to)}
-                    className="w-full flex items-center gap-2.5 rounded-xl px-2 py-2 -mx-2 hover:bg-gray-50 dark:hover:bg-white/5 transition-all duration-200 text-left"
-                  >
-                    <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
-                      <action.icon className="w-4 h-4" />
-                    </span>
-                    <span className="text-[13px] font-semibold text-gray-900 dark:text-gray-50">{action.label}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="relative overflow-hidden rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, #2563eb, #3b82f6)' }}>
-              <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full bg-white/10 pointer-events-none" aria-hidden="true" />
-              <Sparkles className="w-5 h-5 text-white/90" />
-              <p className="mt-2 text-sm font-bold text-white">Make the most of Campinity!</p>
-              <p className="mt-1 text-[12.5px] text-blue-100 leading-relaxed">
-                Discover communities, posts and people around your campus.
-              </p>
-              <button
-                type="button"
-                onClick={() => inputRef.current?.focus()}
-                className="mt-3 flex items-center gap-1.5 rounded-full bg-white text-blue-600 text-xs font-bold px-4 py-2 hover:bg-blue-50 transition-all duration-200"
-              >
-                Start Exploring
-              </button>
-            </section>
-          </aside>
         </div>
     </div>
   )

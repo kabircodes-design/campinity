@@ -172,10 +172,26 @@ export function useCall() {
       // by checking the 'incoming' case on its own, first.
       if (state === 'incoming') {
         const currentId = incomingCallRef.current?.id
-        const stillRinging = calls.some((c) => c.id === currentId)
+        const freshCall = calls.find((c) => c.id === currentId)
+        const stillRinging = Boolean(freshCall)
         if (!stillRinging) {
           setIncomingCall(null)
           setCallState('idle')
+        } else {
+          // ROOT CAUSE of the "setRemoteDescription: type null" crash:
+          // createCallDoc() writes offer:null in the SAME setDoc that
+          // sets status:'ringing', so this listener's very first
+          // snapshot (the one that actually triggers setIncomingCall
+          // below) can fire before the caller's own follow-up
+          // setCallOffer() write lands. Previously incomingCall was
+          // only ever set ONCE per call — every later snapshot for an
+          // already-"incoming" call only checked stillRinging, so a
+          // callee who answered quickly could still be holding a
+          // frozen `offer: null`. Refreshing incomingCall on every
+          // snapshot while still ringing means answerCall() always
+          // reads whatever the live document's offer actually is by
+          // the time the user taps Accept.
+          setIncomingCall(freshCall)
         }
         // A second, simultaneous caller gets an immediate "busy"
         // instead of silently vanishing or randomly replacing the call
@@ -308,13 +324,19 @@ export function useCall() {
             teardown('declined')
             return
           }
-          if (call.status === 'active' && call.answer && !remoteDescSetRef.current) {
+          if (call.status === 'active' && call.answer?.type && call.answer?.sdp && !remoteDescSetRef.current) {
             remoteDescSetRef.current = true
             clearRingTimeout()
             setCallState('connecting')
             armConnectTimeout(callId)
-            await pc.setRemoteDescription(new RTCSessionDescription(call.answer)).catch(() => {})
-            await drainPendingCandidates(pc)
+            try {
+              await pc.setRemoteDescription(new RTCSessionDescription(call.answer))
+              await drainPendingCandidates(pc)
+            } catch {
+              setCallError("Couldn't connect the call. Please try again.")
+              await setCallStatus(callId, 'failed').catch(() => {})
+              teardown('failed')
+            }
           }
         })
         const unsubscribeCandidates = subscribeToCalleeCandidates(callId, async (candidate) => {
@@ -374,6 +396,20 @@ export function useCall() {
       attachPeerConnectionHandlers(pc, call.id, false)
       armConnectTimeout(call.id)
 
+      // Belt-and-suspenders per the signaling-safety requirement: never
+      // hand a missing/malformed description to the WebRTC API (that's
+      // what produced the raw "Failed to read the 'type' property...
+      // null is not a valid enum value" browser error before). The
+      // incoming-call listener above now keeps `incomingCall` (and
+      // therefore `call`) refreshed with the live Firestore doc while
+      // still ringing, so `call.offer` should already be populated by
+      // the time the user taps Accept — but if it somehow still isn't
+      // (e.g. a very fast tap racing the caller's own offer write),
+      // fail cleanly here instead of letting the constructor throw a
+      // raw browser error up through the catch block below.
+      if (!call.offer?.type || !call.offer?.sdp) {
+        throw new Error("Couldn't connect the call. Please try again.")
+      }
       await pc.setRemoteDescription(new RTCSessionDescription(call.offer))
       remoteDescSetRef.current = true
 

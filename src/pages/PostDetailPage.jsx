@@ -19,7 +19,6 @@ import {
 import Avatar from '../components/Avatar.jsx'
 import MentionText from '../components/MentionText.jsx'
 import PostPoll from '../components/PostPoll.jsx'
-import BottomNav from '../components/BottomNav.jsx'
 import CommentCard from '../components/CommentCard.jsx'
 import CommentComposer from '../components/CommentComposer.jsx'
 import CommentSkeleton from '../components/CommentSkeleton.jsx'
@@ -225,7 +224,7 @@ export default function PostDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
+      <div className="h-full flex items-center justify-center">
         <Loader size="lg" tone="dark" />
       </div>
     )
@@ -233,21 +232,18 @@ export default function PostDetailPage() {
 
   if (notFound || !post) {
     return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-        <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm flex items-center justify-center px-6 text-center">
-          <div>
-            <p className="text-sm font-semibold text-gray-900">Post not found</p>
-            <p className="mt-1 text-sm text-gray-400">It may have been removed.</p>
-            <button
-              type="button"
-              onClick={() => navigate('/home')}
-              className="mt-4 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
-            >
-              Back to Home
-            </button>
-          </div>
+      <div className="h-full flex items-center justify-center px-6 text-center">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Post not found</p>
+          <p className="mt-1 text-sm text-gray-400">It may have been removed.</p>
+          <button
+            type="button"
+            onClick={() => navigate('/home')}
+            className="mt-4 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
+          >
+            Back to Home
+          </button>
         </div>
-        <BottomNav />
       </div>
     )
   }
@@ -326,23 +322,24 @@ export default function PostDetailPage() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
-          <div className="h-14 flex items-center gap-2 px-3">
-            <button
-              type="button"
-              aria-label="Back"
-              onClick={() => navigate(-1)}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <span className="text-base font-bold tracking-tight text-gray-900">Post</span>
-          </div>
-        </header>
+    <div className="h-screen lg:h-full flex flex-col overflow-hidden bg-gray-50">
+      <header className="flex-shrink-0 bg-white border-b border-gray-100">
+        <div className="h-14 flex items-center gap-2 px-3 lg:max-w-[640px] lg:mx-auto">
+          <button
+            type="button"
+            aria-label="Back"
+            onClick={() => navigate(-1)}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <span className="text-base font-bold tracking-tight text-gray-900">Post</span>
+        </div>
+      </header>
 
-        <main className="pb-32">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white lg:my-4 lg:rounded-2xl lg:border lg:border-gray-100 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] min-h-full lg:min-h-0">
+        <main>
           <div className="flex items-start gap-3 px-4 pt-4">
             <Avatar initials={post.initials} colorClass={post.avatarColor} size="md" src={post.avatarUrl || undefined} />
             <div className="flex-1 min-w-0">
@@ -605,13 +602,14 @@ export default function PostDetailPage() {
             )}
           </section>
         </main>
-
-        <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-30 w-full max-w-[480px] lg:max-w-[520px] bg-white/95 backdrop-blur-md border-t border-gray-100 px-3 py-2.5">
-          <CommentComposer currentUser={currentUser} onSubmit={handlePostComment} />
         </div>
       </div>
 
-      <BottomNav />
+      <div className="flex-shrink-0 bg-white/95 backdrop-blur-md border-t border-gray-100 px-3 py-2.5 lg:px-0">
+        <div className="lg:max-w-[640px] lg:mx-auto">
+          <CommentComposer currentUser={currentUser} onSubmit={handlePostComment} />
+        </div>
+      </div>
 
       {confirmingDelete &&
         createPortal(

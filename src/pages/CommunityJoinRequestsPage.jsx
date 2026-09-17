@@ -9,6 +9,7 @@ import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { acceptRequest, getCommunityById, getMembership, getPendingRequests, rejectRequest } from '../firebase/communityService.js'
+import { createJoinRequestApprovedNotification } from '../firebase/notificationService.js'
 
 /**
  * Owner/admin only, matching CommunitySettingsPage.jsx's own access
@@ -80,6 +81,14 @@ export default function CommunityJoinRequestsPage() {
     try {
       await acceptRequest(communityId, uid)
       setRequests((prev) => prev.filter((r) => r.uid !== uid))
+      createJoinRequestApprovedNotification({
+        targetUid: uid,
+        actorUid: auth.currentUser?.uid,
+        actorName: auth.currentUser?.displayName || 'A community admin',
+        actorAvatar: auth.currentUser?.photoURL || '',
+        communityId,
+        communityName
+      }).catch(() => {})
     } catch (err) {
       setActionError(err?.message || 'Could not accept this request.')
     } finally {

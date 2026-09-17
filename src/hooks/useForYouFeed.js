@@ -94,9 +94,6 @@ export function useForYouFeed(uid, preferredCategories = []) {
         // right "next page" starting point.
         if (!cursorRef.current) cursorRef.current = lastRawDoc
         setLoading(false)
-        // TEMPORARY — remove once pagination is confirmed working in
-        // the running app.
-        console.log('[ForYou] initial/live page:', enriched.length, 'accumulated:', merged.length, 'cursor set:', Boolean(cursorRef.current))
       },
       (err) => {
         setError(err?.message || 'Could not load the feed.')
@@ -108,13 +105,7 @@ export function useForYouFeed(uid, preferredCategories = []) {
   }, [uid, mergeAndSet])
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore || !cursorRef.current) {
-      // TEMPORARY — remove once confirmed. Logs exactly why a
-      // pagination attempt was skipped, if it was.
-      console.log('[ForYou] loadMore skipped:', { loadingMore, hasMore, hasCursor: Boolean(cursorRef.current) })
-      return
-    }
-    console.log('[ForYou] loadMore started') // TEMPORARY — remove once confirmed
+    if (loadingMore || !hasMore || !cursorRef.current) return
     setLoadingMore(true)
     try {
       const pageQuery = query(
@@ -125,12 +116,10 @@ export function useForYouFeed(uid, preferredCategories = []) {
         limit(PAGE_SIZE)
       )
       const { posts: page, lastRawDoc, isLastPage } = await fetchEnrichedPostsPage(pageQuery, uid)
-      const merged = mergeAndSet(page)
+      mergeAndSet(page)
       if (lastRawDoc) cursorRef.current = lastRawDoc
       const exhausted = isLastPage || page.length < PAGE_SIZE
       if (exhausted) setHasMore(false)
-      // TEMPORARY — remove once confirmed.
-      console.log('[ForYou] loadMore completed:', { newPageCount: page.length, mergedTotal: merged.length, hasMore: !exhausted })
     } catch (err) {
       setError(err?.message || 'Could not load more posts.')
     } finally {

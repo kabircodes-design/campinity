@@ -104,48 +104,45 @@ export default function SignupPage() {
   }
 
   return (
-    <div
-      className="relative min-h-screen"
-      style={{
-        backgroundImage:
-          'radial-gradient(ellipse 900px 600px at 15% -10%, rgba(99,102,241,0.10), transparent), radial-gradient(ellipse 700px 500px at 100% 100%, rgba(59,130,246,0.08), transparent)'
-      }}
-    >
+    <>
       <SignupCelebration active={submitSuccess} />
 
-      <div className="relative z-10">
-        <AuthLayout
-          eyebrow="Join your campus"
-          title="Create your account"
-          subtitle="Verified students only. Takes less than a minute."
-          footer={
-            <>
-              Already have an account?{' '}
-              <Link to="/login" className="font-semibold text-accent hover:text-accent-deep transition-colors duration-200">
-                Log in
-              </Link>
-            </>
-          }
-        >
-          <Button
-            variant="secondary"
-            icon={<GoogleGlyph />}
-            loading={googleLoading}
-            disabled={isSubmitting}
-            onClick={handleGoogle}
-          >
-            Continue with Google
-          </Button>
+      <AuthLayout
+        eyebrow="Join your campus"
+        title="Create your account"
+        subtitle="Verified students only. Takes less than a minute."
+        maxWidthClass="max-w-[400px] xl:max-w-[460px]"
+        brandHeading={
+          <>
+            Where your campus
+            <br />
+            comes together.
+          </>
+        }
+        brandBody="Join verified students already sharing, connecting and building community on campus."
+        footer={
+          <>
+            Already have an account?{' '}
+            <Link to="/login" className="font-semibold text-accent hover:text-accent-deep transition-colors duration-200">
+              Log in
+            </Link>
+          </>
+        }
+      >
+        <Button variant="secondary" icon={<GoogleGlyph />} loading={googleLoading} disabled={isSubmitting} onClick={handleGoogle}>
+          Continue with Google
+        </Button>
 
-          {googleError && (
-            <p role="alert" className="mt-3 rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
-              {googleError}
-            </p>
-          )}
+        {googleError && (
+          <p role="alert" className="mt-3 rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
+            {googleError}
+          </p>
+        )}
 
-          <Divider />
+        <Divider />
 
-          <form onSubmit={onSubmit} noValidate className="space-y-4">
+        <form onSubmit={onSubmit} noValidate className="space-y-3.5">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
             <Input
               ref={nameRef}
               id="signup-name"
@@ -175,7 +172,9 @@ export default function SignupPage() {
               disabled={isSubmitting}
               required
             />
+          </div>
 
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5 items-start">
             <div>
               <PasswordInput
                 id="signup-password"
@@ -204,29 +203,29 @@ export default function SignupPage() {
               disabled={isSubmitting}
               required
             />
+          </div>
 
-            {submitError && (
-              <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
-                {submitError}
-              </p>
-            )}
+          {submitError && (
+            <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
+              {submitError}
+            </p>
+          )}
 
-            {submitSuccess && (
-              <p
-                role="status"
-                className="flex items-center gap-2 rounded-xl2 bg-accent-tint dark:bg-blue-500/15 text-accent text-[13px] font-medium px-4 py-3"
-              >
-                <Icon name="check" className="w-4 h-4" strokeWidth={2.2} />
-                Account created — check your inbox to verify your email.
-              </p>
-            )}
+          {submitSuccess && (
+            <p
+              role="status"
+              className="flex items-center gap-2 rounded-xl2 bg-accent-tint dark:bg-blue-500/15 text-accent text-[13px] font-medium px-4 py-3"
+            >
+              <Icon name="check" className="w-4 h-4" strokeWidth={2.2} />
+              Account created — check your inbox to verify your email.
+            </p>
+          )}
 
-            <Button type="submit" loading={isSubmitting} disabled={!isValid}>
-              Create account
-            </Button>
-          </form>
-        </AuthLayout>
-      </div>
-    </div>
+          <Button type="submit" loading={isSubmitting} disabled={!isValid}>
+            {isSubmitting ? 'Creating account…' : 'Create account'}
+          </Button>
+        </form>
+      </AuthLayout>
+    </>
   )
 }

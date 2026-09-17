@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { Camera, Check, X } from 'lucide-react'
 import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
+import Icon from '../../components/Icon.jsx'
 import { auth } from '../../firebase/firebase.js'
 import { saveUserProfile } from '../utils/userProfile.js'
 import { uploadProfileImage } from '../utils/storage.js'
@@ -12,6 +14,10 @@ import { useUsernameAvailability } from '../../hooks/useUsernameAvailability.js'
 import { markJustOnboarded } from '../../onboarding/campusIntroFlag.js'
 
 const years = ['FYJC', 'SYJC', 'FY', 'SY', 'TY', 'Final Year']
+
+const fieldLabelClass = 'block text-[13px] font-medium text-ink-soft dark:text-gray-400 mb-1.5'
+const fieldInputClass =
+  'w-full rounded-xl2 border bg-bg dark:bg-white/5 px-4 py-3 text-[15px] text-ink placeholder:text-ink-faint dark:text-gray-50 dark:placeholder:text-gray-500 outline-none transition-colors duration-200 focus:ring-4 focus:ring-accent-tint dark:focus:ring-blue-500/15 border-line dark:border-white/10 focus:border-accent'
 
 function TagInput({ label, values, onAdd, onRemove, placeholder }) {
   const [input, setInput] = useState('')
@@ -27,28 +33,28 @@ function TagInput({ label, values, onAdd, onRemove, placeholder }) {
 
   return (
     <div>
-      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{label}</label>
+      <label className={fieldLabelClass}>{label}</label>
       <input
         type="text"
         value={input}
         onChange={(event) => setInput(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+        className={fieldInputClass}
       />
       {values.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
           {values.map((value) => (
             <span
               key={value}
-              className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 text-blue-600 text-xs font-medium pl-3 pr-2 py-1.5"
+              className="inline-flex items-center gap-1.5 rounded-full bg-accent-tint dark:bg-blue-500/15 text-accent text-xs font-medium pl-3 pr-2 py-1.5"
             >
               {value}
               <button
                 type="button"
                 onClick={() => onRemove(value)}
                 aria-label={`Remove ${value}`}
-                className="hover:text-blue-800 transition-colors duration-300"
+                className="hover:text-accent-deep transition-colors duration-200"
               >
                 <X className="w-3 h-3" strokeWidth={2.4} />
               </button>
@@ -89,6 +95,12 @@ export default function CreateProfilePage() {
     if (!file) return
     setPhotoFile(file)
     setPhotoPreview(URL.createObjectURL(file))
+  }
+
+  const handleRemovePhoto = () => {
+    setPhotoFile(null)
+    setPhotoPreview('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const validate = () => {
@@ -168,20 +180,52 @@ export default function CreateProfilePage() {
   }
 
   return (
-    <AuthLayout title="Create your profile" subtitle="This is how other students on campus will see you.">
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="flex flex-col items-center">
-          <label htmlFor="create-profile-photo" className="relative cursor-pointer group">
-            <div className="w-20 h-20 rounded-full bg-blue-50 border border-gray-200 overflow-hidden flex items-center justify-center">
+    <AuthLayout
+      eyebrow="Make your campus profile"
+      title="Let's build your profile"
+      subtitle="Tell your campus a little about you."
+      maxWidthClass="max-w-[400px] xl:max-w-[500px]"
+      brandHeading={<>One last step.</>}
+      brandBody="Add a few details so your campus can find and recognize you."
+    >
+      <form onSubmit={handleSubmit} className="space-y-3.5">
+        <div className="flex flex-col items-center pb-1">
+          <div className="relative group">
+            <label
+              htmlFor="create-profile-photo"
+              className="relative block w-24 h-24 rounded-full cursor-pointer overflow-hidden ring-4 ring-accent-tint dark:ring-blue-500/10 bg-accent-tint dark:bg-white/5"
+            >
               {photoPreview ? (
-                <img src={photoPreview} alt="Profile preview" className="w-full h-full object-cover" />
+                <img
+                  src={photoPreview}
+                  alt="Profile preview"
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
               ) : (
-                <Camera className="w-6 h-6 text-blue-300" strokeWidth={1.6} />
+                <div className="w-full h-full flex items-center justify-center">
+                  <Camera className="w-7 h-7 text-accent/40" strokeWidth={1.5} />
+                </div>
               )}
-            </div>
-            <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center border-2 border-white group-hover:bg-blue-700 transition-colors duration-300">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <span className="text-white text-[11px] font-semibold">{photoPreview ? 'Change photo' : 'Add photo'}</span>
+              </div>
+            </label>
+
+            <span className="pointer-events-none absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-accent flex items-center justify-center border-2 border-surface dark:border-[#11131a]">
               <Camera className="w-3.5 h-3.5 text-white" strokeWidth={1.8} />
             </span>
+
+            {photoPreview && (
+              <button
+                type="button"
+                onClick={handleRemovePhoto}
+                aria-label="Remove photo"
+                className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-surface dark:bg-[#11131a] border border-line dark:border-white/10 flex items-center justify-center text-ink-faint hover:text-red-500 shadow-card transition-colors duration-200"
+              >
+                <X className="w-3 h-3" strokeWidth={2.2} />
+              </button>
+            )}
+
             <input
               id="create-profile-photo"
               ref={fileInputRef}
@@ -190,78 +234,96 @@ export default function CreateProfilePage() {
               className="sr-only"
               onChange={handlePhotoChange}
             />
-          </label>
-          <p className="mt-2 text-xs text-gray-400">Add a profile photo</p>
+          </div>
+          <p className="mt-2.5 text-[12.5px] text-ink-faint dark:text-gray-500">
+            {photoPreview ? 'Looking good' : 'Add a profile photo'}
+          </p>
         </div>
 
-        <Input
-          id="fullName"
-          label="Full name"
-          value={fullName}
-          onChange={(event) => setFullName(event.target.value)}
-          error={errors.fullName}
-        />
-
-        <div>
-          <label htmlFor="username" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-            Username
-          </label>
-          <input
-            id="username"
-            type="text"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
+          <Input
+            id="fullName"
+            label="Full name"
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
+            error={errors.fullName}
             disabled={isSubmitting}
-            placeholder="yourname"
-            className={`w-full rounded-xl border bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
-              errors.username ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
-            }`}
           />
-          {errors.username && <p className="mt-1 text-xs text-red-500">{errors.username}</p>}
-          {!errors.username && usernameCheck.message && (
-            <p
-              className={`mt-1 text-xs ${
-                usernameCheck.status === 'available' ? 'text-emerald-600' : 'text-gray-400'
+
+          <div>
+            <label htmlFor="username" className={fieldLabelClass}>
+              Username
+            </label>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              disabled={isSubmitting}
+              placeholder="yourname"
+              className={`w-full rounded-xl2 border bg-bg dark:bg-white/5 px-4 py-3 text-[15px] text-ink placeholder:text-ink-faint dark:text-gray-50 dark:placeholder:text-gray-500 outline-none transition-colors duration-200 focus:ring-4 focus:ring-accent-tint dark:focus:ring-blue-500/15 ${
+                errors.username ? 'border-red-400 focus:border-red-500 dark:border-red-500/60' : 'border-line dark:border-white/10 focus:border-accent'
               }`}
+            />
+            {errors.username && <p className="mt-1.5 text-[12.5px] text-red-500 dark:text-red-400">{errors.username}</p>}
+            {!errors.username && usernameCheck.message && (
+              <p
+                className={`mt-1.5 text-[12.5px] ${
+                  usernameCheck.status === 'available' ? 'text-emerald-600 dark:text-emerald-400' : 'text-ink-faint dark:text-gray-500'
+                }`}
+              >
+                {usernameCheck.message}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
+          <Input
+            id="college"
+            label="College"
+            value={college}
+            onChange={(event) => setCollege(event.target.value)}
+            error={errors.college}
+            disabled={isSubmitting}
+          />
+          <Input id="course" label="Course" value={course} onChange={(event) => setCourse(event.target.value)} disabled={isSubmitting} />
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
+          <div>
+            <label htmlFor="year" className={fieldLabelClass}>
+              Year
+            </label>
+            <select
+              id="year"
+              value={year}
+              onChange={(event) => setYear(event.target.value)}
+              disabled={isSubmitting}
+              className={fieldInputClass}
             >
-              {usernameCheck.message}
-            </p>
-          )}
+              {years.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Input id="division" label="Division" value={division} onChange={(event) => setDivision(event.target.value)} disabled={isSubmitting} />
         </div>
 
-        <Input id="college" label="College" value={college} onChange={(event) => setCollege(event.target.value)} error={errors.college} />
-        <Input id="course" label="Course" value={course} onChange={(event) => setCourse(event.target.value)} />
-
         <div>
-          <label htmlFor="year" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-            Year
-          </label>
-          <select
-            id="year"
-            value={year}
-            onChange={(event) => setYear(event.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
-          >
-            {years.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <Input id="division" label="Division" value={division} onChange={(event) => setDivision(event.target.value)} />
-
-        <div>
-          <label htmlFor="bio" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+          <label htmlFor="bio" className={fieldLabelClass}>
             Bio
           </label>
           <textarea
             id="bio"
-            rows={3}
+            rows={2}
             value={bio}
             onChange={(event) => setBio(event.target.value)}
-            className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+            disabled={isSubmitting}
+            className={`${fieldInputClass} resize-none`}
           />
         </div>
 
@@ -274,9 +336,21 @@ export default function CreateProfilePage() {
         />
 
         {submitError && (
-          <p role="alert" className="rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+          <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
             {submitError}
           </p>
+        )}
+
+        {justSaved && (
+          <motion.p
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            role="status"
+            className="flex items-center justify-center gap-2 rounded-xl2 bg-accent-tint dark:bg-blue-500/15 text-accent text-[13px] font-medium px-4 py-3"
+          >
+            <Icon name="check" className="w-4 h-4" strokeWidth={2.4} />
+            You're in. Welcome to Campinity.
+          </motion.p>
         )}
 
         <Button
@@ -285,7 +359,16 @@ export default function CreateProfilePage() {
           loading={isSubmitting}
           icon={justSaved ? <Check className="w-4 h-4" strokeWidth={2.6} /> : null}
         >
-          {justSaved ? 'Welcome!' : isSubmitting ? 'Saving…' : 'Continue'}
+          {justSaved ? (
+            'Welcome!'
+          ) : isSubmitting ? (
+            'Joining…'
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              Join Campinity
+              <Icon name="arrow" className="w-4 h-4" strokeWidth={2} />
+            </span>
+          )}
         </Button>
       </form>
     </AuthLayout>

@@ -1,31 +1,59 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Calendar, Lock, MoreHorizontal, Share2, Tag, Users } from 'lucide-react'
+import {
+  ArrowLeft,
+  Calendar,
+  Lock,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Share2,
+  ShieldCheck,
+  Tag,
+  Users
+} from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
-import BottomNav from '../components/BottomNav.jsx'
+import PostCard from '../components/PostCard.jsx'
 import CommunityCoverEditor from '../components/CommunityCoverEditor.jsx'
+import CommunityMemberRow from '../components/community/CommunityMemberRow.jsx'
+import CommunitySectionNav from '../components/community/CommunitySectionNav.jsx'
+import CommunityRightRail from '../components/community/CommunityRightRail.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
+import { getUserProfiles } from '../firebase/profileService.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import {
   acceptRequest,
+  banMember,
   deleteCommunity,
   demoteModerator,
+  getCommunityChannels,
   getCommunityFeedPosts,
   getCommunityMediaPosts,
   getMembers,
   getMembership,
   getPendingRequests,
+  isMemberBanned,
   joinCommunity,
   leaveCommunity,
+  promoteToAdmin,
   promoteToModerator,
   rejectRequest,
+  removeAdmin,
   removeMember,
   requestToJoin,
+  setCommunityMuted,
   subscribeToCommunity,
   transferOwnership
 } from '../firebase/communityService.js'
-import { createCommunityAnnouncementNotifications } from '../firebase/notificationService.js'
+import {
+  createCommunityAnnouncementNotifications,
+  createCommunityRoleChangedNotification,
+  createJoinRequestApprovedNotification
+} from '../firebase/notificationService.js'
+import { usePostingStatus } from '../context/PostingStatusContext.jsx'
+import { getMutedUsers } from '../firebase/muteService.js'
 
 const typeLabels = {
   official_club: 'Official Club',
@@ -38,50 +66,47 @@ const typeLabels = {
   custom: 'Custom'
 }
 
-const tabs = ['Posts', 'Members', 'About', 'Media', 'Settings']
+const roleFilters = ['All', 'Admins', 'Moderators', 'Members']
 
 /**
- * Layout follows PostDetailPage.jsx's header/back-button pattern.
- * community doc is a LIVE subscription (subscribeToCommunity) so
- * membersCount updates in real time as people join/leave while the
- * page is open — everything else here (membership status, members
- * list, pending requests, community posts) is a one-shot fetch,
- * matching Phase 2's "realtime listeners only where necessary."
- *
- * Settings tab only renders its content for the owner/an admin — but
- * this page can't actually DO anything there yet (edit/delete
- * community, manage admins) since that UI wasn't asked for in this
- * pass; it shows the pending-requests approve/reject list (which IS
- * asked for) and leaves the rest as a clearly-labeled "coming soon"
- * rather than fabricating controls with no backing action.
- * Known gap, not hidden: the Members and Settings-requests lists below
- * render a member's raw uid as their name (via getInitials(member.uid)),
- * because Phase 1's member/request docs only store uid/role/joinedAt —
- * no display name or avatar. Fetching each member's profile individually
- * would mean N+1 Firestore reads per page visit, which conflicts with
- * this phase's own "avoid unnecessary reads" requirement. The correct
- * fix is denormalizing displayName/avatar onto the member doc at
- * join-time (a communityService.js change), not a per-row fetch here.
+ * Community 2.0 — rendered inside AppShell's <Outlet/> (App.jsx moved
+ * /community/:communityId into the shared layout-route group), so the
+ * persistent DesktopSidebar + global header now come for free instead
+ * of this page centering a phone-width card in the middle of an empty
+ * desktop viewport. `h-screen lg:h-full flex flex-col overflow-hidden`
+ * is the same pattern MessagesPage.jsx already established for a page
+ * that needs a fixed, non-scrolling shell with its own internal scroll
+ * regions (here: the center feed, the left nav, and the right rail each
+ * scroll independently — never the page itself, never more than one
+ * region at a time).
  */
 export default function CommunityDetailPage() {
   const { communityId } = useParams()
   const navigate = useNavigate()
+  const uid = auth.currentUser?.uid
 
   const [community, setCommunity] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [activeTab, setActiveTab] = useState('Posts')
+  const [activeSection, setActiveSection] = useState('Posts')
 
   const [membership, setMembership] = useState(null)
   const [membershipLoading, setMembershipLoading] = useState(true)
   const [joinError, setJoinError] = useState('')
   const [isJoining, setIsJoining] = useState(false)
   const [requestSent, setRequestSent] = useState(false)
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const [isBanned, setIsBanned] = useState(false)
 
   const [members, setMembers] = useState([])
+  const [membersCursor, setMembersCursor] = useState(null)
   const [membersLoading, setMembersLoading] = useState(false)
+  const [membersLoadingMore, setMembersLoadingMore] = useState(false)
+  const [memberProfiles, setMemberProfiles] = useState(new Map())
   const [memberActionId, setMemberActionId] = useState(null)
   const [memberActionError, setMemberActionError] = useState('')
+  const [memberSearch, setMemberSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState('All')
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
@@ -94,17 +119,32 @@ export default function CommunityDetailPage() {
 
   const [posts, setPosts] = useState([])
   const [postsLoading, setPostsLoading] = useState(false)
+  const [mutedUids, setMutedUids] = useState(new Set())
+  const [channels, setChannels] = useState([])
+  const [selectedChannelId, setSelectedChannelId] = useState(null) // null = whole community, every channel
 
   const [mediaPosts, setMediaPosts] = useState([])
   const [mediaLoading, setMediaLoading] = useState(false)
 
   const [pendingRequests, setPendingRequests] = useState([])
   const [requestActionId, setRequestActionId] = useState(null)
+  const [requestActionError, setRequestActionError] = useState('')
 
-  const uid = auth.currentUser?.uid
+  const [aboutProfiles, setAboutProfiles] = useState(new Map())
+
+  const [assetEditor, setAssetEditor] = useState(null) // 'cover' | 'icon' | null
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false)
+
   const isOwner = community?.ownerId === uid
   const isAdmin = isOwner || (community?.admins || []).includes(uid)
-  const [assetEditor, setAssetEditor] = useState(null) // 'cover' | 'icon' | null
+  const isModerator = (community?.moderators || []).includes(uid)
+  // Post moderation (pin/remove) is owner/admin/moderator — a strictly
+  // broader group than isAdmin (which gates community MANAGEMENT: the
+  // Settings section, requests, promote/demote). Mirrors firestore.rules'
+  // own isCommunityStaff() exactly.
+  const canModeratePosts = isAdmin || isModerator
+
+  const sections = ['Posts', 'Members', 'Media', 'About', ...(isAdmin ? ['Settings'] : [])]
 
   useEffect(() => {
     setLoading(true)
@@ -120,9 +160,11 @@ export default function CommunityDetailPage() {
   useEffect(() => {
     let cancelled = false
     setMembershipLoading(true)
-    getMembership(communityId, uid)
-      .then((data) => {
-        if (!cancelled) setMembership(data)
+    Promise.all([getMembership(communityId, uid), isMemberBanned(communityId, uid)])
+      .then(([membershipData, banned]) => {
+        if (cancelled) return
+        setMembership(membershipData)
+        setIsBanned(banned)
       })
       .catch(() => {
         if (!cancelled) setMembership(null)
@@ -135,34 +177,69 @@ export default function CommunityDetailPage() {
     }
   }, [communityId, uid])
 
+  const enrichMembers = (memberDocs) => {
+    getUserProfiles(memberDocs.map((m) => m.uid)).then((profileMap) => {
+      setMemberProfiles((prev) => new Map([...prev, ...profileMap]))
+    })
+  }
+
   const loadMembers = () => {
     setMembersLoading(true)
     return getMembers(communityId)
-      .then(({ members: data }) => setMembers(data))
+      .then(({ members: data, nextCursor }) => {
+        setMembers(data)
+        setMembersCursor(nextCursor)
+        enrichMembers(data)
+      })
       .finally(() => setMembersLoading(false))
   }
 
+  const loadMoreMembers = () => {
+    if (!membersCursor || membersLoadingMore) return
+    setMembersLoadingMore(true)
+    getMembers(communityId, { cursor: membersCursor })
+      .then(({ members: data, nextCursor }) => {
+        setMembers((prev) => [...prev, ...data])
+        setMembersCursor(nextCursor)
+        enrichMembers(data)
+      })
+      .finally(() => setMembersLoadingMore(false))
+  }
+
   useEffect(() => {
-    if (activeTab !== 'Members') return
+    if (activeSection !== 'Members') return
+    loadMembers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, communityId])
+
+  // Loaded once, independent of which section is active — the Posts tab
+  // needs it the moment it renders, and it's a single small read (one's
+  // own mutedUsers subcollection), not worth re-fetching per tab switch.
+  useEffect(() => {
+    if (!uid) return
+    getMutedUsers(uid)
+      .then((docs) => setMutedUids(new Set(docs.map((d) => d.mutedUid))))
+      .catch(() => {})
+  }, [uid])
+
+  useEffect(() => {
+    if (activeSection !== 'Posts') return
     let cancelled = false
-    setMembersLoading(true)
-    getMembers(communityId)
-      .then(({ members: data }) => {
-        if (!cancelled) setMembers(data)
+    getCommunityChannels(communityId)
+      .then((data) => {
+        if (!cancelled) setChannels(data)
       })
-      .finally(() => {
-        if (!cancelled) setMembersLoading(false)
-      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [activeTab, communityId])
+  }, [activeSection, communityId])
 
   useEffect(() => {
-    if (activeTab !== 'Posts') return
+    if (activeSection !== 'Posts') return
     let cancelled = false
     setPostsLoading(true)
-    getCommunityFeedPosts(communityId)
+    getCommunityFeedPosts(communityId, uid, { channelId: selectedChannelId })
       .then(({ posts: data }) => {
         if (!cancelled) setPosts(data)
       })
@@ -172,13 +249,31 @@ export default function CommunityDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [activeTab, communityId])
+  }, [activeSection, communityId, uid, selectedChannelId])
+
+  // Mirrors HomePage.jsx's optimistic insertion of a just-created post,
+  // scoped the opposite way: Home now excludes community posts, this
+  // page includes ONLY the one matching its own communityId. Without
+  // this, posting from the community composer (CreatePostPage.jsx,
+  // deep-linked via /create with communityId in nav state) and landing
+  // back here immediately could race the real createPost() write, which
+  // runs in the background after navigation — the post would only
+  // appear after a manual refresh.
+  const { status: postingStatus, newPost: postingNewPost } = usePostingStatus()
+  useEffect(() => {
+    if (postingStatus !== 'success' || !postingNewPost) return
+    if (postingNewPost.communityId !== communityId) return
+    setPosts((prev) => {
+      if (prev.some((p) => String(p.id) === String(postingNewPost.id))) return prev
+      return [postingNewPost, ...prev]
+    })
+  }, [postingStatus, postingNewPost, communityId])
 
   useEffect(() => {
-    if (activeTab !== 'Media') return
+    if (activeSection !== 'Media') return
     let cancelled = false
     setMediaLoading(true)
-    getCommunityMediaPosts(communityId)
+    getCommunityMediaPosts(communityId, uid)
       .then((data) => {
         if (!cancelled) setMediaPosts(data)
       })
@@ -188,18 +283,28 @@ export default function CommunityDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [activeTab, communityId])
+  }, [activeSection, communityId, uid])
 
   useEffect(() => {
-    if (activeTab !== 'Settings' || !isAdmin) return
+    if (activeSection !== 'About' || !community) return
+    const uids = [community.ownerId, ...(community.admins || [])].filter(Boolean)
+    getUserProfiles(uids).then(setAboutProfiles)
+  }, [activeSection, community])
+
+  useEffect(() => {
+    if (activeSection !== 'Settings' || !isAdmin) return
     let cancelled = false
     getPendingRequests(communityId).then((data) => {
-      if (!cancelled) setPendingRequests(data)
+      if (cancelled) return
+      setPendingRequests(data)
+      getUserProfiles(data.map((r) => r.uid)).then((profileMap) => {
+        if (!cancelled) setMemberProfiles((prev) => new Map([...prev, ...profileMap]))
+      })
     })
     return () => {
       cancelled = true
     }
-  }, [activeTab, isAdmin, communityId])
+  }, [activeSection, isAdmin, communityId])
 
   const handleJoin = async () => {
     if (!uid) {
@@ -244,6 +349,8 @@ export default function CommunityDetailPage() {
     try {
       await leaveCommunity(communityId, uid)
       setMembership(null)
+      setShowLeaveConfirm(false)
+      navigate('/communities')
     } catch (err) {
       setJoinError(err?.message || 'Could not leave this community.')
     } finally {
@@ -251,16 +358,21 @@ export default function CommunityDetailPage() {
     }
   }
 
-  const [requestActionError, setRequestActionError] = useState('')
-
   const handleApprove = async (targetUid) => {
     setRequestActionId(targetUid)
     setRequestActionError('')
     try {
       await acceptRequest(communityId, targetUid)
       setPendingRequests((prev) => prev.filter((req) => req.uid !== targetUid))
+      createJoinRequestApprovedNotification({
+        targetUid,
+        actorUid: uid,
+        actorName: auth.currentUser?.displayName || 'A community admin',
+        actorAvatar: auth.currentUser?.photoURL || '',
+        communityId,
+        communityName: community?.name
+      }).catch(() => {})
     } catch (err) {
-      console.error('Could not approve join request:', { communityId, targetUid, code: err?.code, message: err?.message, err })
       if (err?.message === 'This request is no longer pending.') {
         setPendingRequests((prev) => prev.filter((req) => req.uid !== targetUid))
       } else {
@@ -277,40 +389,53 @@ export default function CommunityDetailPage() {
     try {
       await rejectRequest(communityId, targetUid)
       setPendingRequests((prev) => prev.filter((req) => req.uid !== targetUid))
-    } catch (err) {
-      console.error('Could not reject join request:', { communityId, targetUid, code: err?.code, message: err?.message, err })
+    } catch {
       setRequestActionError("Couldn't reject this request. Please try again.")
     } finally {
       setRequestActionId(null)
     }
   }
 
-  const handlePromote = async (targetUid) => {
+  const withMemberAction = (fn) => async (targetUid) => {
     setMemberActionId(targetUid)
     setMemberActionError('')
     try {
-      await promoteToModerator(communityId, targetUid)
+      await fn(targetUid)
       await loadMembers()
     } catch (err) {
-      setMemberActionError(err?.message || 'Could not promote this member.')
+      setMemberActionError(err?.message || 'Could not complete this action.')
     } finally {
       setMemberActionId(null)
     }
   }
 
-  const handleDemote = async (targetUid) => {
-    setMemberActionId(targetUid)
-    setMemberActionError('')
-    try {
-      await demoteModerator(communityId, targetUid)
-      await loadMembers()
-    } catch (err) {
-      setMemberActionError(err?.message || 'Could not demote this member.')
-    } finally {
-      setMemberActionId(null)
-    }
+  const notifyRoleChanged = (targetUid, newRole) => {
+    createCommunityRoleChangedNotification({
+      targetUid,
+      actorUid: uid,
+      actorName: auth.currentUser?.displayName || 'A community admin',
+      actorAvatar: auth.currentUser?.photoURL || '',
+      communityId,
+      communityName: community?.name,
+      newRole
+    }).catch(() => {})
   }
 
+  const handlePromoteModerator = withMemberAction(async (targetUid) => {
+    await promoteToModerator(communityId, targetUid)
+    notifyRoleChanged(targetUid, 'moderator')
+  })
+  const handleDemoteModerator = withMemberAction((targetUid) => demoteModerator(communityId, targetUid))
+  const handlePromoteAdmin = withMemberAction(async (targetUid) => {
+    await promoteToAdmin(communityId, uid, targetUid)
+    notifyRoleChanged(targetUid, 'admin')
+  })
+  const handleRemoveAdmin = withMemberAction((targetUid) => removeAdmin(communityId, uid, targetUid))
+  const transferOwnershipAction = withMemberAction((targetUid) => transferOwnership(communityId, uid, targetUid))
+  const handleTransferOwnership = (targetUid) => {
+    if (!window.confirm('Transfer ownership to this member? You will become an admin instead.')) return
+    transferOwnershipAction(targetUid)
+  }
   const handleRemoveMember = async (targetUid) => {
     setMemberActionId(targetUid)
     setMemberActionError('')
@@ -324,50 +449,40 @@ export default function CommunityDetailPage() {
     }
   }
 
-  const handleTransferOwnership = async (targetUid) => {
-    if (!window.confirm('Transfer ownership to this member? You will become an admin instead.')) return
+  const [muteBusy, setMuteBusy] = useState(false)
+  const handleToggleMute = async () => {
+    if (!uid || !membership || muteBusy) return
+    const nextMuted = !membership.muted
+    setMuteBusy(true)
+    setMembership((prev) => ({ ...prev, muted: nextMuted })) // optimistic
+    try {
+      await setCommunityMuted(communityId, uid, nextMuted)
+    } catch {
+      setMembership((prev) => ({ ...prev, muted: !nextMuted })) // roll back
+    } finally {
+      setMuteBusy(false)
+    }
+  }
+
+  const handleBanMember = async (targetUid) => {
     setMemberActionId(targetUid)
     setMemberActionError('')
     try {
-      await transferOwnership(communityId, uid, targetUid)
-      await loadMembers()
+      await banMember(communityId, uid, targetUid)
+      setMembers((prev) => prev.filter((m) => m.uid !== targetUid))
     } catch (err) {
-      setMemberActionError(err?.message || 'Could not transfer ownership.')
+      setMemberActionError(err?.message || 'Could not ban this member.')
     } finally {
       setMemberActionId(null)
     }
   }
 
-  const handleDeleteCommunity = async () => {
-    setIsDeleting(true)
-    setDeleteError('')
-    try {
-      await deleteCommunity(communityId, uid)
-      navigate('/home')
-    } catch (err) {
-      setDeleteError(err?.message || 'Could not delete this community.')
-      setIsDeleting(false)
-    }
-  }
-
-  /**
-   * Actor identity uses auth.currentUser?.displayName directly — this
-   * page never loads the current user's own Firestore profile (only
-   * the community's data), and adding that fetch just for this one
-   * label felt like more than this feature needed. Firebase Auth's own
-   * displayName field may or may not be populated depending on how
-   * signup sets it elsewhere in this project (unverified — I don't
-   * have that flow); falls back to "A community admin" if empty rather
-   * than showing a blank name.
-   */
   const handleSendAnnouncement = async (event) => {
     event.preventDefault()
     if (!announcementText.trim() || isSendingAnnouncement) return
-
     setIsSendingAnnouncement(true)
     setAnnouncementError('')
     setAnnouncementSent(false)
-
     try {
       await createCommunityAnnouncementNotifications({
         communityId,
@@ -387,6 +502,18 @@ export default function CommunityDetailPage() {
     }
   }
 
+  const handleDeleteCommunity = async () => {
+    setIsDeleting(true)
+    setDeleteError('')
+    try {
+      await deleteCommunity(communityId, uid)
+      navigate('/communities')
+    } catch (err) {
+      setDeleteError(err?.message || 'Could not delete this community.')
+      setIsDeleting(false)
+    }
+  }
+
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({ title: community?.name, url: window.location.href }).catch(() => {})
@@ -395,9 +522,24 @@ export default function CommunityDetailPage() {
     }
   }
 
+  const filteredMembers = useMemo(() => {
+    const term = memberSearch.trim().toLowerCase()
+    return members.filter((member) => {
+      if (roleFilter === 'Admins' && member.role !== 'admin' && member.role !== 'owner') return false
+      if (roleFilter === 'Moderators' && member.role !== 'moderator') return false
+      if (roleFilter === 'Members' && member.role !== 'member') return false
+      if (!term) return true
+      const profile = memberProfiles.get(member.uid)
+      const haystack = `${profile?.displayName || ''} ${profile?.username || ''}`.toLowerCase()
+      return haystack.includes(term)
+    })
+  }, [members, memberSearch, roleFilter, memberProfiles])
+
+  const visiblePosts = useMemo(() => posts.filter((post) => !mutedUids.has(post.userId)), [posts, mutedUids])
+
   if (loading) {
     return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
+      <div className="h-full flex items-center justify-center">
         <Loader size="lg" tone="dark" />
       </div>
     )
@@ -405,21 +547,18 @@ export default function CommunityDetailPage() {
 
   if (notFound || !community) {
     return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-        <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm flex items-center justify-center px-6 text-center">
-          <div>
-            <p className="text-sm font-semibold text-gray-900">Community not found</p>
-            <p className="mt-1 text-sm text-gray-400">It may have been removed.</p>
-            <button
-              type="button"
-              onClick={() => navigate('/home')}
-              className="mt-4 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
-            >
-              Back to Home
-            </button>
-          </div>
+      <div className="h-full flex items-center justify-center px-6 text-center">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Community not found</p>
+          <p className="mt-1 text-sm text-gray-400">It may have been removed.</p>
+          <button
+            type="button"
+            onClick={() => navigate('/communities')}
+            className="mt-4 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
+          >
+            Back to Communities
+          </button>
         </div>
-        <BottomNav />
       </div>
     )
   }
@@ -428,54 +567,66 @@ export default function CommunityDetailPage() {
     ? community.createdAt.toDate().toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
     : null
 
-  return (
-    <div
-      className="relative overflow-x-hidden min-h-screen w-full max-w-[100vw]"
-      style={{ backgroundColor: '#f3f0fb' }}
+  const joinLeaveButton = membershipLoading ? (
+    <div className="h-10 w-full lg:w-40 rounded-full bg-gray-100 animate-pulse" />
+  ) : isOwner ? (
+    <button
+      type="button"
+      onClick={() => setAdminMenuOpen(true)}
+      className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-sm font-semibold px-4 py-2.5 hover:bg-amber-100 transition-all duration-200"
     >
-      <div
-        className="ambient-glow-layer ambient-glow-1"
-        style={{ background: 'radial-gradient(ellipse 1100px 750px at 8% -8%, rgba(147,112,255,0.32), transparent 55%)' }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-2"
-        style={{
-          background:
-            'radial-gradient(ellipse 900px 700px at 100% 15%, rgba(96,165,250,0.24), transparent 55%), radial-gradient(ellipse 700px 600px at 90% 100%, rgba(167,139,250,0.18), transparent 55%)'
-        }}
-      />
-      <div
-        className="ambient-glow-layer ambient-glow-3"
-        style={{ background: 'radial-gradient(ellipse 850px 650px at 25% 105%, rgba(236,72,153,0.20), transparent 55%)' }}
-      />
-      <div className="relative mx-auto max-w-[480px] lg:max-w-[560px] bg-white/45 backdrop-blur-2xl lg:my-4 lg:rounded-3xl lg:border lg:border-white/50 lg:shadow-[0_8px_32px_rgba(91,77,255,0.08)] min-h-screen lg:min-h-0 pb-24">
-        <header className="sticky top-0 z-40 bg-white/55 backdrop-blur-xl border-b border-white/40 shadow-[0_4px_16px_rgba(91,77,255,0.05)]">
-          <div className="h-14 flex items-center justify-between px-3">
-            <button
-              type="button"
-              aria-label="Back"
-              onClick={() => navigate(-1)}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <span className="text-base font-bold tracking-tight text-gray-900 truncate max-w-[220px]">
-              {community.name}
-            </span>
-            <button
-              type="button"
-              aria-label="More options"
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-all duration-300"
-            >
-              <MoreHorizontal className="w-5 h-5" />
-            </button>
-          </div>
-        </header>
+      <ShieldCheck className="w-4 h-4" />
+      Owner · Manage
+    </button>
+  ) : membership ? (
+    <button
+      type="button"
+      onClick={() => setShowLeaveConfirm(true)}
+      disabled={isJoining}
+      className="rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2.5 hover:border-red-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-all duration-200"
+    >
+      Leave
+    </button>
+  ) : requestSent ? (
+    <button
+      type="button"
+      onClick={handleCancelRequest}
+      disabled={isJoining}
+      className="rounded-full bg-gray-100 text-gray-500 text-sm font-semibold px-5 py-2.5 hover:bg-gray-200 disabled:opacity-50 transition-all duration-200"
+    >
+      {isJoining ? 'Cancelling…' : 'Cancel Request'}
+    </button>
+  ) : isBanned ? (
+    <div className="rounded-full border border-red-200 bg-red-50 text-red-500 text-center text-sm font-semibold px-4 py-2.5">
+      You can't join this community
+    </div>
+  ) : (
+    <button
+      type="button"
+      onClick={handleJoin}
+      disabled={isJoining}
+      className="rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 disabled:opacity-50 shadow-[0_2px_12px_rgba(37,99,235,0.25)] transition-all duration-200"
+    >
+      {isJoining ? 'Please wait…' : community.privacy === 'private' ? 'Request to Join' : 'Join Community'}
+    </button>
+  )
 
-        <div className="h-32 bg-gradient-to-br from-blue-600 to-indigo-700 relative">
+  return (
+    <div className="h-screen lg:h-full flex flex-col overflow-hidden bg-[#f8fafc]">
+      {/* ============ HEADER ============ */}
+      <div className="flex-shrink-0 bg-white border-b border-gray-100">
+        <div className="h-24 lg:h-32 bg-gradient-to-br from-blue-600 to-indigo-700 relative">
           {community.coverImage && (
             <img src={community.coverImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
           )}
+          <button
+            type="button"
+            aria-label="Back to Communities"
+            onClick={() => navigate('/communities')}
+            className="lg:hidden absolute top-3 left-3 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/45 transition-all duration-200"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
           {isAdmin && (
             <button
               type="button"
@@ -487,13 +638,13 @@ export default function CommunityDetailPage() {
           )}
         </div>
 
-        <div className="px-4">
-          <div className="-mt-8 flex items-end gap-3">
-            <div className="relative w-16 h-16 rounded-2xl bg-white border-4 border-white shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
+        <div className="px-4 lg:px-6 pb-4">
+          <div className="-mt-8 lg:-mt-9 flex items-end gap-3">
+            <div className="relative w-16 h-16 lg:w-20 lg:h-20 rounded-2xl bg-white border-4 border-white shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
               {community.icon ? (
                 <img src={community.icon} alt="" className="w-full h-full object-cover" />
               ) : (
-                <Users className="w-7 h-7 text-blue-600" strokeWidth={1.7} />
+                <Users className="w-7 h-7 lg:w-9 lg:h-9 text-blue-600" strokeWidth={1.7} />
               )}
               {isAdmin && (
                 <button
@@ -506,27 +657,95 @@ export default function CommunityDetailPage() {
                 </button>
               )}
             </div>
-            <button
-              type="button"
-              onClick={handleShare}
-              aria-label="Share community"
-              className="mb-1 ml-auto w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-all duration-300"
-            >
-              <Share2 className="w-4 h-4" />
-            </button>
+
+            <div className="flex-1 min-w-0 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 pb-1">
+              <div className="min-w-0">
+                <h1 className="text-lg lg:text-xl font-bold text-gray-900 tracking-tight truncate">{community.name}</h1>
+                <p className="text-sm text-gray-400">@{community.handle}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  aria-label="Share community"
+                  className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-all duration-200"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+                {membership && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      aria-label="Community options"
+                      onClick={() => setAdminMenuOpen((v) => !v)}
+                      className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-all duration-200"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                    {adminMenuOpen && (
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Close menu"
+                          className="fixed inset-0 z-10 cursor-default"
+                          onClick={() => setAdminMenuOpen(false)}
+                        />
+                        <div className="absolute right-0 top-11 z-20 w-52 rounded-xl border border-gray-100 bg-white shadow-lg py-1">
+                          <button
+                            type="button"
+                            disabled={muteBusy}
+                            onClick={() => {
+                              setAdminMenuOpen(false)
+                              handleToggleMute()
+                            }}
+                            className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors duration-150"
+                          >
+                            {membership.muted ? 'Unmute Community' : 'Mute Community'}
+                          </button>
+                          {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAdminMenuOpen(false)
+                              navigate(`/community/${communityId}/settings`)
+                            }}
+                            className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                          >
+                            Edit community details
+                          </button>
+                          )}
+                          {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAdminMenuOpen(false)
+                              navigate(`/community/${communityId}/requests`)
+                            }}
+                            className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150 flex items-center justify-between"
+                          >
+                            Join requests
+                          </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+                <div className="hidden lg:block">{joinLeaveButton}</div>
+              </div>
+            </div>
           </div>
 
-          <h1 className="mt-3 text-xl font-bold text-gray-900 tracking-tight">{community.name}</h1>
-          <p className="text-sm text-gray-400">@{community.handle}</p>
-
-          <p className="mt-2.5 text-sm text-gray-600 leading-relaxed">{community.description}</p>
+          {community.description && (
+            <p className="mt-3 text-sm text-gray-600 leading-relaxed max-w-2xl">{community.description}</p>
+          )}
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-600 text-[11px] font-semibold px-2.5 py-1">
               {typeLabels[community.type] || 'Community'}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-500 text-[11px] font-medium px-2.5 py-1">
-              {community.privacy === 'private' ? <Lock className="w-3 h-3" /> : null}
+              {community.privacy === 'private' && <Lock className="w-3 h-3" />}
               {community.privacy === 'private' ? 'Private' : 'Public'}
             </span>
             <span className="inline-flex items-center gap-1 text-[11px] text-gray-400">
@@ -541,359 +760,428 @@ export default function CommunityDetailPage() {
             )}
           </div>
 
-          {community.tags?.length > 0 && (
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {community.tags.map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 text-[11px] text-gray-400">
-                  <Tag className="w-3 h-3" />
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-4">
-            {membershipLoading ? (
-              <div className="h-11 rounded-full bg-white/40 backdrop-blur-sm animate-pulse" />
-            ) : isOwner ? (
-              <div className="rounded-full border border-white/50 bg-white/40 backdrop-blur-sm text-center text-sm font-semibold text-gray-600 py-3">
-                You own this community
-              </div>
-            ) : membership ? (
-              <button
-                type="button"
-                onClick={handleLeave}
-                disabled={isJoining}
-                className="w-full rounded-full border border-white/50 bg-white/40 backdrop-blur-sm text-gray-700 text-sm font-semibold py-3 hover:border-red-300/60 hover:text-red-500 hover:bg-red-50/40 disabled:opacity-50 transition-all duration-300"
-              >
-                {isJoining ? 'Leaving…' : 'Leave Community'}
-              </button>
-            ) : requestSent ? (
-              <button
-                type="button"
-                onClick={handleCancelRequest}
-                disabled={isJoining}
-                className="w-full rounded-full bg-white/35 backdrop-blur-sm border border-white/40 text-gray-500 text-sm font-semibold py-3 hover:bg-white/50 disabled:opacity-50 transition-all duration-300"
-              >
-                {isJoining ? 'Cancelling…' : 'Cancel Request'}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleJoin}
-                disabled={isJoining}
-                className="w-full rounded-full bg-blue-600/90 backdrop-blur-sm text-white text-sm font-semibold py-3 hover:bg-blue-700/90 disabled:opacity-50 shadow-[0_2px_12px_rgba(91,77,255,0.25)] transition-all duration-300"
-              >
-                {isJoining ? 'Please wait…' : community.privacy === 'private' ? 'Request to Join' : 'Join Community'}
-              </button>
-            )}
+          <div className="mt-3 lg:hidden">
+            {joinLeaveButton}
             {joinError && <p className="mt-2 text-xs text-red-500 text-center">{joinError}</p>}
           </div>
+          {joinError && <p className="hidden lg:block mt-2 text-xs text-red-500">{joinError}</p>}
         </div>
 
-        <nav className="mt-5 sticky top-14 z-30 flex items-center bg-white/50 backdrop-blur-xl border-b border-white/40 overflow-x-auto scroll-hidden">
-          {tabs
-            .filter((tab) => tab !== 'Settings' || isAdmin)
-            .map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`flex-shrink-0 px-4 py-3 text-[13px] font-semibold text-center border-b-2 transition-all duration-300 ${
-                  activeTab === tab
-                    ? 'text-blue-700 border-blue-600 bg-gradient-to-b from-blue-50/60 to-transparent'
-                    : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-white/30'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-        </nav>
+        <div className="lg:hidden">
+          <CommunitySectionNav
+            orientation="horizontal"
+            sections={sections}
+            activeSection={activeSection}
+            onSelect={setActiveSection}
+            badges={{ Settings: pendingRequests.length }}
+          />
+        </div>
+      </div>
 
-        <main className="px-4 py-4">
-          {activeTab === 'Posts' &&
-            (postsLoading ? (
-              <div className="py-16 flex justify-center">
-                <Loader size="md" tone="dark" />
-              </div>
-            ) : posts.length === 0 ? (
-              <div className="py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">No posts yet</p>
-                <p className="mt-1 text-sm text-gray-400">
-                  {membership ? 'Be the first to post here.' : 'Join to start the conversation.'}
-                </p>
-              </div>
-            ) : (
-              <ul className="space-y-3">
-                {posts.map((post) => (
-                  <li key={post.id} className="rounded-xl border border-gray-100 p-3.5">
-                    <div className="flex items-center gap-2.5">
-                      <Avatar
-                        initials={getInitials(post.author?.displayName)}
-                        colorClass={getAvatarColor(post.userId)}
-                        size="sm"
-                      />
-                      <p className="text-sm font-semibold text-gray-900">{post.author?.displayName || 'Student'}</p>
-                    </div>
-                    {post.text && <p className="mt-2 text-sm text-gray-700 leading-relaxed">{post.text}</p>}
-                    {post.imageUrl && (
-                      <img src={post.imageUrl} alt="" className="mt-2 rounded-lg w-full max-h-64 object-cover" />
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ))}
+      {/* ============ BODY ============ */}
+      <div className="flex-1 min-h-0 lg:flex lg:overflow-hidden">
+        <aside className="hidden lg:flex lg:w-56 lg:flex-shrink-0 lg:h-full lg:overflow-y-auto border-r border-gray-100 bg-white">
+          <CommunitySectionNav
+            orientation="vertical"
+            sections={sections}
+            activeSection={activeSection}
+            onSelect={setActiveSection}
+            badges={{ Settings: pendingRequests.length }}
+          />
+        </aside>
 
-          {activeTab === 'Members' &&
-            (membersLoading ? (
-              <div className="py-16 flex justify-center">
-                <Loader size="md" tone="dark" />
-              </div>
-            ) : (
+        <main className="flex-1 min-w-0 overflow-y-auto lg:h-full">
+          <div className="max-w-2xl mx-auto px-4 py-4 lg:px-6 lg:py-5">
+            {activeSection === 'Posts' && (
               <>
+                {channels.length > 0 && (
+                  <div className="flex items-center gap-1.5 mb-4 overflow-x-auto scroll-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedChannelId(null)}
+                      className={`flex-shrink-0 rounded-full text-xs font-semibold px-3 py-1.5 transition-all duration-200 ${
+                        selectedChannelId === null ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {channels.map((channel) => (
+                      <button
+                        key={channel.id}
+                        type="button"
+                        onClick={() => setSelectedChannelId(channel.id)}
+                        className={`flex-shrink-0 rounded-full text-xs font-semibold px-3 py-1.5 transition-all duration-200 ${
+                          selectedChannelId === channel.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        }`}
+                      >
+                        #{channel.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {membership && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/create', { state: { communityId, channelId: selectedChannelId || 'general' } })}
+                    className="w-full flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3.5 mb-4 text-left hover:border-gray-200 hover:shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all duration-200"
+                  >
+                    <Avatar
+                      initials="+"
+                      colorClass="from-blue-500 to-blue-600"
+                      size="sm"
+                      src={auth.currentUser?.photoURL || undefined}
+                    />
+                    <span className="flex-1 text-sm text-gray-400">
+                      Share something in #{channels.find((c) => c.id === selectedChannelId)?.name?.toLowerCase() || 'general'}…
+                    </span>
+                    <span className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                      <Plus className="w-4 h-4" strokeWidth={2.2} />
+                    </span>
+                  </button>
+                )}
+
+                {postsLoading ? (
+                  <div className="py-16 flex justify-center">
+                    <Loader size="md" tone="dark" />
+                  </div>
+                ) : posts.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <p className="text-3xl">👋</p>
+                    <p className="mt-2 text-sm font-semibold text-gray-900">Nothing here yet</p>
+                    <p className="mt-1 text-sm text-gray-400">
+                      {membership ? 'Start the first conversation in this community.' : 'Join to start the conversation.'}
+                    </p>
+                    {membership && (
+                      <button
+                        type="button"
+                        onClick={() => navigate('/create', { state: { communityId } })}
+                        className="mt-4 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-200"
+                      >
+                        Create Post
+                      </button>
+                    )}
+                  </div>
+                ) : visiblePosts.length === 0 ? (
+                  // Every post here happens to be from someone this viewer
+                  // muted — distinct from "the community has no posts,"
+                  // so it gets its own honest message rather than the
+                  // "Nothing here yet" empty state above.
+                  <div className="py-16 text-center">
+                    <p className="text-sm text-gray-400">All posts here are from muted members.</p>
+                  </div>
+                ) : (
+                  <div className="-mx-4 lg:-mx-6">
+                    {[...visiblePosts].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)).map((post) => (
+                      <PostCard
+                        key={post.id}
+                        post={post}
+                        canModerate={canModeratePosts}
+                        onDeleted={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+                        onPinChanged={(postId, nextPinned) =>
+                          setPosts((prev) =>
+                            prev.map((p) => ({ ...p, pinned: p.id === postId ? nextPinned : nextPinned ? false : p.pinned }))
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeSection === 'Members' && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={memberSearch}
+                      onChange={(event) => setMemberSearch(event.target.value)}
+                      placeholder="Search members…"
+                      className="w-full rounded-full border border-gray-200 bg-gray-50 pl-9 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 mb-3 overflow-x-auto scroll-hidden">
+                  {roleFilters.map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setRoleFilter(filter)}
+                      className={`flex-shrink-0 rounded-full text-xs font-semibold px-3 py-1.5 transition-all duration-200 ${
+                        roleFilter === filter ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+
                 {memberActionError && (
                   <p role="alert" className="mb-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
                     {memberActionError}
                   </p>
                 )}
-                <ul className="space-y-1">
-                  {members.map((member) => {
-                    const joinedLabel = member.joinedAt?.toDate
-                      ? member.joinedAt.toDate().toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
-                      : null
-                    const isThisMemberOwner = member.role === 'owner'
-                    const isThisMemberBusy = memberActionId === member.uid
-                    const canManage = isAdmin && !isThisMemberOwner && member.uid !== uid
 
-                    return (
-                      <li key={member.uid} className="py-2">
-                        <div className="flex items-center gap-3">
-                          <Avatar initials={getInitials(member.uid)} colorClass={getAvatarColor(member.uid)} size="sm" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-gray-700 truncate">{member.uid}</p>
-                            {joinedLabel && <p className="text-[11px] text-gray-400">Joined {joinedLabel}</p>}
-                          </div>
-                          {member.role !== 'member' && (
-                            <span className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">
-                              {member.role}
-                            </span>
-                          )}
-                        </div>
-
-                        {canManage && (
-                          <div className="mt-2 ml-11 flex flex-wrap gap-1.5">
-                            {member.role === 'moderator' ? (
-                              <button
-                                type="button"
-                                onClick={() => handleDemote(member.uid)}
-                                disabled={isThisMemberBusy}
-                                className="text-[11px] font-semibold text-gray-500 hover:text-gray-700 disabled:opacity-50 rounded-full border border-gray-200 px-2.5 py-1 transition-all duration-300"
-                              >
-                                Demote to Member
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handlePromote(member.uid)}
-                                disabled={isThisMemberBusy}
-                                className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50 rounded-full border border-blue-200 px-2.5 py-1 transition-all duration-300"
-                              >
-                                Promote to Moderator
-                              </button>
-                            )}
-                            {isOwner && (
-                              <button
-                                type="button"
-                                onClick={() => handleTransferOwnership(member.uid)}
-                                disabled={isThisMemberBusy}
-                                className="text-[11px] font-semibold text-gray-500 hover:text-gray-700 disabled:opacity-50 rounded-full border border-gray-200 px-2.5 py-1 transition-all duration-300"
-                              >
-                                Make Owner
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMember(member.uid)}
-                              disabled={isThisMemberBusy}
-                              className="text-[11px] font-semibold text-red-500 hover:text-red-600 disabled:opacity-50 rounded-full border border-red-200 px-2.5 py-1 transition-all duration-300"
-                            >
-                              {isThisMemberBusy ? 'Working…' : 'Remove'}
-                            </button>
-                          </div>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              </>
-            ))}
-
-          {activeTab === 'About' && (
-            <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
-              <p>{community.description}</p>
-              {community.rules && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Rules</p>
-                  <p className="whitespace-pre-wrap">{community.rules}</p>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Type</p>
-                  <p className="text-sm">{typeLabels[community.type] || 'Community'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Privacy</p>
-                  <p className="text-sm">{community.privacy === 'private' ? 'Private' : 'Public'}</p>
-                </div>
-                {createdDate && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Created</p>
-                    <p className="text-sm">{createdDate}</p>
+                {membersLoading ? (
+                  <div className="py-16 flex justify-center">
+                    <Loader size="md" tone="dark" />
+                  </div>
+                ) : filteredMembers.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <p className="text-sm text-gray-400">No members match this search.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-0.5">
+                    {filteredMembers.map((member) => (
+                      <CommunityMemberRow
+                        key={member.uid}
+                        member={member}
+                        profile={memberProfiles.get(member.uid) || null}
+                        isOwner={isOwner}
+                        canManage={isAdmin && member.role !== 'owner' && member.uid !== uid}
+                        canManageAdmins={isAdmin && member.role !== 'owner' && member.uid !== uid}
+                        busy={memberActionId === member.uid}
+                        onPromoteModerator={handlePromoteModerator}
+                        onDemoteModerator={handleDemoteModerator}
+                        onPromoteAdmin={handlePromoteAdmin}
+                        onRemoveAdmin={handleRemoveAdmin}
+                        onTransferOwnership={handleTransferOwnership}
+                        onRemove={handleRemoveMember}
+                        onBan={isAdmin && member.role !== 'owner' && member.uid !== uid ? handleBanMember : undefined}
+                        onMuteChanged={(targetUid, muted) =>
+                          setMutedUids((prev) => {
+                            const next = new Set(prev)
+                            if (muted) next.add(targetUid)
+                            else next.delete(targetUid)
+                            return next
+                          })
+                        }
+                      />
+                    ))}
                   </div>
                 )}
-              </div>
-            </div>
-          )}
 
-          {activeTab === 'Media' &&
-            (mediaLoading ? (
-              <div className="py-16 flex justify-center">
-                <Loader size="md" tone="dark" />
-              </div>
-            ) : mediaPosts.length === 0 ? (
-              <div className="py-16 text-center">
-                <p className="text-sm text-gray-400">No photos posted here yet.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-1">
-                {mediaPosts.map((post) => (
+                {membersCursor && !memberSearch && roleFilter === 'All' && (
                   <button
-                    key={post.id}
                     type="button"
-                    onClick={() => navigate(`/post/${post.id}`)}
-                    className="aspect-square overflow-hidden rounded-md bg-gray-100"
+                    onClick={loadMoreMembers}
+                    disabled={membersLoadingMore}
+                    className="mt-3 w-full rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-2.5 hover:border-gray-300 disabled:opacity-50 transition-all duration-200"
                   >
-                    <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
+                    {membersLoadingMore ? 'Loading…' : 'Load more members'}
                   </button>
-                ))}
+                )}
               </div>
-            ))}
+            )}
 
-          {activeTab === 'Settings' && isAdmin && (
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Send Announcement</p>
-              <form onSubmit={handleSendAnnouncement} className="mb-6">
-                <textarea
-                  rows={3}
-                  value={announcementText}
-                  onChange={(event) => setAnnouncementText(event.target.value)}
-                  disabled={isSendingAnnouncement}
-                  maxLength={280}
-                  placeholder="Share an update with every member..."
-                  className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
-                />
-                {announcementError && <p className="mt-1.5 text-xs text-red-500">{announcementError}</p>}
-                {announcementSent && <p className="mt-1.5 text-xs text-emerald-600">Sent to every member.</p>}
-                <button
-                  type="submit"
-                  disabled={!announcementText.trim() || isSendingAnnouncement}
-                  className="mt-2 w-full rounded-full bg-blue-600 text-white text-sm font-semibold py-2.5 hover:bg-blue-700 disabled:opacity-50 transition-all duration-300"
-                >
-                  {isSendingAnnouncement ? 'Sending…' : 'Send to All Members'}
-                </button>
-              </form>
-
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Pending Requests {pendingRequests.length > 0 && `(${pendingRequests.length})`}
-              </p>
-              {requestActionError && (
-                <p role="alert" className="mb-2 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
-                  {requestActionError}
-                </p>
-              )}
-              {pendingRequests.length === 0 ? (
-                <p className="text-sm text-gray-400 py-6 text-center">No pending requests.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {pendingRequests.map((req) => (
-                    <li key={req.uid} className="flex items-center gap-3 rounded-xl border border-gray-100 p-3">
-                      <Avatar initials={getInitials(req.uid)} colorClass={getAvatarColor(req.uid)} size="sm" />
-                      <span className="text-sm text-gray-700 flex-1 truncate">{req.uid}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleApprove(req.uid)}
-                        disabled={requestActionId === req.uid}
-                        className="rounded-full bg-blue-600/90 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 hover:bg-blue-700/90 disabled:opacity-50 shadow-[0_2px_8px_rgba(91,77,255,0.2)] transition-all duration-300"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleReject(req.uid)}
-                        disabled={requestActionId === req.uid}
-                        className="rounded-full border border-white/50 bg-white/40 backdrop-blur-sm text-gray-600 text-xs font-semibold px-3 py-1.5 hover:bg-red-50/40 hover:border-red-200/60 disabled:opacity-50 transition-all duration-300"
-                      >
-                        Reject
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="mt-8 pt-6 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => navigate(`/community/${communityId}/settings`)}
-                  className="w-full rounded-full border border-gray-200 text-gray-700 text-sm font-semibold py-3 hover:border-gray-300 transition-all duration-300"
-                >
-                  Edit Community Details
-                </button>
-              </div>
-
-              {isOwner && (
-                <div className="mt-4 pt-6 border-t border-gray-100">
-                  <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2">Danger zone</p>
-                  {!showDeleteConfirm ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="w-full rounded-full border border-red-200 text-red-500 text-sm font-semibold py-3 hover:bg-red-50 transition-all duration-300"
-                    >
-                      Delete Community
-                    </button>
-                  ) : (
-                    <div className="rounded-xl border border-red-200 bg-red-50/50 p-4">
-                      <p className="text-sm font-semibold text-gray-900">Delete this community?</p>
-                      <p className="mt-1 text-xs text-gray-500 leading-relaxed">
-                        This permanently deletes the community, its members, and pending requests. Posts made in it
-                        stay up but will show as belonging to a deleted community. This can't be undone.
-                      </p>
-                      {deleteError && <p className="mt-2 text-xs text-red-600">{deleteError}</p>}
-                      <div className="mt-3 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowDeleteConfirm(false)}
-                          disabled={isDeleting}
-                          className="flex-1 rounded-full border border-gray-200 text-gray-600 text-xs font-semibold py-2.5 disabled:opacity-50 transition-all duration-300"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleDeleteCommunity}
-                          disabled={isDeleting}
-                          className="flex-1 rounded-full bg-red-500 text-white text-xs font-semibold py-2.5 hover:bg-red-600 disabled:opacity-50 transition-all duration-300"
-                        >
-                          {isDeleting ? 'Deleting…' : 'Yes, delete it'}
-                        </button>
-                      </div>
+            {activeSection === 'About' && (
+              <div className="space-y-5 text-sm text-gray-600 leading-relaxed">
+                <p>{community.description}</p>
+                {community.rules && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Rules</p>
+                    <p className="whitespace-pre-wrap">{community.rules}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Type</p>
+                    <p className="text-sm">{typeLabels[community.type] || 'Community'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Privacy</p>
+                    <p className="text-sm">{community.privacy === 'private' ? 'Private' : 'Public'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Members</p>
+                    <p className="text-sm">{community.membersCount}</p>
+                  </div>
+                  {createdDate && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Created</p>
+                      <p className="text-sm">{createdDate}</p>
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          )}
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Owner</p>
+                  <PersonChip uid={community.ownerId} profile={aboutProfiles.get(community.ownerId)} />
+                </div>
+                {community.admins?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Admins</p>
+                    <div className="flex flex-wrap gap-2">
+                      {community.admins.map((adminUid) => (
+                        <PersonChip key={adminUid} uid={adminUid} profile={aboutProfiles.get(adminUid)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeSection === 'Media' &&
+              (mediaLoading ? (
+                <div className="py-16 flex justify-center">
+                  <Loader size="md" tone="dark" />
+                </div>
+              ) : mediaPosts.length === 0 ? (
+                <div className="py-16 text-center">
+                  <p className="text-3xl">📷</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">No photos or videos yet</p>
+                  <p className="mt-1 text-sm text-gray-400">Media shared in this community will show up here.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-1">
+                  {mediaPosts.map((post) => (
+                    <button
+                      key={post.id}
+                      type="button"
+                      onClick={() => navigate(`/post/${post.id}`)}
+                      className="aspect-square overflow-hidden rounded-md bg-gray-100 hover:opacity-90 transition-opacity duration-200"
+                    >
+                      <img src={post.imagePreviewUrl} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              ))}
+
+            {activeSection === 'Settings' && isAdmin && (
+              <div className="space-y-8">
+                <section>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Community profile</p>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/community/${communityId}/settings`)}
+                    className="w-full rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold py-3 hover:border-gray-300 transition-all duration-200"
+                  >
+                    Edit name, description, avatar & cover
+                  </button>
+                </section>
+
+                <section>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Moderation — Announcement</p>
+                  <form onSubmit={handleSendAnnouncement}>
+                    <textarea
+                      rows={3}
+                      value={announcementText}
+                      onChange={(event) => setAnnouncementText(event.target.value)}
+                      disabled={isSendingAnnouncement}
+                      maxLength={280}
+                      placeholder="Share an update with every member..."
+                      className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-200"
+                    />
+                    {announcementError && <p className="mt-1.5 text-xs text-red-500">{announcementError}</p>}
+                    {announcementSent && <p className="mt-1.5 text-xs text-emerald-600">Sent to every member.</p>}
+                    <button
+                      type="submit"
+                      disabled={!announcementText.trim() || isSendingAnnouncement}
+                      className="mt-2 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 disabled:opacity-50 transition-all duration-200"
+                    >
+                      {isSendingAnnouncement ? 'Sending…' : 'Send to All Members'}
+                    </button>
+                  </form>
+                </section>
+
+                <section>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    Moderation — Pending Requests {pendingRequests.length > 0 && `(${pendingRequests.length})`}
+                  </p>
+                  {requestActionError && (
+                    <p role="alert" className="mb-2 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
+                      {requestActionError}
+                    </p>
+                  )}
+                  {pendingRequests.length === 0 ? (
+                    <p className="text-sm text-gray-400 py-4 text-center">No pending requests.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {pendingRequests.map((req) => {
+                        const profile = memberProfiles.get(req.uid)
+                        return (
+                          <li key={req.uid} className="flex items-center gap-3 rounded-xl border border-gray-100 p-3">
+                            <PersonChip uid={req.uid} profile={profile} plain />
+                            <button
+                              type="button"
+                              onClick={() => handleApprove(req.uid)}
+                              disabled={requestActionId === req.uid}
+                              className="rounded-full bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50 transition-all duration-200"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleReject(req.uid)}
+                              disabled={requestActionId === req.uid}
+                              className="rounded-full border border-gray-200 text-gray-600 text-xs font-semibold px-3 py-1.5 hover:border-red-200 hover:bg-red-50 disabled:opacity-50 transition-all duration-200"
+                            >
+                              Reject
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </section>
+
+                {isOwner && (
+                  <section className="pt-6 border-t border-gray-100">
+                    <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2">Danger zone</p>
+                    {!showDeleteConfirm ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="w-full rounded-full border border-red-200 text-red-500 text-sm font-semibold py-3 hover:bg-red-50 transition-all duration-200"
+                      >
+                        Delete Community
+                      </button>
+                    ) : (
+                      <div className="rounded-xl border border-red-200 bg-red-50/50 p-4">
+                        <p className="text-sm font-semibold text-gray-900">Delete this community?</p>
+                        <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+                          This permanently deletes the community, its members, and pending requests. Posts made in it
+                          stay up but will show as belonging to a deleted community. This can't be undone.
+                        </p>
+                        {deleteError && <p className="mt-2 text-xs text-red-600">{deleteError}</p>}
+                        <div className="mt-3 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowDeleteConfirm(false)}
+                            disabled={isDeleting}
+                            className="flex-1 rounded-full border border-gray-200 text-gray-600 text-xs font-semibold py-2.5 disabled:opacity-50 transition-all duration-200"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDeleteCommunity}
+                            disabled={isDeleting}
+                            className="flex-1 rounded-full bg-red-500 text-white text-xs font-semibold py-2.5 hover:bg-red-600 disabled:opacity-50 transition-all duration-200"
+                          >
+                            {isDeleting ? 'Deleting…' : 'Yes, delete it'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                )}
+              </div>
+            )}
+          </div>
         </main>
+
+        <aside className="hidden xl:flex xl:w-80 xl:flex-shrink-0 xl:h-full xl:overflow-y-auto border-l border-gray-100 bg-white">
+          <div className="w-full">
+            <CommunityRightRail
+              community={community}
+              onViewMembers={() => setActiveSection('Members')}
+              onViewAbout={() => setActiveSection('About')}
+            />
+          </div>
+        </aside>
       </div>
 
       {isAdmin && assetEditor && (
@@ -903,12 +1191,76 @@ export default function CommunityDetailPage() {
           communityId={communityId}
           kind={assetEditor}
           onSaved={(url) => {
-            setCommunity((prev) => (prev ? { ...prev, [assetEditor === 'cover' ? 'coverImage' : 'icon'] : url } : prev))
+            setCommunity((prev) => (prev ? { ...prev, [assetEditor === 'cover' ? 'coverImage' : 'icon']: url } : prev))
           }}
         />
       )}
 
-      <BottomNav />
+      {showLeaveConfirm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-6">
+          <button
+            type="button"
+            aria-label="Cancel"
+            onClick={() => !isJoining && setShowLeaveConfirm(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5 shadow-xl">
+            <p className="text-base font-bold text-gray-900">Leave {community.name}?</p>
+            <p className="mt-1.5 text-sm text-gray-500 leading-relaxed">
+              You'll stop seeing posts from this community and will need to rejoin to come back.
+            </p>
+            {joinError && <p className="mt-2 text-xs text-red-500">{joinError}</p>}
+            <div className="mt-5 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowLeaveConfirm(false)}
+                disabled={isJoining}
+                className="flex-1 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold py-2.5 hover:border-gray-300 disabled:opacity-50 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLeave}
+                disabled={isJoining}
+                className="flex-1 rounded-full bg-red-600 text-white text-sm font-semibold py-2.5 hover:bg-red-700 disabled:opacity-50 transition-all duration-200"
+              >
+                {isJoining ? 'Leaving…' : 'Leave'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function PersonChip({ uid, profile, plain }) {
+  const navigate = useNavigate()
+  const displayName = profile?.displayName || 'Student'
+  const goToProfile = () => {
+    if (profile?.username) navigate(`/student/${profile.username}`)
+  }
+  const content = (
+    <>
+      <Avatar
+        initials={getInitials(displayName)}
+        colorClass={getAvatarColor(uid)}
+        size="sm"
+        src={profile ? getProfileIdentityImage(profile) || undefined : undefined}
+      />
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+        {profile?.username && <p className="text-xs text-gray-400 truncate">@{profile.username}</p>}
+      </div>
+    </>
+  )
+  if (plain) {
+    return <div className="flex-1 min-w-0 flex items-center gap-2.5">{content}</div>
+  }
+  return (
+    <button type="button" onClick={goToProfile} className="flex items-center gap-2 rounded-full border border-gray-100 pl-1 pr-3 py-1 hover:border-gray-200 transition-all duration-200">
+      {content}
+    </button>
   )
 }

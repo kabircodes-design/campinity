@@ -61,7 +61,7 @@ export function formatTimeAgo(timestamp) {
  * present in postTypeConfig). `feedCategories` is always ['forYou'] for
  * the same reason.
  */
-function mapPostDoc(docSnap, currentUid) {
+export function mapPostDoc(docSnap, currentUid) {
   const data = docSnap.data()
   const likedBy = Array.isArray(data.likedBy) ? data.likedBy : []
 
@@ -74,6 +74,9 @@ function mapPostDoc(docSnap, currentUid) {
     username: data.username || '',
     initials: getInitials(data.displayName),
     avatarColor: getAvatarColor(data.userId || data.displayName || docSnap.id),
+    avatarUrl: data.profilePhoto || '',
+    communityId: data.communityId || null,
+    communityName: data.communityName || '',
     department: '',
     year: '',
     college: '',
@@ -90,6 +93,7 @@ function mapPostDoc(docSnap, currentUid) {
     comments: data.commentsCount || 0,
     likedByMe: currentUid ? likedBy.includes(currentUid) : false,
     poll: data.poll || null,
+    pinned: data.pinned || false,
     collegeId: data.collegeId || null,
     // PRE-EXISTING BUG FOUND while adding campus-feed scoping: this was
     // hardcoded to ['forYou'] only, so HomePage.jsx's Campus tab filter
@@ -125,7 +129,12 @@ export async function getFeedPosts(currentUid, maxResults = 50) {
     limit(maxResults)
   )
   const snap = await getDocs(postsQuery)
-  return snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+  // Community posts belong to their own community's feed
+  // (getCommunityFeedPosts), not the general Home feed — same
+  // exclusion as postFeedShared.js's shared pipeline, applied here too
+  // since this function is Home's "Campus" tab AND SearchPage's
+  // "Latest Posts" preview, neither of which routes through that hook.
+  return snap.docs.filter((d) => !d.data().communityId).map((docSnap) => mapPostDoc(docSnap, currentUid))
 }
 
 /**

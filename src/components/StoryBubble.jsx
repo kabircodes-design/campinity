@@ -53,7 +53,7 @@ export default function StoryBubble({ story, seen = false, onOpen }) {
         className="flex flex-col items-center gap-1.5 w-16 flex-shrink-0 active:scale-95 transition-transform duration-150"
       >
         <div
-          className={`relative w-[60px] h-[60px] rounded-full flex items-center justify-center transition-all duration-300 ${
+          className={`relative w-[60px] h-[60px] rounded-full flex-shrink-0 flex items-center justify-center transition-all duration-300 ${
             hasActiveStory
               ? seen
                 ? 'p-[2px] bg-gray-300'
@@ -66,11 +66,24 @@ export default function StoryBubble({ story, seen = false, onOpen }) {
               : ''
           }`}
         >
-          <div className={hasActiveStory ? 'w-full h-full rounded-full bg-white p-[2px]' : 'w-full h-full'}>
+          {/* overflow-hidden here (not on the ring div above, which also
+              hosts the +badge below — clipping THAT to the circle would
+              cut the badge off at the circle's rounded edge instead of
+              letting it sit cleanly in the square corner) is what
+              guarantees the photo itself can never visually spill past
+              its own circular boundary, independent of the `fill` sizing
+              fix above. */}
+          <div
+            className={
+              hasActiveStory
+                ? 'w-full h-full rounded-full overflow-hidden bg-white p-[2px]'
+                : 'w-full h-full rounded-full overflow-hidden'
+            }
+          >
             <Avatar
               initials={getInitials(story.label || story.initials)}
               colorClass={story.colorClass || getAvatarColor(story.userId || story.id)}
-              size="lg"
+              size="fill"
               src={story.avatar || undefined}
             />
           </div>

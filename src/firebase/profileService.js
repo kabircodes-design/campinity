@@ -104,6 +104,24 @@ export async function getUserProfile(uid) {
   return mapProfileDoc(data)
 }
 
+/**
+ * Enriches a list of uids with their profiles — the same
+ * `Promise.all(uids.map(getUserProfile))` shape already used ad hoc in
+ * CommunityJoinRequestsPage.jsx, GroupInfoPage.jsx, leaderboardService.js
+ * and CloseFriendsPage.jsx, pulled out once so new call sites (e.g. a
+ * community member directory) reuse it instead of re-deriving it.
+ * Dedupes repeated uids so a caller never pays for the same read twice,
+ * and returns a Map for O(1) lookup by the caller. Failed individual
+ * reads resolve to a null entry rather than rejecting the whole batch.
+ */
+export async function getUserProfiles(uids) {
+  const uniqueUids = [...new Set((uids || []).filter(Boolean))]
+  const entries = await Promise.all(
+    uniqueUids.map(async (uid) => [uid, await getUserProfile(uid).catch(() => null)])
+  )
+  return new Map(entries)
+}
+
 export async function createUserProfile(uid, data = {}) {
   const ref = doc(db, COLLECTION, uid)
   await setDoc(

@@ -75,6 +75,7 @@ export function mapPostForCard(raw, currentUid, liveProfile) {
     shareCount: raw.shareCount || 0,
     communityId: raw.communityId || null,
     communityName: raw.communityName || null,
+    poll: raw.poll || null,
     file: raw.file,
     subject: raw.subject || null,
     collection: raw.collection || null,
@@ -112,7 +113,15 @@ export function subscribeToEnrichedPostsQuery(postsQuery, currentUid, onUpdate, 
     postsQuery,
     (snap) => {
       const thisSequence = ++sequence
-      const rawDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      // Community posts have their own home (the community's own feed,
+      // via getCommunityFeedPosts) and are deliberately excluded from
+      // Home's general feeds here — the query itself can't express
+      // "communityId is absent" without a schema/rules change (every
+      // community post is still visibility:'public' for the community
+      // feed's own read rule to work), so this is the actual
+      // query/filtering fix, applied once in the shared pipeline both
+      // Home hooks go through, not a per-page JSX hide.
+      const rawDocs = snap.docs.filter((d) => !d.data().communityId).map((d) => ({ id: d.id, ...d.data() }))
       const lastRawDoc = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null
 
       enrichWithAuthors(
@@ -139,7 +148,8 @@ export function subscribeToEnrichedPostsQuery(postsQuery, currentUid, onUpdate, 
  */
 export async function fetchEnrichedPostsPage(postsQuery, currentUid) {
   const snap = await getDocs(postsQuery)
-  const rawDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  // Same community-post exclusion as subscribeToEnrichedPostsQuery above — kept in sync deliberately.
+  const rawDocs = snap.docs.filter((d) => !d.data().communityId).map((d) => ({ id: d.id, ...d.data() }))
   const lastRawDoc = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null
 
   const enriched = await enrichWithAuthors(

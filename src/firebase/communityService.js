@@ -47,6 +47,7 @@ import {
 import { deleteObject, getStorage, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { db } from './firebase.js'
 import { awardXP } from '../gamification/xpService.js'
+import { mapPostDoc } from './postService.js'
 
 export const COMMUNITY_TYPES = [
   'official_club',
@@ -84,6 +85,73 @@ function memberDocRef(communityId, uid) {
 
 function requestDocRef(communityId, uid) {
   return doc(db, 'communityRequests', `${communityId}_${uid}`)
+}
+
+function banDocRef(communityId, uid) {
+  return doc(db, 'communityBans', `${communityId}_${uid}`)
+}
+
+/**
+ * Channels — communities/{communityId}/channels/{channelId}, a real
+ * subcollection (not a hardcoded/UI-only list): every community gets
+ * these 4 written as genuine documents at creation time (createCommunity
+ * below), and posts/{postId} carries a real channelId field pointing at
+ * one of them (communityId → channelId → post, per the explicit
+ * architecture requirement). Deliberately NOT a full Discord-style
+ * user-createable-channel system — admins/owner can add MORE channels
+ * (createCommunityChannel below) on top of this real starting set, but
+ * there's no channel-permissions/ordering system beyond that, matching
+ * "don't over-engineer this into a Discord clone."
+ */
+export const DEFAULT_CHANNELS = [
+  { id: 'general', name: 'General', description: 'General discussion for the whole community.' },
+  { id: 'announcements', name: 'Announcements', description: 'Official updates from owners and admins.' },
+  { id: 'events', name: 'Events', description: 'Upcoming events and meetups.' },
+  { id: 'study', name: 'Study', description: 'Notes, resources and study discussion.' }
+]
+
+function channelDocRef(communityId, channelId) {
+  return doc(db, 'communities', communityId, 'channels', channelId)
+}
+
+function slugifyChannelName(name) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 40)
+}
+
+export async function getCommunityChannels(communityId) {
+  const snap = await getDocs(query(collection(db, 'communities', communityId, 'channels'), orderBy('order', 'asc')))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
+/** Owner/admin only — adds a channel on top of the 4 real defaults every community already has. */
+export async function createCommunityChannel(communityId, requesterUid, { name, description = '' }) {
+  const trimmedName = name?.trim()
+  if (!trimmedName) throw new Error('Channel name is required.')
+  const communitySnap = await getDoc(communityDocRef(communityId))
+  if (!communitySnap.exists()) throw new Error('Community not found.')
+  const community = communitySnap.data()
+  if (community.ownerId !== requesterUid && !(community.admins || []).includes(requesterUid)) {
+    throw new Error('Only the owner or an admin can create channels.')
+  }
+
+  const channelId = slugifyChannelName(trimmedName) || `channel-${Date.now()}`
+  const existing = await getDoc(channelDocRef(communityId, channelId))
+  if (existing.exists()) throw new Error('A channel with that name already exists.')
+
+  await setDoc(channelDocRef(communityId, channelId), {
+    communityId,
+    name: trimmedName,
+    description: description?.trim() || '',
+    createdBy: requesterUid,
+    createdAt: serverTimestamp(),
+    order: Date.now()
+  })
+  return channelId
 }
 
 /** Maps a Firestore community doc + snapshot id into the plain shape UI reads. */
@@ -169,6 +237,20 @@ export async function createCommunity({
       communityId: newCommunityRef.id,
       role: 'owner',
       joinedAt: serverTimestamp()
+    })
+
+    // Real per-community channel docs, written here (not fabricated in
+    // the UI) — every community starts with the same 4 real channels;
+    // General is where an un-targeted post lands by default.
+    DEFAULT_CHANNELS.forEach((channel, index) => {
+      transaction.set(channelDocRef(newCommunityRef.id, channel.id), {
+        communityId: newCommunityRef.id,
+        name: channel.name,
+        description: channel.description,
+        createdBy: uid,
+        createdAt: serverTimestamp(),
+        order: index
+      })
     })
   })
 
@@ -389,6 +471,72 @@ export async function removeMember(communityId, targetUid) {
   })
 }
 
+/**
+ * Ban — deliberately distinct from removeMember above, not a synonym
+ * for it. Removing just deletes the membership doc (they can rejoin a
+ * public community immediately); banning does the same membership
+ * cleanup AND writes a communityBans/{communityId}_{uid} record that
+ * firestore.rules' own communityMembers/communityRequests create rules
+ * now check (`!exists(.../communityBans/$(communityId_uid))`) before
+ * allowing either a fresh join or a join request — the actual
+ * enforcement lives there, not in this function's own checks, which
+ * exist only to fail early with a clear message.
+ */
+export async function banMember(communityId, requesterUid, targetUid) {
+  await runTransaction(db, async (transaction) => {
+    const communitySnap = await transaction.get(communityDocRef(communityId))
+    if (!communitySnap.exists()) throw new Error('Community not found.')
+    const community = communitySnap.data()
+    if (community.ownerId !== requesterUid && !(community.admins || []).includes(requesterUid)) {
+      throw new Error('Only the owner or an admin can ban members.')
+    }
+    if (community.ownerId === targetUid) {
+      throw new Error('The owner cannot be banned.')
+    }
+
+    const memberRef = memberDocRef(communityId, targetUid)
+    const memberSnap = await transaction.get(memberRef)
+    if (memberSnap.exists()) {
+      transaction.delete(memberRef)
+      transaction.update(communityDocRef(communityId), { membersCount: increment(-1) })
+      const admins = community.admins || []
+      const moderators = community.moderators || []
+      if (admins.includes(targetUid)) transaction.update(communityDocRef(communityId), { admins: arrayRemove(targetUid) })
+      if (moderators.includes(targetUid)) transaction.update(communityDocRef(communityId), { moderators: arrayRemove(targetUid) })
+    }
+
+    transaction.set(banDocRef(communityId, targetUid), {
+      communityId,
+      uid: targetUid,
+      bannedBy: requesterUid,
+      bannedAt: serverTimestamp()
+    })
+  })
+}
+
+export async function unbanMember(communityId, targetUid) {
+  await deleteDoc(banDocRef(communityId, targetUid))
+}
+
+export async function isMemberBanned(communityId, uid) {
+  if (!uid) return false
+  const snap = await getDoc(banDocRef(communityId, uid))
+  return snap.exists()
+}
+
+/**
+ * Mute Community — a per-member preference (I don't want notifications
+ * from this community), not a moderation action. Writes ONLY the
+ * `muted` field on the caller's OWN membership doc — the one field
+ * firestore.rules' communityMembers update rule lets a plain member
+ * touch on their own doc; everything else about that doc (role) stays
+ * owner/admin-only exactly as before.
+ */
+export async function setCommunityMuted(communityId, uid, muted) {
+  if (!uid) throw new Error('You need to be signed in.')
+  await updateDoc(memberDocRef(communityId, uid), { muted: Boolean(muted) })
+}
+
 export async function transferOwnership(communityId, currentOwnerUid, newOwnerUid) {
   await runTransaction(db, async (transaction) => {
     const communitySnap = await transaction.get(communityDocRef(communityId))
@@ -592,20 +740,44 @@ export async function getOwnedCommunities(uid) {
  * Written here assuming a flat `communityId` field, matching what this
  * message specifies posts should store.
  */
-export async function getCommunityFeedPosts(communityId, { pageSize = 20, cursor = null } = {}) {
-  const constraints = [where('communityId', '==', communityId), orderBy('createdAt', 'desc'), limit(pageSize)]
+/**
+ * Reuses postService.js's own mapPostDoc — the same translation layer
+ * getFeedPosts()/getUserPosts() use — so a community post renders
+ * through PostCard exactly like a Home-feed post (poll included: PostCard
+ * already renders PostPoll whenever post.poll is present, so a poll
+ * created via the normal composer and posted into a community shows up
+ * directly in this feed, no separate handling needed). Previously this
+ * returned raw, unmapped doc data, which is why CommunityDetailPage.jsx
+ * could never actually use PostCard here and had to hand-roll a much
+ * more limited list instead.
+ */
+/**
+ * `channelId` is optional — omitted (the default), this returns the
+ * community's WHOLE feed across every channel, same as before channels
+ * existed; passed, it narrows to just that channel via a real `where`
+ * clause (not a client-side filter), same as the existing communityId
+ * scoping. Two equality filters + orderBy on a third field needs a
+ * Firestore composite index — same one-time-setup situation every other
+ * multi-filter query in this file already documents (Firestore's own
+ * error includes a direct console link the first time this runs for
+ * real with a channelId filter).
+ */
+export async function getCommunityFeedPosts(communityId, currentUid, { pageSize = 20, cursor = null, channelId = null } = {}) {
+  const constraints = [where('communityId', '==', communityId)]
+  if (channelId) constraints.push(where('channelId', '==', channelId))
+  constraints.push(orderBy('createdAt', 'desc'), limit(pageSize))
   if (cursor) constraints.push(startAfter(cursor))
   const snap = await getDocs(query(collection(db, 'posts'), ...constraints))
   return {
-    posts: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    posts: snap.docs.map((d) => mapPostDoc(d, currentUid)),
     nextCursor: snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1] : null
   }
 }
 
 /** Media tab — same query, filtered client-side to posts that have an image. Firestore can't combine an equality filter with an existence filter on a different field without a composite index; client-side filtering on top of the already-scoped community query avoids requiring one for this one tab. */
-export async function getCommunityMediaPosts(communityId, { pageSize = 60 } = {}) {
-  const { posts } = await getCommunityFeedPosts(communityId, { pageSize })
-  return posts.filter((post) => Boolean(post.imageUrl))
+export async function getCommunityMediaPosts(communityId, currentUid, { pageSize = 60 } = {}) {
+  const { posts } = await getCommunityFeedPosts(communityId, currentUid, { pageSize })
+  return posts.filter((post) => Boolean(post.imagePreviewUrl))
 }
 
 /** Live subscription for a community's member count / core fields — used by the club page header. */

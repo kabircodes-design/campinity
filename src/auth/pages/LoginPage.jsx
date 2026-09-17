@@ -94,136 +94,99 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="relative min-h-screen lg:flex"
-      style={{
-        backgroundImage:
-          'radial-gradient(ellipse 900px 600px at 15% -10%, rgba(99,102,241,0.10), transparent), radial-gradient(ellipse 700px 500px at 100% 100%, rgba(59,130,246,0.08), transparent)'
-      }}
+    <AuthLayout
+      eyebrow="Welcome back"
+      title="Welcome back to Campinity"
+      subtitle="Your campus, right where you left it."
+      footer={
+        <>
+          Don't have an account?{' '}
+          <Link to="/signup" className="font-semibold text-accent hover:text-accent-deep transition-colors duration-200">
+            Create one
+          </Link>
+        </>
+      }
     >
-      {/* Desktop-only brand/storytelling column — a pure sibling of
-          AuthLayout below, added without touching or needing to know
-          AuthLayout's own internals. Mobile renders exactly as before
-          this change (hidden below lg:). No animation, no motion —
-          matches Phase 1's stability-first requirement. */}
-      <div className="hidden lg:flex lg:w-[45%] lg:flex-col lg:justify-center lg:px-16 bg-gradient-to-br from-indigo-600 via-blue-600 to-indigo-700 text-white relative overflow-hidden">
-        <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-white/5" />
-        <div className="absolute -bottom-24 -left-10 w-80 h-80 rounded-full bg-white/5" />
-        <div className="relative">
-          <p className="text-2xl font-bold tracking-tight">Campinity</p>
-          <p className="mt-6 text-4xl font-bold leading-tight">
-            Your campus.
-            <br />
-            One place.
-          </p>
-          <p className="mt-4 text-indigo-100 text-base max-w-sm">
-            Everything happening around your campus — feeds, notes, communities and people, all in one login.
-          </p>
-        </div>
-      </div>
+      <Button variant="secondary" icon={<GoogleGlyph />} loading={googleLoading} disabled={isSubmitting} onClick={handleGoogle}>
+        Continue with Google
+      </Button>
 
-      <div className="relative z-10 flex-1 lg:flex lg:items-center lg:justify-center">
-        <AuthLayout
-          eyebrow="Welcome back"
-          title="Log in to Campinity"
-          subtitle="Your campus, right where you left it."
-          footer={
-            <>
-              Don't have an account?{' '}
-              <Link to="/signup" className="font-semibold text-accent hover:text-accent-deep transition-colors duration-200">
-                Create account
-              </Link>
-            </>
-          }
-        >
-          <Button
-            variant="secondary"
-            icon={<GoogleGlyph />}
-            loading={googleLoading}
-            disabled={isSubmitting}
-            onClick={handleGoogle}
+      {googleError && (
+        <p role="alert" className="mt-3 rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
+          {googleError}
+        </p>
+      )}
+
+      <Divider />
+
+      <form onSubmit={onSubmit} noValidate className="space-y-3.5">
+        <Input
+          ref={emailRef}
+          id="login-email"
+          label="Email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          placeholder="you@campus.edu"
+          value={values.email}
+          onChange={handleChange('email')}
+          onBlur={handleBlur('email')}
+          error={fieldError('email')}
+          disabled={isSubmitting}
+          required
+        />
+
+        <PasswordInput
+          id="login-password"
+          label="Password"
+          autoComplete="current-password"
+          placeholder="Enter your password"
+          value={values.password}
+          onChange={handleChange('password')}
+          onBlur={handleBlur('password')}
+          error={fieldError('password')}
+          disabled={isSubmitting}
+          required
+        />
+
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 text-[13.5px] text-ink-soft cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-line text-accent accent-accent focus:ring-2 focus:ring-accent-tint"
+            />
+            Remember me
+          </label>
+          <Link
+            to="/forgot-password"
+            className="text-[13.5px] font-semibold text-accent hover:text-accent-deep transition-colors duration-200"
           >
-            Continue with Google
-          </Button>
+            Forgot password?
+          </Link>
+        </div>
 
-          {googleError && (
-            <p role="alert" className="mt-3 rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
-              {googleError}
-            </p>
-          )}
+        {submitError && (
+          <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
+            {submitError}
+          </p>
+        )}
 
-          <Divider />
+        {submitSuccess && (
+          <p
+            role="status"
+            className="flex items-center gap-2 rounded-xl2 bg-accent-tint dark:bg-blue-500/15 text-accent text-[13px] font-medium px-4 py-3"
+          >
+            <Icon name="check" className="w-4 h-4" strokeWidth={2.2} />
+            Logged in — redirecting…
+          </p>
+        )}
 
-          <form onSubmit={onSubmit} noValidate className="space-y-4">
-            <Input
-              ref={emailRef}
-              id="login-email"
-              label="Email"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              placeholder="you@campus.edu"
-              value={values.email}
-              onChange={handleChange('email')}
-              onBlur={handleBlur('email')}
-              error={fieldError('email')}
-              disabled={isSubmitting}
-              required
-            />
-
-            <PasswordInput
-              id="login-password"
-              label="Password"
-              autoComplete="current-password"
-              placeholder="Enter your password"
-              value={values.password}
-              onChange={handleChange('password')}
-              onBlur={handleBlur('password')}
-              error={fieldError('password')}
-              disabled={isSubmitting}
-              required
-            />
-
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-[13.5px] text-ink-soft cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-line text-accent accent-accent focus:ring-2 focus:ring-accent-tint"
-                />
-                Remember me
-              </label>
-              <Link
-                to="/forgot-password"
-                className="text-[13.5px] font-semibold text-accent hover:text-accent-deep transition-colors duration-200"
-              >
-                Forgot password?
-              </Link>
-            </div>
-
-            {submitError && (
-              <p role="alert" className="rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3">
-                {submitError}
-              </p>
-            )}
-
-            {submitSuccess && (
-              <p
-                role="status"
-                className="flex items-center gap-2 rounded-xl2 bg-accent-tint dark:bg-blue-500/15 text-accent text-[13px] font-medium px-4 py-3"
-              >
-                <Icon name="check" className="w-4 h-4" strokeWidth={2.2} />
-                Logged in — redirecting…
-              </p>
-            )}
-
-            <Button type="submit" loading={isSubmitting} disabled={!isValid}>
-              Log in
-            </Button>
-          </form>
-        </AuthLayout>
-      </div>
-    </div>
+        <Button type="submit" loading={isSubmitting} disabled={!isValid}>
+          {isSubmitting ? 'Logging in…' : 'Log in'}
+        </Button>
+      </form>
+    </AuthLayout>
   )
 }

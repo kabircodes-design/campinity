@@ -23,7 +23,9 @@ export const NOTIFICATION_ICONS = {
   invite: 'Mail',
   announcement: 'Megaphone',
   message_request: 'Mail',
-  message_request_accepted: 'MessageCircle'
+  message_request_accepted: 'MessageCircle',
+  community_join_approved: 'Users',
+  community_role_changed: 'ShieldCheck'
 }
 
 export function getNotificationText(notification) {
@@ -74,6 +76,18 @@ export function getNotificationText(notification) {
       return { lead: name, action: 'accepted your message request', preview: null }
     case 'lostFoundClaim':
       return { lead: name, action: 'thinks they found your lost item', preview: null }
+    case 'community_join_approved':
+      return {
+        lead: notification.communityName || 'A community',
+        action: 'approved your request to join',
+        preview: null
+      }
+    case 'community_role_changed':
+      return {
+        lead: notification.communityName || 'A community',
+        action: notification.newRole ? `made you ${notification.newRole === 'admin' ? 'an' : 'a'} ${notification.newRole}` : 'updated your role',
+        preview: null
+      }
     default:
       return { lead: name, action: 'sent you a notification', preview: null }
   }

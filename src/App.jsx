@@ -139,10 +139,13 @@ export default function App() {
             (AppShell.jsx) and never remount navigating between these
             pages; only <Outlet/>'s content changes. This is the actual
             fix for "navigation feels like a fresh page load": these are
-            every primary tab-bar/nav destination in the app. Detail/
-            drill-down pages (chat threads, post detail, community
-            detail, followers lists, etc.) intentionally stay outside
-            this group — they're not primary nav destinations, and
+            every primary tab-bar/nav destination in the app, plus
+            /community/:communityId (Community 2.0 rebuild — it needs the
+            persistent DesktopSidebar for its own real desktop workspace
+            layout, unlike a one-off drill-down page). Other detail/
+            drill-down pages (chat threads, post detail, followers lists,
+            community create/settings/requests, etc.) intentionally stay
+            outside this group — they're not primary nav destinations, and
             forcing them into the shared shell would be a much larger,
             riskier change than this task asked for. Radar is also
             deliberately excluded — RadarPage.jsx is architected as its
@@ -151,6 +154,15 @@ export default function App() {
         <Route element={<ProtectedRoute stage="home"><AppShell /></ProtectedRoute>}>
           <Route path="/home" element={<HomePage />} />
           <Route path="/communities" element={<DiscoverCommunitiesPage />} />
+          {/* Community 2.0: moved inside the shared AppShell (was its own
+              full-screen page) so it gets the persistent DesktopSidebar +
+              header for free on desktop, instead of centering a phone-width
+              card in an otherwise empty viewport. Create/Settings/Requests
+              stay standalone below, unchanged — this only moves the main
+              detail page, which is the one this pass rebuilt. */}
+          <Route path="/community/:communityId" element={<CommunityDetailPage />} />
+          <Route path="/post/:postId" element={<PostDetailPage />} />
+          <Route path="/student/:username" element={<StudentProfilePlaceholder />} />
           <Route path="/marketplace" element={<MarketplacePage />} />
           <Route path="/lost-found" element={<LostFoundPage />} />
           <Route path="/messages" element={<MessagesPage />} />
@@ -339,14 +351,6 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/community/:communityId"
-          element={
-            <ProtectedRoute stage="home">
-              <CommunityDetailPage />
-            </ProtectedRoute>
-          }
-        />
 
         <Route
           path="/followers/:username?"
@@ -425,25 +429,6 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <AboutSettingsPage />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Post Detail + Comments — now a real page (Feature 4B). */}
-        <Route
-          path="/post/:postId"
-          element={
-            <ProtectedRoute stage="home">
-              <PostDetailPage />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/student/:username"
-          element={
-            <ProtectedRoute stage="home">
-              <StudentProfilePlaceholder />
             </ProtectedRoute>
           }
         />

@@ -14,7 +14,7 @@ import { useTheme } from '../theme/useTheme.js'
  * renders <Logo withWordmark /> and gets the correct pair for
  * whatever theme is currently active.
  */
-export default function Logo({ className = 'w-8 h-8', withWordmark = false, forceLight = false }) {
+export default function Logo({ className = 'w-8 h-8', withWordmark = false, forceLight = false, forceDark = false }) {
   const { resolvedIsDark } = useTheme()
 
   // forceLight: for the one place (the post-onboarding welcome intro)
@@ -23,7 +23,12 @@ export default function Logo({ className = 'w-8 h-8', withWordmark = false, forc
   // logo variant there would mean a light logo meant for dark
   // backgrounds landing on a light background. Every existing caller
   // omits this prop and keeps today's theme-driven behavior exactly.
-  const isDark = forceLight ? false : resolvedIsDark
+  //
+  // forceDark: the mirror case — the auth pages' desktop brand panel is
+  // always a saturated blue gradient regardless of the viewer's app
+  // theme, so it always needs the light-colored logo/wordmark meant for
+  // dark backgrounds, never the black one.
+  const isDark = forceDark ? true : forceLight ? false : resolvedIsDark
 
   const logoSrc = isDark ? '/logo-dark.webp' : '/logo-light.webp'
   const wordmarkSrc = isDark ? '/wordmark-dark.webp' : '/wordmark-light.webp'

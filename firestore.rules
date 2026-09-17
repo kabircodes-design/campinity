@@ -41,6 +41,20 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/users/$(uidB)/blockedUsers/$(uidA));
     }
 
+    // Owner, admin, OR moderator of a community — one get() (via `let`
+    // at each call site, not here, since functions can't declare `let`
+    // bindings that outlive their own body across multiple returns)
+    // used to gate community-staff-only actions that go beyond the
+    // existing owner/admin-only pattern above (e.g. pinning a post —
+    // Part 13 of the community moderation pass explicitly gives
+    // moderators pin/remove/report, not just admins).
+    function isCommunityStaff(communityId) {
+      let community = get(/databases/$(database)/documents/communities/$(communityId)).data;
+      return request.auth.uid == community.ownerId ||
+             request.auth.uid in community.get('admins', []) ||
+             request.auth.uid in community.get('moderators', []);
+    }
+
     /**
      * =====================================================================
      * INCIDENT NOTE (this pass): a full audit found that firestore.rules
@@ -173,9 +187,23 @@ service cloud.firestore {
         onlyChanged(['likedBy', 'likesCount']) ||
         onlyChanged(['commentsCount']) ||
         onlyChanged(['shareCount']) ||
-        onlyChanged(['communityDeleted'])
+        onlyChanged(['communityDeleted']) ||
+        // Pinning: owner/admin/moderator of the post's OWN community may
+        // toggle ONLY the pinned field — never text/media/author fields.
+        // A post with no communityId (a general Home post) has no
+        // community staff to grant this, so resource.data.communityId
+        // must be present for this branch to ever be reachable.
+        (onlyChanged(['pinned']) && resource.data.communityId != null && isCommunityStaff(resource.data.communityId))
       );
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Community owner/admin/moderator may also remove another
+      // member's post FROM that community (Part 13's "moderator: Remove"
+      // — previously post delete was strictly author-only, a real,
+      // narrow moderation gap this closes without touching normal,
+      // non-community post deletion at all).
+      allow delete: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        (resource.data.communityId != null && isCommunityStaff(resource.data.communityId))
+      );
 
       // posts/{postId}/comments/{commentId} — schema and rule intent
       // both documented directly in engagementService.js. Author owns
@@ -555,6 +583,21 @@ service cloud.firestore {
         onlyChanged(['membersCount'])
       );
       allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      // communities/{communityId}/channels/{channelId} — real per-
+      // community documents (createCommunity writes the 4 defaults;
+      // createCommunityChannel lets an owner/admin add more), not a
+      // hardcoded UI list. Read open, same reasoning as the parent
+      // community doc (channel names aren't private). Create/update/
+      // delete owner/admin-only — a plain member can browse channels
+      // but never create, rename, or remove one.
+      match /channels/{channelId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isSignedIn() && (
+          get(/databases/$(database)/documents/communities/$(communityId)).data.ownerId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/communities/$(communityId)).data.admins
+        );
+      }
     }
 
     // communityMembers/{communityId}_{uid} — communityService.js's own
@@ -567,19 +610,48 @@ service cloud.firestore {
     match /communityMembers/{memberId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && (
-        request.resource.data.uid == request.auth.uid ||
-        get(/databases/$(database)/documents/communities/$(request.resource.data.communityId)).data.ownerId == request.auth.uid ||
-        request.auth.uid in get(/databases/$(database)/documents/communities/$(request.resource.data.communityId)).data.admins
+        !exists(/databases/$(database)/documents/communityBans/$(request.resource.data.communityId + '_' + request.resource.data.uid)) && (
+          get(/databases/$(database)/documents/communities/$(request.resource.data.communityId)).data.ownerId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/communities/$(request.resource.data.communityId)).data.admins ||
+          request.resource.data.uid == request.auth.uid
+        )
       );
       allow update: if isSignedIn() && (
         get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == request.auth.uid ||
-        request.auth.uid in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.admins
+        request.auth.uid in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.admins ||
+        // Mute Community: a member may flip ONLY their own `muted` flag
+        // on their own membership doc — never their role, never anyone
+        // else's doc. Everything else about this doc (role changes) stays
+        // owner/admin-only exactly as before.
+        (resource.data.uid == request.auth.uid && onlyChanged(['muted']))
       );
       allow delete: if isSignedIn() && (
         resource.data.uid == request.auth.uid ||
         get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == request.auth.uid ||
         request.auth.uid in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.admins
       );
+    }
+
+    // communityBans/{communityId}_{uid} — same deterministic composite-id
+    // reservation pattern as communityMembers/communityRequests above.
+    // Read open (join/leave flows and the Members UI need to know ban
+    // state). Create/delete (ban/unban) restricted to the target
+    // community's own owner/admin — enforced HERE, not just hidden by a
+    // disabled button, per the explicit "do not create a client-only
+    // fake ban" requirement. joinCommunity/requestToJoin's own create
+    // rules below additionally check this collection so a banned user
+    // can't rejoin by calling the client function directly.
+    match /communityBans/{banId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        get(/databases/$(database)/documents/communities/$(request.resource.data.communityId)).data.ownerId == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/communities/$(request.resource.data.communityId)).data.admins
+      );
+      allow delete: if isSignedIn() && (
+        get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.admins
+      );
+      allow update: if false;
     }
 
     // communityRequests/{communityId}_{uid} — requestToJoin creates its
@@ -591,7 +663,8 @@ service cloud.firestore {
         get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == request.auth.uid ||
         request.auth.uid in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.admins
       );
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid &&
+        !exists(/databases/$(database)/documents/communityBans/$(request.resource.data.communityId + '_' + request.auth.uid));
       allow delete: if isSignedIn() && (
         resource.data.uid == request.auth.uid ||
         get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == request.auth.uid ||

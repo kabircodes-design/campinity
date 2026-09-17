@@ -500,6 +500,47 @@ export async function unpinComment(postId, commentId, requesterUid, postOwnerUid
 }
 
 /* ============================================================
+   PIN POST — community owner/admin/moderator only, distinct from
+   pinComment above (that pins a COMMENT within a post; this pins a
+   POST within a community's feed). Same "only one pinned at a time"
+   pattern: pinning a new post automatically unpins whichever one was
+   previously pinned in that same community, kept to one small
+   📌 Pinned area rather than an unbounded pinned list. firestore.rules'
+   posts/{postId} update rule is the real enforcement (onlyChanged
+   (['pinned']) + isCommunityStaff) — this client-side check exists
+   only to fail with a clear message before attempting the write.
+   ============================================================ */
+
+export async function pinPost(postId, requesterUid) {
+  if (!requesterUid) throw new Error('You need to be signed in.')
+  const snap = await getDoc(postDoc(postId))
+  if (!snap.exists()) throw new Error('This post no longer exists.')
+  const post = snap.data()
+  if (!post.communityId) throw new Error('Only community posts can be pinned.')
+
+  const communitySnap = await getDoc(doc(db, 'communities', post.communityId))
+  const community = communitySnap.exists() ? communitySnap.data() : null
+  const isStaff =
+    community &&
+    (community.ownerId === requesterUid ||
+      (community.admins || []).includes(requesterUid) ||
+      (community.moderators || []).includes(requesterUid))
+  if (!isStaff) throw new Error('Only community owners, admins, or moderators can pin posts.')
+
+  const currentlyPinnedSnap = await getDocs(
+    query(collection(db, 'posts'), where('communityId', '==', post.communityId), where('pinned', '==', true), limit(1))
+  )
+  const batch = writeBatch(db)
+  currentlyPinnedSnap.docs.forEach((d) => batch.update(d.ref, { pinned: false }))
+  batch.update(postDoc(postId), { pinned: true })
+  await batch.commit()
+}
+
+export async function unpinPost(postId) {
+  await updateDoc(postDoc(postId), { pinned: false })
+}
+
+/* ============================================================
    SAVED POSTS — new feature, private to the owner. Schema:
    users/{uid}/savedPosts/{postId}, doc id IS the postId (structurally
    prevents duplicate saves, matches this project's existing composite-

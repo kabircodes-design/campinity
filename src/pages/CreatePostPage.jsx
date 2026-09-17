@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { BarChart3, Clock, FileText, Image as ImageIcon, Plus, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import Switch from '../components/Switch.jsx'
@@ -7,7 +7,7 @@ import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { computeExpiresAt, createPost, getAvatarColor, getInitials, uploadPostDocument, uploadPostImage } from '../firebase/postService.js'
-import { getUserCommunityMemberships, getCommunityById } from '../firebase/communityService.js'
+import { getUserCommunityMemberships, getCommunityById, getCommunityChannels } from '../firebase/communityService.js'
 import { createMentionNotification } from '../firebase/notificationService.js'
 import { useMentionAutocomplete } from '../hooks/useMentionAutocomplete.js'
 import MentionSuggestions from '../components/MentionSuggestions.jsx'
@@ -51,6 +51,9 @@ function formatFileSize(bytes) {
 
 export default function CreatePostPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const preselectedCommunityId = location.state?.communityId || null
+  const preselectedChannelId = location.state?.channelId || null
   const verified = useMyVerification()
   const { startPosting, markSuccess, markError } = usePostingStatus()
   const imageInputRef = useRef(null)
@@ -118,6 +121,8 @@ export default function CreatePostPage() {
   const [postTarget, setPostTarget] = useState('public')
   const [myCommunities, setMyCommunities] = useState([])
   const [communitiesLoading, setCommunitiesLoading] = useState(true)
+  const [channels, setChannels] = useState([])
+  const [selectedChannelId, setSelectedChannelId] = useState(preselectedChannelId || 'general')
 
   useEffect(() => {
     let cancelled = false
@@ -192,7 +197,17 @@ export default function CreatePostPage() {
         const communities = await Promise.all(
           memberships.map((membership) => getCommunityById(membership.communityId))
         )
-        if (!cancelled) setMyCommunities(communities.filter(Boolean))
+        const validCommunities = communities.filter(Boolean)
+        if (!cancelled) {
+          setMyCommunities(validCommunities)
+          // Deep-linked from a community page's composer ("Post to this
+          // community") — only trusted if the membership fetch above
+          // actually confirms the user belongs to it, never taken as-is
+          // from navigation state alone.
+          if (preselectedCommunityId && validCommunities.some((c) => c.id === preselectedCommunityId)) {
+            setPostTarget(preselectedCommunityId)
+          }
+        }
       } catch {
         // Post-To selector just falls back to "Public Feed only" if this fails.
       } finally {
@@ -205,6 +220,30 @@ export default function CreatePostPage() {
       cancelled = true
     }
   }, [])
+
+  // Real per-community channels (communities/{id}/channels), fetched
+  // once a real community target is picked — never fetched for the
+  // public-feed target, which has no channels at all.
+  useEffect(() => {
+    if (postTarget === 'public') {
+      setChannels([])
+      return undefined
+    }
+    let cancelled = false
+    getCommunityChannels(postTarget)
+      .then((data) => {
+        if (cancelled) return
+        setChannels(data)
+        if (data.length > 0 && !data.some((c) => c.id === selectedChannelId)) {
+          setSelectedChannelId(data.find((c) => c.id === 'general')?.id || data[0].id)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postTarget])
 
   useEffect(() => {
     return () => {
@@ -288,14 +327,6 @@ export default function CreatePostPage() {
     // the "instant Home" feel; it just has to happen before the
     // content is considered postable at all.
     const moderationResult = moderateText(postText.trim())
-    // eslint-disable-next-line no-console
-    console.log('[ModerationDebug]', {
-      raw: postText.trim(),
-      sanitized: moderationResult.text,
-      wasModerated: moderationResult.wasModerated,
-      highestSeverity: moderationResult.highestSeverity,
-      flaggedForReview: moderationResult.flaggedForReview
-    })
 
     // Snapshot everything handlePublish's background continuation
     // needs — this component is about to unmount via navigate(),
@@ -317,6 +348,7 @@ export default function CreatePostPage() {
       noteCollection,
       noteChapter,
       selectedCommunity: postTarget !== 'public' ? myCommunities.find((c) => c.id === postTarget) : null,
+      selectedChannel: postTarget !== 'public' && channels.length > 0 ? channels.find((c) => c.id === selectedChannelId) : null,
       mentionedUids: mentionedUids.filter((mentionedUid) => mentionedUid !== uid), // never notify yourself for @-ing your own username
       poll: pollEnabled
         ? {
@@ -328,7 +360,12 @@ export default function CreatePostPage() {
 
     clearPostDraft()
     startPosting(imageFile ? 'Posting your photo…' : 'Posting…')
-    navigate('/home')
+    // A community post lands the user back in that community's own feed
+    // (its own posts/{postId} listener picks up the new post the normal
+    // way once written) — not Home, which now deliberately excludes
+    // community posts entirely (see postFeedShared.js/getFeedPosts).
+    const targetCommunity = postTarget !== 'public' ? myCommunities.find((c) => c.id === postTarget) : null
+    navigate(targetCommunity ? `/community/${targetCommunity.id}` : '/home')
 
     // Everything below now runs in the background, after the user is
     // already on Home. This function keeps running even though
@@ -393,7 +430,17 @@ export default function CreatePostPage() {
           ...(publishData.selectedCommunity && {
             communityId: publishData.selectedCommunity.id,
             communityName: publishData.selectedCommunity.name
-          })
+          }),
+          // channelId → communityId → post: only ever set alongside a
+          // real communityId, and only when that community actually has
+          // channel docs (an older community with none simply never gets
+          // this field — its whole feed stays one unified stream, exactly
+          // as before channels existed).
+          ...(publishData.selectedCommunity &&
+            publishData.selectedChannel && {
+              channelId: publishData.selectedChannel.id,
+              channelName: publishData.selectedChannel.name
+            })
         }
       })
 
@@ -470,7 +517,12 @@ export default function CreatePostPage() {
           ...(publishData.selectedCommunity && {
             communityId: publishData.selectedCommunity.id,
             communityName: publishData.selectedCommunity.name
-          })
+          }),
+          ...(publishData.selectedCommunity &&
+            publishData.selectedChannel && {
+              channelId: publishData.selectedChannel.id,
+              channelName: publishData.selectedChannel.name
+            })
         },
         'Posted'
       )
@@ -507,6 +559,16 @@ export default function CreatePostPage() {
     )
   }
 
+  // When arriving from a community's own "Share something..." prompt
+  // (CommunityDetailPage's composer entry, via navigate('/create',
+  // { state: { communityId } })), the target is already known — the
+  // generic "Post to" selector below is hidden entirely and postTarget
+  // stays locked to it, so the user is never asked to reselect a
+  // community they already chose by entering it in the first place.
+  const lockedCommunity = preselectedCommunityId
+    ? myCommunities.find((c) => c.id === preselectedCommunityId) || null
+    : null
+
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
       <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
@@ -515,12 +577,14 @@ export default function CreatePostPage() {
             <button
               type="button"
               aria-label="Cancel"
-              onClick={() => navigate('/home')}
+              onClick={() => navigate(lockedCommunity ? `/community/${lockedCommunity.id}` : '/home')}
               className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
             >
               <X className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900">New Post</span>
+            <span className="text-base font-bold tracking-tight text-gray-900">
+              {lockedCommunity ? 'New Community Post' : 'New Post'}
+            </span>
             <button
               type="button"
               onClick={handlePublish}
@@ -533,6 +597,39 @@ export default function CreatePostPage() {
         </header>
 
         <div className="px-4 py-4 pb-24 space-y-5">
+          {lockedCommunity && (
+            <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50/60 px-3.5 py-2.5">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                {lockedCommunity.icon ? (
+                  <img src={lockedCommunity.icon} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-white text-xs font-bold">{lockedCommunity.name?.[0]?.toUpperCase() || 'C'}</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-blue-500 uppercase tracking-wide">Posting in</p>
+                <p className="text-sm font-semibold text-gray-900 truncate">{lockedCommunity.name}</p>
+              </div>
+            </div>
+          )}
+
+          {lockedCommunity && channels.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto scroll-hidden">
+              {channels.map((channel) => (
+                <button
+                  key={channel.id}
+                  type="button"
+                  onClick={() => setSelectedChannelId(channel.id)}
+                  className={`flex-shrink-0 rounded-full text-xs font-semibold px-3 py-1.5 transition-all duration-200 ${
+                    selectedChannelId === channel.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  #{channel.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           {pendingDraft && (
             <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-3 [animation:fadeIn_150ms_ease-out]">
               <div className="min-w-0 flex-1">
@@ -590,7 +687,13 @@ export default function CreatePostPage() {
               onKeyDown={(event) => {
                 handleMentionKeyDown(event)
               }}
-              placeholder="What's happening on campus? Use @ to mention someone."
+              placeholder={
+                lockedCommunity
+                  ? channels.length > 0
+                    ? `Share something in #${channels.find((c) => c.id === selectedChannelId)?.name?.toLowerCase() || 'general'}...`
+                    : `Share something with ${lockedCommunity.name}...`
+                  : "What's happening on campus? Use @ to mention someone."
+              }
               className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
             />
             <p className="mt-1 text-right text-xs text-gray-400">
@@ -822,7 +925,7 @@ export default function CreatePostPage() {
             )}
           </div>
 
-          {!communitiesLoading && myCommunities.length > 0 && (
+          {!communitiesLoading && !lockedCommunity && myCommunities.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Post to</p>
               <div className="space-y-2">

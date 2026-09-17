@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { AtSign, Award, CornerUpLeft, Heart, Mail, Megaphone, MessageCircle, PackageSearch, Pin, Share2, Star, Trash2, UserPlus } from 'lucide-react'
+import { AtSign, Award, CornerUpLeft, Heart, Mail, Megaphone, MessageCircle, PackageSearch, Pin, Share2, ShieldCheck, Star, Trash2, UserPlus, Users } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { getNotificationText } from '../utils/notificationText.js'
 import { formatTimeAgo } from '../firebase/postService.js'
@@ -19,7 +19,9 @@ const ICON_STYLES = {
   announcement: { Icon: Megaphone, bg: 'bg-violet-500', fill: false },
   message_request: { Icon: Mail, bg: 'bg-blue-600', fill: false },
   message_request_accepted: { Icon: MessageCircle, bg: 'bg-emerald-500', fill: false },
-  lostFoundClaim: { Icon: PackageSearch, bg: 'bg-amber-500', fill: false }
+  lostFoundClaim: { Icon: PackageSearch, bg: 'bg-amber-500', fill: false },
+  community_join_approved: { Icon: Users, bg: 'bg-emerald-500', fill: false },
+  community_role_changed: { Icon: ShieldCheck, bg: 'bg-blue-600', fill: false }
 }
 
 /**

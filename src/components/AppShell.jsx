@@ -1,15 +1,12 @@
 import { Suspense, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, MessageCircle, Radar } from 'lucide-react'
+import { Radar } from 'lucide-react'
 import DesktopSidebar from './DesktopSidebar.jsx'
 import BottomNav from './BottomNav.jsx'
-import Avatar from './Avatar.jsx'
 import Logo from './Logo.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
-import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 /**
@@ -47,10 +44,6 @@ export default function AppShell() {
     return () => unsubscribe()
   }, [])
 
-  const initials = getInitials(profile?.displayName || '')
-  const myColorClass = getAvatarColor(auth.currentUser?.uid || profile?.displayName)
-  const isMessagesActive = location.pathname.startsWith('/messages')
-
   return (
     <>
       <div
@@ -82,65 +75,23 @@ export default function AppShell() {
                 <Logo className="w-7 h-7" withWordmark />
               </button>
 
-              {/* The large "Search for people, communities, posts..."
-                  desktop bar that used to live here is removed —
-                  requested explicitly, it was taking unnecessary header
-                  space above every AppShell page (Home/Communities/
-                  Marketplace/Lost & Found/Messages all share this one
-                  header). Search/Explore itself is untouched — Ctrl K
-                  never had a real keyboard listener behind it (grepped
-                  the whole app; it was decorative only), so nothing
-                  functional is lost. The desktop Radar icon below still
-                  reaches Search-adjacent discovery, and /search remains
-                  a normal route reachable via DesktopSidebar's own
-                  "Explore" nav item and mobile's bottom-nav-adjacent
-                  entry points — this only removes the redundant top-bar
-                  shortcut. ml-auto below still correctly right-aligns
-                  the icon cluster now that there's no flex-1 sibling
-                  pushing it — no phantom gap left behind. */}
-              <div className="flex items-center gap-1 ml-auto">
-                <button
-                  type="button"
-                  aria-label="Radar"
-                  onClick={() => navigate('/radar')}
-                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
-                >
-                  <Radar className="w-5 h-5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Messages"
-                  onClick={() => navigate('/messages')}
-                  className={`relative hidden lg:flex w-9 h-9 rounded-full items-center justify-center transition-all duration-200 ${
-                    isMessagesActive
-                      ? 'text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-500/15'
-                      : 'text-gray-500 hover:bg-gray-100 active:scale-95 dark:text-gray-400 dark:hover:bg-white/10'
-                  }`}
-                >
-                  <MessageCircle className="w-5 h-5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Notifications"
-                  onClick={() => navigate('/notifications')}
-                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
-                >
-                  <Bell className="w-5 h-5" />
-                  {unreadNotifCount > 0 && (
-                    <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white dark:ring-[#11131a]" />
-                  )}
-                </button>
-                {profile && (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/profile')}
-                    aria-label="Your profile"
-                    className="hidden lg:flex items-center ml-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 p-0.5 transition-all duration-200"
-                  >
-                    <Avatar initials={initials} colorClass={myColorClass} size="sm" src={getProfileIdentityImage(profile) || undefined} />
-                  </button>
-                )}
-              </div>
+              {/* Messages/Notifications/Profile were removed from here —
+                  DesktopSidebar already lists all three as real nav items
+                  on desktop, and BottomNav covers them on mobile, so this
+                  was a genuinely redundant second entry point, not a
+                  second way to reach something otherwise unreachable.
+                  Radar stays: it has no equivalent entry in either nav.
+                  ml-auto still correctly right-aligns it now that there's
+                  no flex-1 sibling pushing it — no phantom gap left
+                  behind, the header just naturally shrinks to fit. */}
+              <button
+                type="button"
+                aria-label="Radar"
+                onClick={() => navigate('/radar')}
+                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200 ml-auto"
+              >
+                <Radar className="w-5 h-5" />
+              </button>
             </div>
           </header>
 

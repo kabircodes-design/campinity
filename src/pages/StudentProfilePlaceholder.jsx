@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, MoreHorizontal } from 'lucide-react'
-import BottomNav from '../components/BottomNav.jsx'
 import ProfileHeader from '../components/ProfileHeader.jsx'
 import PostCard from '../components/PostCard.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
@@ -227,7 +226,7 @@ export default function StudentProfilePlaceholder() {
 
   if (loading) {
     return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 flex items-center justify-center">
+      <div className="h-full flex items-center justify-center">
         <Loader size="lg" tone="dark" />
       </div>
     )
@@ -235,20 +234,17 @@ export default function StudentProfilePlaceholder() {
 
   if (notFound || !profile) {
     return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-        <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm flex items-center justify-center px-6 text-center">
-          <div>
-            <p className="text-sm font-semibold text-gray-900">Student not found</p>
-            <button
-              type="button"
-              onClick={() => navigate('/home')}
-              className="mt-4 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
-            >
-              Back to Home
-            </button>
-          </div>
+      <div className="h-full flex items-center justify-center px-6 text-center">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Student not found</p>
+          <button
+            type="button"
+            onClick={() => navigate('/home')}
+            className="mt-4 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
+          >
+            Back to Home
+          </button>
         </div>
-        <BottomNav />
       </div>
     )
   }
@@ -272,9 +268,9 @@ export default function StudentProfilePlaceholder() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+    <div className="h-full w-full max-w-[100vw] lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50">
+      <div className="mx-auto max-w-[480px] lg:max-w-[720px] bg-white min-h-full lg:min-h-0 lg:my-4 lg:rounded-2xl lg:border lg:border-gray-100 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 lg:rounded-t-2xl">
           <div className="h-14 flex items-center justify-between px-3">
             <button
               type="button"
@@ -400,8 +396,6 @@ export default function StudentProfilePlaceholder() {
             ))}
         </main>
       </div>
-
-      <BottomNav />
     </div>
   )
 }

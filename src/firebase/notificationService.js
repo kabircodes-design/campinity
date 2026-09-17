@@ -353,6 +353,31 @@ export async function createMessageRequestAcceptedNotification({ targetUid, acto
   })
 }
 
+/** Fires when an owner/admin approves a private community's join request — the requester's "you're in" moment. */
+export async function createJoinRequestApprovedNotification({ targetUid, actorUid, actorName, actorAvatar, communityId, communityName }) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'A community admin',
+    actorAvatar: actorAvatar || '',
+    type: 'community_join_approved',
+    communityId,
+    communityName: communityName || 'a community'
+  })
+}
+
+/** Fires when a member is promoted to moderator/admin, or an admin is demoted back to member. */
+export async function createCommunityRoleChangedNotification({ targetUid, actorUid, actorName, actorAvatar, communityId, communityName, newRole }) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'A community admin',
+    actorAvatar: actorAvatar || '',
+    type: 'community_role_changed',
+    communityId,
+    communityName: communityName || 'a community',
+    newRole
+  })
+}
+
 /**
  * Community announcements — fans out to every member. Uses
  * communityService.js's getMembers (already built) to enumerate
