@@ -155,6 +155,13 @@ export default function ChatPage() {
   const messagesContainerRef = useRef(null)
   const [showNewMessagesButton, setShowNewMessagesButton] = useState(false)
   const isNearBottomRef = useRef(true)
+  // Tracks whether THIS conversation has already done its first
+  // bottom-positioning — reset per chatId below. Opening a chat should
+  // land on the latest message instantly (no visible scroll animation,
+  // per the explicit "do not make the user watch the conversation
+  // scroll" requirement); a message arriving later, while already
+  // viewing the chat, is the one case that should still animate.
+  const hasScrolledInitiallyRef = useRef(false)
   const [replyingTo, setReplyingTo] = useState(null)
   const [highlightedMessageId, setHighlightedMessageId] = useState(null)
   const highlightTimeoutRef = useRef(null)
@@ -225,18 +232,33 @@ export default function ChatPage() {
   // effect fires the first time `messages` populates, same mechanism
   // that also handles new incoming messages while already at the
   // bottom. Only skips the jump if the user has manually scrolled up.
+  //
+  // ROOT CAUSE of "opening a chat visibly scrolls down": this always
+  // used behavior: 'smooth', including for the very first positioning
+  // after a conversation's messages load — a real, visible animated
+  // scroll from wherever the container defaulted to (the top) down to
+  // the bottom, exactly the "watch the conversation scroll" bug
+  // reported. The fix: the FIRST time a given chatId reaches the
+  // bottom, jump instantly ('auto', no animation); every subsequent
+  // arrival — a new message landing while already at the bottom —
+  // still animates smoothly, matching WhatsApp/Instagram's own actual
+  // behavior (open = instant, live new message = smooth).
   useEffect(() => {
     if (isNearBottomRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      const behavior = hasScrolledInitiallyRef.current ? 'smooth' : 'auto'
+      bottomRef.current?.scrollIntoView({ behavior })
+      hasScrolledInitiallyRef.current = true
     } else {
       setShowNewMessagesButton(true)
     }
   }, [messages])
 
   // Reset scroll tracking when switching conversations, so opening chat
-  // B right after chat A doesn't inherit "user had scrolled up" from A.
+  // B right after chat A doesn't inherit "user had scrolled up" from A,
+  // and B gets its own instant (not animated) first positioning too.
   useEffect(() => {
     isNearBottomRef.current = true
+    hasScrolledInitiallyRef.current = false
     setShowNewMessagesButton(false)
   }, [chatId])
 
@@ -564,7 +586,7 @@ export default function ChatPage() {
                 otherDisplayName={!isGroup ? otherProfile?.displayName : undefined}
               />
 
-              <div className="flex-shrink-0 border-t border-gray-100 bg-white pb-16 lg:pb-[env(safe-area-inset-bottom)]">
+              <div className="flex-shrink-0 border-t border-gray-100 bg-white pb-[env(safe-area-inset-bottom)]">
                 {pendingLimitReached ? (
                   <p className="px-4 py-3.5 text-center text-xs text-gray-400">
                     You've sent your message — you can reply again once they accept.
@@ -584,10 +606,11 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="lg:hidden">
-        <BottomNav />
-      </div>
-
+      {/* No BottomNav here (deliberately) — an open chat is its own
+          focused screen on mobile, exactly like WhatsApp/Instagram:
+          the global bottom nav disappears while inside a conversation
+          and returns the moment the user navigates back to /messages.
+          It's still rendered normally by AppShell everywhere else. */}
       <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} targetType="user" targetId={otherUid} targetOwnerUid={otherUid} />
     </>
   )

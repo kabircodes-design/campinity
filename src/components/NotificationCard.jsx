@@ -21,7 +21,9 @@ const ICON_STYLES = {
   message_request_accepted: { Icon: MessageCircle, bg: 'bg-emerald-500', fill: false },
   lostFoundClaim: { Icon: PackageSearch, bg: 'bg-amber-500', fill: false },
   community_join_approved: { Icon: Users, bg: 'bg-emerald-500', fill: false },
-  community_role_changed: { Icon: ShieldCheck, bg: 'bg-blue-600', fill: false }
+  community_role_changed: { Icon: ShieldCheck, bg: 'bg-blue-600', fill: false },
+  story_like: { Icon: Heart, bg: 'bg-red-500', fill: true },
+  story_comment: { Icon: MessageCircle, bg: 'bg-blue-600', fill: false }
 }
 
 /**
@@ -58,6 +60,12 @@ export default function NotificationCard({ notification, onRead, onDelete }) {
       navigate(`/student/${notification.actorUsername}`)
     } else if (notification.type === 'lostFoundClaim' && notification.itemId) {
       navigate(`/lost-found?item=${notification.itemId}`)
+    } else if (notification.type === 'story_like' || notification.type === 'story_comment') {
+      // No dedicated story route exists — stories are only ever viewed
+      // inline from Home's story tray, so that's the honest destination
+      // (a story can also have expired by the time this is tapped;
+      // Home is still the correct place to land either way).
+      navigate('/home')
     } else if (notification.postId && notification.commentId) {
       // #comment-{id} matches the anchor id PostDetailPage.jsx's comment
       // list items should carry — see that page's update for the other

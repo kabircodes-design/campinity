@@ -301,6 +301,15 @@ export default function HomePage() {
       isAdd: true,
       stories: myGroup?.stories || []
     }
+    // ROOT CAUSE of "fake More button with no stories": this trailing
+    // bubble is purely decorative — StoryBubble.jsx's own handleClick
+    // is a no-op for isMore (`if (story.isMore) return`) — so it was
+    // never a real destination. Appending it unconditionally meant it
+    // was the ONLY thing shown next to "Your Story" when nobody on
+    // campus had an active story yet, which read as a fake placeholder.
+    // Now it only appears once there's an actual second bubble for it
+    // to trail.
+    if (otherGroups.length === 0) return [addStory]
     const moreStory = { id: 'more', label: 'More', isMore: true }
     return [addStory, ...otherGroups, moreStory]
   }, [stories, initials, myColorClass, profile])

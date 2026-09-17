@@ -25,7 +25,9 @@ export const NOTIFICATION_ICONS = {
   message_request: 'Mail',
   message_request_accepted: 'MessageCircle',
   community_join_approved: 'Users',
-  community_role_changed: 'ShieldCheck'
+  community_role_changed: 'ShieldCheck',
+  story_like: 'Heart',
+  story_comment: 'MessageCircle'
 }
 
 export function getNotificationText(notification) {
@@ -88,6 +90,10 @@ export function getNotificationText(notification) {
         action: notification.newRole ? `made you ${notification.newRole === 'admin' ? 'an' : 'a'} ${notification.newRole}` : 'updated your role',
         preview: null
       }
+    case 'story_like':
+      return { lead: name, action: 'liked your story', preview: null }
+    case 'story_comment':
+      return { lead: name, action: 'replied to your story', preview: notification.commentPreview || null }
     default:
       return { lead: name, action: 'sent you a notification', preview: null }
   }

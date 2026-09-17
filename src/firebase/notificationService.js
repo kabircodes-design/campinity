@@ -72,10 +72,12 @@ function notificationsCollection(uid) {
 const NOTIFICATION_CATEGORY = {
   like: 'likes',
   comment_like: 'likes',
+  story_like: 'likes',
   comment: 'comments',
   reply: 'comments',
   mention: 'comments',
   pin: 'comments',
+  story_comment: 'comments',
   follow: 'follows',
   message_request: 'messages',
   message_request_accepted: 'messages',
@@ -354,6 +356,35 @@ export async function createMessageRequestAcceptedNotification({ targetUid, acto
     actorUsername: actorUsername || '',
     type: 'message_request_accepted',
     chatId
+  })
+}
+
+/**
+ * Story engagement — a real, previously-missing gap: likeStory/
+ * addStoryComment (storyService.js) never told the story's owner
+ * anything happened, so "someone liked/replied to your story" simply
+ * never surfaced anywhere. Same createNotification() gate as every
+ * other type (no self-notification, blocked-user filtering already
+ * centralized there) — these two functions are the only new piece.
+ */
+export async function createStoryLikeNotification({ targetUid, actorUid, actorName, actorAvatar, storyId }) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    type: 'story_like',
+    storyId
+  })
+}
+
+export async function createStoryCommentNotification({ targetUid, actorUid, actorName, actorAvatar, storyId, commentPreview }) {
+  return createNotification(targetUid, {
+    actorUid,
+    actorName: actorName || 'Someone',
+    actorAvatar: actorAvatar || '',
+    type: 'story_comment',
+    storyId,
+    commentPreview: commentPreview || null
   })
 }
 

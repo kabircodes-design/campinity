@@ -290,6 +290,7 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
     fileName = null,
     fileSize = null,
     mimeType = null,
+    durationSec = null,
     callType = null,
     callDurationSec = null,
     callOutcome = null,
@@ -349,6 +350,9 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
       messageDoc.fileName = fileName || 'File'
       messageDoc.fileSize = fileSize || 0
       messageDoc.mimeType = mimeType || ''
+    }
+    if (type === 'voice') {
+      messageDoc.durationSec = durationSec || 0
     }
     if (type === 'call') {
       messageDoc.callType = callType || 'voice'
@@ -563,6 +567,28 @@ export async function uploadChatFile(chatId, uid, file) {
   await uploadBytes(fileRef, file)
   const url = await getDownloadURL(fileRef)
   return { url, name: file.name, size: file.size, mimeType: file.type }
+}
+
+/**
+ * Voice messages (Part 9) — same chatMedia/{chatId}/{uid}/ Storage path
+ * and the same owner-only write rule as every other chat attachment
+ * (storage.rules has no per-mime-type restriction there), so this is
+ * additive, not a new permission surface. Takes a raw Blob (MediaRecorder's
+ * output has no .name like a File does) and gives it one, with a real
+ * contentType so the download URL serves as playable audio.
+ */
+export async function uploadChatVoice(chatId, uid, blob, mimeType) {
+  const ext = mimeType?.includes('wav')
+    ? 'wav'
+    : mimeType?.includes('mp4')
+      ? 'm4a'
+      : mimeType?.includes('ogg')
+        ? 'ogg'
+        : 'webm'
+  const path = `chatMedia/${chatId}/${uid}/${Date.now()}-voice.${ext}`
+  const fileRef = ref(storage, path)
+  await uploadBytes(fileRef, blob, { contentType: mimeType || 'audio/webm' })
+  return getDownloadURL(fileRef)
 }
 
 export async function markChatRead(chatId, uid) {

@@ -8,9 +8,12 @@ import {
   Download,
   FileText,
   MoreVertical,
+  Pause,
   Pencil,
   Phone,
   PhoneMissed,
+  Play,
+  RotateCcw,
   Trash2,
   Video,
   X
@@ -40,6 +43,143 @@ function groupReactions(reactions) {
     groups[emoji].push(uid)
   })
   return groups
+}
+
+// Module-level, not React state — "only one voice message plays at a
+// time" is an imperative fact about which single <audio> element is
+// currently active across the whole chat, not something any one
+// bubble's render should own. Whichever bubble starts playback pauses
+// whatever this points at first, then claims it.
+let currentlyPlayingAudioEl = null
+
+/**
+ * Voice-message playback — a real <audio> element (not a fake progress
+ * bar), one per bubble so multiple voice notes in a conversation each
+ * have independent play state. durationSec comes from the message doc
+ * (measured at record time) and is used as the initial/fallback label
+ * before the browser's own metadata loads, so the bubble never shows
+ * "0:00" while buffering.
+ *
+ * The actual fix for "Play is clickable but audio never plays" lives at
+ * the RECORDING layer (MessageInput.jsx's convertRecordingToWav), not
+ * here — MediaRecorder's raw WebM/Opus output has no seek index and an
+ * unresolved duration (a well-documented Chromium limitation), which is
+ * why it played unreliably as a static file. Newly-sent voice messages
+ * are now converted to plain PCM WAV before upload, which has no such
+ * container ambiguity and needs no playback-side workaround. This
+ * player stays a plain, hack-free <audio> wrapper — a previous attempt
+ * to patch this at the player level (forcing a large seek to build a
+ * seek index at runtime) is what introduced the visible "Couldn't play"
+ * error in the first place: seeking past the real content of an
+ * un-indexed file can push it into a genuine decode error instead of
+ * just leaving it stuck. Older messages recorded before this fix may
+ * still be undecodable WebM — they now fail the same honest way (retry
+ * state below) rather than erroring out from an extra runtime hack.
+ */
+function VoiceMessagePlayer({ url, isMine, durationSec }) {
+  const audioRef = useRef(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(durationSec || 0)
+  const [playbackError, setPlaybackError] = useState(false)
+
+  // Pause + release the single-playback slot on unmount (leaving the
+  // chat, or the message list re-rendering this bubble away) — nothing
+  // should keep playing audio for a bubble that's no longer on screen.
+  useEffect(() => {
+    return () => {
+      const audio = audioRef.current
+      if (audio) audio.pause()
+      if (currentlyPlayingAudioEl === audio) currentlyPlayingAudioEl = null
+    }
+  }, [])
+
+  const togglePlay = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (isPlaying) {
+      audio.pause()
+      return
+    }
+    setPlaybackError(false)
+    if (currentlyPlayingAudioEl && currentlyPlayingAudioEl !== audio) {
+      currentlyPlayingAudioEl.pause()
+    }
+    currentlyPlayingAudioEl = audio
+    // A rejected play() promise (autoplay-policy quirks, a genuinely
+    // broken/expired URL, an undecodable file) must never throw a raw
+    // error into the UI — just a small, honest retry state. The real
+    // error is still captured, only ever logged in DEV.
+    audio.play().catch((err) => {
+      if (import.meta.env.DEV) console.warn('[voice message] play() rejected:', err?.name, err?.message)
+      setPlaybackError(true)
+      setIsPlaying(false)
+      if (currentlyPlayingAudioEl === audio) currentlyPlayingAudioEl = null
+    })
+  }
+
+  const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0
+  const barColor = isMine ? 'bg-white' : 'bg-blue-600'
+  const trackColor = isMine ? 'bg-white/25' : 'bg-gray-200'
+
+  return (
+    <div className="flex items-center gap-2.5 min-w-[180px]">
+      <audio
+        ref={audioRef}
+        src={url}
+        preload="metadata"
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => {
+          setIsPlaying(false)
+          setCurrentTime(0)
+          if (currentlyPlayingAudioEl === audioRef.current) currentlyPlayingAudioEl = null
+        }}
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => {
+          if (Number.isFinite(e.currentTarget.duration)) setDuration(e.currentTarget.duration)
+        }}
+        onError={(e) => {
+          if (import.meta.env.DEV) {
+            const err = e.currentTarget.error
+            console.warn('[voice message] <audio> error:', err?.code, err?.message)
+          }
+          setPlaybackError(true)
+        }}
+        className="hidden"
+      />
+      <button
+        type="button"
+        onClick={togglePlay}
+        aria-label={playbackError ? 'Retry playing voice message' : isPlaying ? 'Pause voice message' : 'Play voice message'}
+        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+          isMine ? 'bg-white/20 text-white' : 'bg-blue-600 text-white'
+        }`}
+      >
+        {playbackError ? (
+          <RotateCcw className="w-3.5 h-3.5" />
+        ) : isPlaying ? (
+          <Pause className="w-3.5 h-3.5" fill="currentColor" />
+        ) : (
+          <Play className="w-3.5 h-3.5 ml-0.5" fill="currentColor" />
+        )}
+      </button>
+      {playbackError ? (
+        <span className={`flex-1 text-[11px] ${isMine ? 'text-white/80' : 'text-gray-500'}`}>
+          Couldn't play this voice message. Tap to retry.
+        </span>
+      ) : (
+        <>
+          <div className={`flex-1 h-1 rounded-full ${trackColor}`}>
+            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${progress * 100}%` }} />
+          </div>
+          <span className={`text-[11px] tabular-nums flex-shrink-0 ${isMine ? 'text-white/80' : 'text-gray-500'}`}>
+            {formatCallDuration(Math.floor(isPlaying || currentTime > 0 ? currentTime : duration))}
+          </span>
+        </>
+      )}
+    </div>
+  )
 }
 
 /**
@@ -268,7 +408,7 @@ export default function MessageBubble({
                 {message.replyTo.senderId === currentUid ? 'You' : 'Reply'}
               </p>
               <p className={`text-[12px] truncate ${isMine ? 'text-white/70' : 'text-gray-500'}`}>
-                {message.replyTo.text || (message.replyTo.type === 'image' ? 'Photo' : 'Attachment')}
+                {message.replyTo.text || (message.replyTo.type === 'image' ? 'Photo' : message.replyTo.type === 'voice' ? 'Voice message' : 'Attachment')}
               </p>
             </button>
           )}
@@ -333,6 +473,8 @@ export default function MessageBubble({
                 <p className="mt-1 px-1 text-[14px] leading-relaxed whitespace-pre-wrap break-words">{message.text}</p>
               )}
             </div>
+          ) : type === 'voice' ? (
+            <VoiceMessagePlayer url={message.fileUrl} isMine={isMine} durationSec={message.durationSec} />
           ) : type === 'image' ? (
             <div>
               {imageFailed ? (

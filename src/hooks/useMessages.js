@@ -88,7 +88,7 @@ export function useMessages(chatId, otherUid) {
   }
 
   const sendMessage = async (text, options = {}) => {
-    const { type = 'text', imageUrl = null, fileUrl = null, fileName = null, fileSize = null, mimeType = null, replyTo = null } = options
+    const { type = 'text', imageUrl = null, fileUrl = null, fileName = null, fileSize = null, mimeType = null, durationSec = null, replyTo = null } = options
     if (!chatId || !uid) return
     if (type === 'text' && !text?.trim()) return
     setSending(true)
@@ -104,6 +104,7 @@ export function useMessages(chatId, otherUid) {
       fileName,
       fileSize,
       mimeType,
+      durationSec,
       replyTo,
       reactions: {},
       read: false,
@@ -131,7 +132,21 @@ export function useMessages(chatId, otherUid) {
     setOptimisticMessages((prev) =>
       prev.map((m) => (m.id === optimisticId ? { ...m, pending: true, failed: false } : m))
     )
-    await attemptSend(entry, entry.text, { type: entry.type, imageUrl: entry.imageUrl, replyTo: entry.replyTo })
+    // Full field set, not just type/imageUrl/replyTo — that gap already
+    // meant retrying a failed 'file' message silently dropped its
+    // fileUrl/fileName/fileSize; fixed here rather than left in place,
+    // since voice messages hit the exact same path and a broken retry
+    // would ship a fake "Retry" button for them.
+    await attemptSend(entry, entry.text, {
+      type: entry.type,
+      imageUrl: entry.imageUrl,
+      fileUrl: entry.fileUrl,
+      fileName: entry.fileName,
+      fileSize: entry.fileSize,
+      mimeType: entry.mimeType,
+      durationSec: entry.durationSec,
+      replyTo: entry.replyTo
+    })
     setSending(false)
   }
 

@@ -16,6 +16,7 @@ import {
   subscribeToStoryComments,
   unlikeStory
 } from '../firebase/storyService.js'
+import { createStoryCommentNotification, createStoryLikeNotification } from '../firebase/notificationService.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getOrCreateChat, sendMessage } from '../firebase/chatService.js'
 import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
@@ -252,6 +253,14 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
         text
       })
       setCommentText('')
+      createStoryCommentNotification({
+        targetUid: current.userId,
+        actorUid: currentUid,
+        actorName: myProfile?.displayName || myProfile?.username,
+        actorAvatar: myProfile?.avatar,
+        storyId: current.id,
+        commentPreview: text.slice(0, 120)
+      }).catch(() => {})
     } catch {
       // Same as story replies below — the input just keeps its text so the user can retry, no separate error toast for one inline field.
     } finally {
@@ -289,8 +298,18 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
     setLiked(nextLiked)
     setLikeCount((prev) => Math.max(0, prev + (nextLiked ? 1 : -1)))
     try {
-      if (nextLiked) await likeStory(current.id, currentUid)
-      else await unlikeStory(current.id, currentUid)
+      if (nextLiked) {
+        await likeStory(current.id, currentUid)
+        createStoryLikeNotification({
+          targetUid: current.userId,
+          actorUid: currentUid,
+          actorName: myProfile?.displayName || myProfile?.username,
+          actorAvatar: myProfile?.avatar,
+          storyId: current.id
+        }).catch(() => {})
+      } else {
+        await unlikeStory(current.id, currentUid)
+      }
     } catch {
       setLiked(!nextLiked)
       setLikeCount((prev) => Math.max(0, prev + (nextLiked ? -1 : 1)))

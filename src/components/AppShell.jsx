@@ -37,6 +37,11 @@ export default function AppShell() {
   const location = useLocation()
   const { profile } = useAuth()
   const [unreadNotifCount, setUnreadNotifCount] = useState(0)
+  // Mobile-only header cluster (logo/notifications/radar) is a Home-page
+  // thing, not a global one — matches how Instagram's own activity/heart
+  // icon only lives on its Home tab, not every screen. Desktop is
+  // unaffected (DesktopSidebar already covers navigation everywhere).
+  const isHome = location.pathname === '/home'
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
@@ -64,16 +69,22 @@ export default function AppShell() {
             correctly against both this conditional wrapper on desktop
             and no wrapper constraint at all on mobile. */}
         <div className="flex flex-col lg:h-screen lg:overflow-hidden overflow-x-hidden min-w-0">
-          <header className="sticky top-0 z-40 bg-white dark:bg-[#11131a] border-b border-gray-100 dark:border-white/10 flex-shrink-0">
+          <header
+            className={`sticky top-0 z-40 bg-white dark:bg-[#11131a] border-b border-gray-100 dark:border-white/10 flex-shrink-0 lg:block ${
+              isHome ? 'block' : 'hidden'
+            }`}
+          >
             <div className="h-14 flex items-center gap-3 px-4 lg:px-6">
-              <button
-                type="button"
-                onClick={() => navigate('/home')}
-                aria-label="Campinity — go to Home"
-                className="lg:hidden flex items-center flex-shrink-0"
-              >
-                <Logo className="w-7 h-7" withWordmark />
-              </button>
+              {isHome && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/home')}
+                  aria-label="Campinity — go to Home"
+                  className="lg:hidden flex items-center flex-shrink-0"
+                >
+                  <Logo className="w-7 h-7" withWordmark />
+                </button>
+              )}
 
               {/* Messages/Profile were removed from here — DesktopSidebar
                   already lists both as real nav items on desktop, AND
@@ -87,24 +98,34 @@ export default function AppShell() {
                   mobile with NO way to reach /notifications at all. Fixed
                   by making it explicitly mobile-only (lg:hidden) instead
                   of removed outright, rather than one rule applied at
-                  every breakpoint. */}
+                  every breakpoint.
+                  isHome: on mobile, this whole cluster (logo/bell/radar)
+                  is a Home-only top bar now — the same real pattern
+                  Instagram's own activity icon uses (Home tab only, not
+                  every screen). Desktop is untouched: Radar keeps its
+                  `lg:flex` override below regardless of route, since
+                  DesktopSidebar has no Radar entry on any page. */}
               <div className="flex items-center gap-1 ml-auto">
-                <button
-                  type="button"
-                  aria-label="Notifications"
-                  onClick={() => navigate('/notifications')}
-                  className="relative lg:hidden w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
-                >
-                  <Bell className="w-5 h-5" />
-                  {unreadNotifCount > 0 && (
-                    <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white dark:ring-[#11131a]" />
-                  )}
-                </button>
+                {isHome && (
+                  <button
+                    type="button"
+                    aria-label="Notifications"
+                    onClick={() => navigate('/notifications')}
+                    className="relative lg:hidden w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
+                  >
+                    <Bell className="w-5 h-5" />
+                    {unreadNotifCount > 0 && (
+                      <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white dark:ring-[#11131a]" />
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
                   aria-label="Radar"
                   onClick={() => navigate('/radar')}
-                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
+                  className={`relative w-9 h-9 rounded-full items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200 lg:flex ${
+                    isHome ? 'flex' : 'hidden'
+                  }`}
                 >
                   <Radar className="w-5 h-5" />
                 </button>

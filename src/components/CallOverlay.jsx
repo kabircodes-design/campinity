@@ -157,9 +157,31 @@ export default function CallOverlay({ call }) {
           <Minimize2 className="w-4 h-4" />
         </button>
       )}
-      {isVideo && isActive && (
-        <video ref={remoteVideoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover bg-gray-900" />
+      {/* CRITICAL FIX: this element used to only mount once isActive was
+          true, but pc.ontrack (which calls setRemoteStream) can fire —
+          and often does — before onconnectionstatechange ever reaches
+          'connected'. The srcObject-assigning effect below only re-runs
+          when `remoteStream` itself changes, not when this element
+          remounts, so a stream that arrived while unmounted was silently
+          dropped forever: connectionState said "connected", callState
+          said 'active', and the video element existed with no
+          srcObject ever set. Now always mounted for the life of a video
+          call so the ref is guaranteed available whenever the track
+          arrives; visually held behind the avatar card (z-10, opaque
+          bg-gray-900 fills the screen) until isActive so "Connected" is
+          never implied early — same requirement as Part 3. */}
+      {isVideo && (
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          className={`absolute inset-0 w-full h-full object-cover bg-gray-900 ${isActive ? '' : 'opacity-0'}`}
+        />
       )}
+      {/* Always mounted for the whole voice-call lifetime (not gated on
+          isActive) — same reasoning as above, and there's no premature
+          "Connected" concern here since <audio> has no visible frame to
+          leak early. */}
       {!isVideo && <audio ref={remoteAudioRef} autoPlay />}
 
       <div className="relative z-10 flex flex-col items-center px-6 text-center">
@@ -175,14 +197,28 @@ export default function CallOverlay({ call }) {
         <p className="mt-1 text-sm text-white/70">{statusLabel}</p>
       </div>
 
-      {isVideo && isActive && (
+      {isVideo && (
         <div className="absolute bottom-28 right-4 w-28 h-40 rounded-2xl overflow-hidden bg-gray-800 border border-white/20 shadow-lg">
-          {cameraOff ? (
-            <div className="w-full h-full flex items-center justify-center">
+          {/* Same fix as the remote element: this video used to unmount
+              entirely on cameraOff (or before isActive), which threw
+              away the DOM node the srcObject effect (keyed only on
+              [localStream]) had already attached to — toggling the
+              camera back on, or reaching 'active' after localStream was
+              already set during 'calling'/'connecting', left this
+              preview blank since the effect never re-ran on remount.
+              Kept permanently mounted for the call's lifetime; camera-off
+              is now a CSS overlay, not an unmount. */}
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`w-full h-full object-cover ${cameraOff ? 'hidden' : ''}`}
+          />
+          {cameraOff && (
+            <div className="absolute inset-0 flex items-center justify-center">
               <VideoOff className="w-5 h-5 text-white/50" />
             </div>
-          ) : (
-            <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
           )}
         </div>
       )}
