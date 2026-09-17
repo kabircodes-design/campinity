@@ -1,9 +1,16 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import Logo from '../components/Logo.jsx'
+import AppearanceSettings from '../components/AppearanceSettings.jsx'
 
-/** Real content, not a placeholder — App.jsx's /settings/about route previously rendered <ComingSoon>. */
-export default function AboutSettingsPage() {
+/**
+ * Dedicated Appearance page — AppearanceSettings.jsx itself (mode +
+ * theme-pack picker, backed by ThemeProvider/localStorage) is completely
+ * untouched, just relocated off Settings' home page onto its own route,
+ * per the explicit "theme must not appear as a giant control at the
+ * top" requirement. No second theme system — same provider, same
+ * persistence, same components.
+ */
+export default function AppearancePage() {
   const navigate = useNavigate()
 
   return (
@@ -19,17 +26,12 @@ export default function AboutSettingsPage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">About Campinity</span>
+            <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">Appearance</span>
           </div>
         </header>
 
-        <main className="px-4 py-8 text-center">
-          <Logo className="w-14 h-14 mx-auto" />
-          <p className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-50">Campinity</p>
-          <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Version 1.0.0 (MVP)</p>
-          <p className="mt-4 text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto leading-relaxed">
-            Your campus, one place — feeds, notes, communities and people, all in one login.
-          </p>
+        <main className="py-2 pb-10">
+          <AppearanceSettings />
         </main>
       </div>
     </div>

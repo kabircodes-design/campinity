@@ -5,9 +5,11 @@ import { useNavigate } from 'react-router-dom'
  * — one combined split/pass, not two separate parsers layered on each
  * other (which would double-process the same string and risk one
  * regex mangling matches the other already replaced). Mentions open
- * the mentioned user's profile; hashtags open Search scoped to that
- * tag (reuses the existing Search page/searchPostsByHashtag, no new
- * hashtag-browsing surface). Doesn't need the `mentions` uid array to
+ * the mentioned user's profile; hashtags open the dedicated
+ * /hashtag/:tag page (HashtagPage.jsx) — reuses the same
+ * searchPostsByHashtag query the old /search?tag= deep link used, just
+ * a real dedicated surface instead of routing through Search. Doesn't
+ * need the `mentions` uid array to
  * highlight (that's only needed to know WHO to notify at write time),
  * just to render the highlight, since both visual patterns are
  * unambiguous. Reused by CommentCard, PostCard, and PostDetailPage —
@@ -44,7 +46,7 @@ export default function MentionText({ text, className = '' }) {
               type="button"
               onClick={(event) => {
                 event.stopPropagation()
-                navigate(`/search?tag=${encodeURIComponent(tag.toLowerCase())}`)
+                navigate(`/hashtag/${encodeURIComponent(tag.toLowerCase())}`)
               }}
               className="text-blue-600 font-medium hover:underline"
             >

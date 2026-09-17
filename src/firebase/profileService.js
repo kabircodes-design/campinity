@@ -18,6 +18,8 @@ import {
 import { db, auth } from './firebase.js'
 import { getUserIdByUsername, ensureUsernameReservation } from './usernameService.js'
 import { awardXP } from '../gamification/xpService.js'
+import { createFollowNotification } from './notificationService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 const COLLECTION = 'users'
 
@@ -403,6 +405,27 @@ export async function followUser(followerId, followingId) {
   if (created) {
     await awardXP(followerId, 'follow', { dedupeKey: `follow_${followerId}_${followingId}` }).catch(() => {})
     await awardXP(followingId, 'followed', { dedupeKey: `followed_${followerId}_${followingId}` }).catch(() => {})
+
+    // ROOT CAUSE of "follow notifications don't appear": createFollowNotification
+    // already existed in notificationService.js, fully correct, but was
+    // never actually called from anywhere — followUser() completed the
+    // follow relationship and simply never told the target. Fetching the
+    // follower's own profile here (rather than requiring every call site —
+    // FollowUserCard, StudentProfilePlaceholder, CommunityMemberRow, etc.
+    // — to separately pass actor info) keeps this fix in the one place
+    // that actually creates a new follow, with no call-site changes
+    // needed anywhere.
+    getUserProfile(followerId)
+      .then((followerProfile) =>
+        createFollowNotification({
+          targetUid: followingId,
+          actorUid: followerId,
+          actorName: followerProfile?.displayName || 'Someone',
+          actorAvatar: followerProfile ? getProfileIdentityImage(followerProfile) || '' : '',
+          actorUsername: followerProfile?.username || ''
+        })
+      )
+      .catch(() => {})
   }
 }
 

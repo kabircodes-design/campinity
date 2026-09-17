@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Radar } from 'lucide-react'
+import { Bell, Radar } from 'lucide-react'
 import DesktopSidebar from './DesktopSidebar.jsx'
 import BottomNav from './BottomNav.jsx'
 import Logo from './Logo.jsx'
@@ -75,23 +75,40 @@ export default function AppShell() {
                 <Logo className="w-7 h-7" withWordmark />
               </button>
 
-              {/* Messages/Notifications/Profile were removed from here —
-                  DesktopSidebar already lists all three as real nav items
-                  on desktop, and BottomNav covers them on mobile, so this
-                  was a genuinely redundant second entry point, not a
-                  second way to reach something otherwise unreachable.
-                  Radar stays: it has no equivalent entry in either nav.
-                  ml-auto still correctly right-aligns it now that there's
-                  no flex-1 sibling pushing it — no phantom gap left
-                  behind, the header just naturally shrinks to fit. */}
-              <button
-                type="button"
-                aria-label="Radar"
-                onClick={() => navigate('/radar')}
-                className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200 ml-auto"
-              >
-                <Radar className="w-5 h-5" />
-              </button>
+              {/* Messages/Profile were removed from here — DesktopSidebar
+                  already lists both as real nav items on desktop, AND
+                  BottomNav already has both on mobile, so restoring them
+                  here would just be pure duplication either way.
+                  Notifications is different: DesktopSidebar covers it on
+                  desktop, but BottomNav has no Notifications tab at all
+                  (its own 5 items are Home/Messages/Marketplace/
+                  Communities/Profile) — removing it from here alongside
+                  Messages/Profile was a genuine regression, since it left
+                  mobile with NO way to reach /notifications at all. Fixed
+                  by making it explicitly mobile-only (lg:hidden) instead
+                  of removed outright, rather than one rule applied at
+                  every breakpoint. */}
+              <div className="flex items-center gap-1 ml-auto">
+                <button
+                  type="button"
+                  aria-label="Notifications"
+                  onClick={() => navigate('/notifications')}
+                  className="relative lg:hidden w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadNotifCount > 0 && (
+                    <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white dark:ring-[#11131a]" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  aria-label="Radar"
+                  onClick={() => navigate('/radar')}
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
+                >
+                  <Radar className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </header>
 

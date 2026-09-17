@@ -9,9 +9,9 @@ import { auth } from '../firebase/firebase.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import {
   deleteNotification,
-  getNotifications,
   markAllNotificationsRead,
-  markNotificationRead
+  markNotificationRead,
+  subscribeToNotifications
 } from '../firebase/notificationService.js'
 import { enrichWithAuthors } from '../hooks/useAuthorEnrichment.js'
 
@@ -96,57 +96,54 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Real-time (Part 5) — subscribeToNotifications already existed in
+  // notificationService.js (its own comment even names this exact page
+  // as the intended caller) but was never actually wired in; this page
+  // was doing a one-shot getNotifications() fetch instead, so a
+  // notification created while this page was already open (someone
+  // follows you, likes a post, etc.) never appeared without a manual
+  // reload. A sequence guard (same pattern postFeedShared.js's
+  // subscribeToEnrichedPostsQuery already uses) drops a stale
+  // enrichment result if a newer snapshot arrives while it's still in
+  // flight, so live updates can never render out of order.
   useEffect(() => {
-    let cancelled = false
     const uid = auth.currentUser?.uid
+    if (!uid) {
+      setError('Not signed in.')
+      setLoading(false)
+      return undefined
+    }
 
-    const load = async () => {
-      if (!uid) {
-        if (!cancelled) {
-          setError('Not signed in.')
+    let sequence = 0
+    const unsubscribe = subscribeToNotifications(uid, {}, (data) => {
+      const thisSequence = ++sequence
+      // Live-enrich actor info instead of trusting actorName/actorAvatar
+      // as written at creation time — a stale write-time snapshot can't
+      // reflect a later profile change.
+      enrichWithAuthors(
+        data,
+        (notification) => notification.actorUid,
+        (notification, profile) => ({
+          ...notification,
+          actorName: profile.displayName,
+          actorAvatar: getProfileIdentityImage(profile) || '',
+          actorUsername: profile.username,
+          actorVerified: profile.verifiedCampus
+        })
+      )
+        .then((enriched) => {
+          if (sequence !== thisSequence) return
+          setNotifications(enriched)
           setLoading(false)
-        }
-        return
-      }
-      try {
-        // getNotifications returns { notifications, nextCursor } — same
-        // pagination-object convention communityService.js already uses
-        // everywhere else in this project (getMembers, getCommunityFeedPosts).
-        // Destructuring the array out here, matching how
-        // CommunityDetailPage.jsx already handles that same shape.
-        const { notifications: data } = await getNotifications(uid)
+        })
+        .catch((err) => {
+          if (sequence !== thisSequence) return
+          setError(err?.message || 'Could not load notifications.')
+          setLoading(false)
+        })
+    })
 
-        // Live-enrich actor info instead of trusting actorName/actorAvatar
-        // as written at creation time — same root cause and same fix as
-        // the Following feed: a stale write-time snapshot can't reflect a
-        // later profile change. notificationService.js's create functions
-        // still WRITE actorName/actorAvatar (harmless, unused after this —
-        // left alone rather than touching a working write path that
-        // isn't this bug's cause).
-        const enriched = await enrichWithAuthors(
-          data,
-          (notification) => notification.actorUid,
-          (notification, profile) => ({
-            ...notification,
-            actorName: profile.displayName,
-            actorAvatar: getProfileIdentityImage(profile) || '',
-            actorUsername: profile.username,
-            actorVerified: profile.verifiedCampus
-          })
-        )
-
-        if (!cancelled) setNotifications(enriched)
-      } catch (err) {
-        if (!cancelled) setError(err?.message || 'Could not load notifications.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
-    }
+    return () => unsubscribe()
   }, [])
 
   const unreadCount = notifications.filter((notification) => !notification.read).length

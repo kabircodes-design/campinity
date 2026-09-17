@@ -12,7 +12,8 @@ import { getFeedPosts } from '../firebase/postService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { searchAll, getPeopleFromMyCourse } from '../firebase/searchService.js'
 import { searchCommunitiesByName, getTrendingCommunities } from '../firebase/communityService.js'
-import { searchPostsByText, searchPostsByHashtag } from '../firebase/postService.js'
+import { searchPostsByText, searchPostsByHashtag, getHashtagPostCount } from '../firebase/postService.js'
+import { normalizeHashtag } from '../utils/hashtags.js'
 import { searchLostFoundItems } from '../firebase/lostFoundService.js'
 import { auth } from '../firebase/firebase.js'
 import { addRecentSearch, clearRecentSearches, getRecentSearches, removeRecentSearch } from '../utils/recentSearches.js'
@@ -117,6 +118,7 @@ export default function SearchPage() {
   const [communities, setCommunities] = useState([])
   const [posts, setPosts] = useState([])
   const [lostFoundItems, setLostFoundItems] = useState([])
+  const [hashtagCount, setHashtagCount] = useState(0)
   const [status, setStatus] = useState('idle') // 'idle' | 'loading' | 'success' | 'error'
 
   // Notes aren't a separate collection — NotesView.jsx already treats
@@ -181,19 +183,26 @@ export default function SearchPage() {
       setCommunities([])
       setPosts([])
       setLostFoundItems([])
+      setHashtagCount(0)
       return undefined
     }
 
     setStatus('loading')
     const requestId = requestIdRef.current
+    // A search term is only ever a real, navigable hashtag if it's
+    // actually valid hashtag syntax (letters/numbers/underscore) — a
+    // count lookup for "coffee shop" would just always be 0 and clutter
+    // results for nothing.
+    const hashtagCandidate = /^[a-zA-Z0-9_]+$/.test(trimmed) ? normalizeHashtag(trimmed) : ''
 
     const timer = window.setTimeout(async () => {
       try {
-        const [result, communityResults, postResults, lostFoundResults] = await Promise.all([
+        const [result, communityResults, postResults, lostFoundResults, hashtagCountResult] = await Promise.all([
           searchAll(trimmed),
           searchCommunitiesByName(trimmed).catch(() => []),
           searchPostsByText(trimmed, auth.currentUser?.uid).catch(() => []),
-          searchLostFoundItems(trimmed).catch(() => [])
+          searchLostFoundItems(trimmed).catch(() => []),
+          hashtagCandidate ? getHashtagPostCount(hashtagCandidate).catch(() => 0) : Promise.resolve(0)
         ])
         if (requestIdRef.current !== requestId) return // a newer keystroke superseded this search
         setStudents(result.students)
@@ -201,6 +210,7 @@ export default function SearchPage() {
         setCommunities(communityResults)
         setPosts(postResults)
         setLostFoundItems(lostFoundResults)
+        setHashtagCount(hashtagCountResult)
         setStatus('success')
       } catch {
         if (requestIdRef.current !== requestId) return
@@ -213,7 +223,12 @@ export default function SearchPage() {
 
   const isSearching = query.trim().length > 0
   const hasResults =
-    students.length > 0 || colleges.length > 0 || communities.length > 0 || posts.length > 0 || lostFoundItems.length > 0
+    students.length > 0 ||
+    colleges.length > 0 ||
+    communities.length > 0 ||
+    posts.length > 0 ||
+    lostFoundItems.length > 0 ||
+    hashtagCount > 0
 
   const showStudents = activeTab === 'all' || activeTab === 'students'
   const showColleges = activeTab === 'all' || activeTab === 'colleges'
@@ -641,6 +656,27 @@ export default function SearchPage() {
 
               {isSearching && status === 'success' && hasResults && (
                 <div className="pt-1">
+                  {activeTab === 'all' && hashtagCount > 0 && (
+                    <section className="px-4 lg:px-6">
+                      <p className="pt-3 pb-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Hashtags</p>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/hashtag/${encodeURIComponent(query.trim().toLowerCase())}`)}
+                        className="w-full flex items-center gap-3 rounded-2xl border border-gray-100 dark:border-white/10 p-3 text-left hover:border-gray-200 dark:hover:border-white/20 transition-all duration-200"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0 font-bold">
+                          #
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-gray-50 truncate">#{query.trim().toLowerCase()}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
+                            {hashtagCount} {hashtagCount === 1 ? 'post' : 'posts'}
+                          </p>
+                        </div>
+                      </button>
+                    </section>
+                  )}
+
                   {showStudents && students.length > 0 && (
                     <section>
                       {activeTab === 'all' && (

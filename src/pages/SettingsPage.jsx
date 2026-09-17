@@ -1,37 +1,46 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Bookmark, HelpCircle, Info, Lock, LogOut, Shield, ShieldCheck, Trash2, User, UserX, ArrowLeft } from 'lucide-react'
+import {
+  ArrowLeft,
+  Bell,
+  ChevronRight,
+  HelpCircle,
+  Info,
+  Lock,
+  LogOut,
+  Palette,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  User,
+  Users
+} from 'lucide-react'
 import SettingsItem from '../components/SettingsItem.jsx'
-import AppearanceSettings from '../components/AppearanceSettings.jsx'
-import ContentPreferences from '../onboarding/ContentPreferences.jsx'
+import { useTheme } from '../theme/useTheme.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { logOut } from '../firebase/accountService.js'
 import { getAuthErrorMessage, logAuthErrorForDebug } from '../auth/utils/authErrorMessages.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
+const MODE_LABELS = { light: 'Light', dark: 'Dark', system: 'System default' }
+
 /**
- * Rebuilt on plain Tailwind (bg-white/bg-gray-50/border-gray-100/
- * blue-600), matching HomePage.jsx and DiscoverCommunitiesPage.jsx
- * exactly — confirmed by reading both directly, neither uses a single
- * theme-prefixed token class. The previous version's theme-bg-surface,
- * theme-text-primary, and backdrop-blur-md layer made Settings the
- * one page in the app whose surface color and blur depend on whichever theme pack
- * happens to be active, which is precisely why it read as visually
- * inconsistent with the rest of Campinity — not because any one class
- * was "too glassy," but because it was the only page still on a
- * different design system. AppearanceSettings.jsx itself (the actual
- * theme-pack picker) is untouched — a real, working preference UI,
- * not something this pass removes.
- *
- * Every item below now routes to a REAL page — Notifications, Privacy,
- * and Blocked Users were <ComingSoon> placeholders before this pass;
- * see NotificationSettingsPage.jsx / PrivacySettingsPage.jsx /
- * BlockedUsersPage.jsx and App.jsx's updated routes.
+ * Settings 2.0 — the previous version dumped Appearance's full mode +
+ * theme-pack picker directly onto this page (the explicit "theme
+ * shouldn't be a giant control at the top" complaint), plus every
+ * individual toggle lived here too. Now this is purely an INDEX: one
+ * profile row, then real grouped categories, each a single row linking
+ * to its own dedicated page — none of which are fabricated, every
+ * route below already exists and does real work (see each page's own
+ * file). Appearance itself is completely untouched (AppearanceSettings.jsx,
+ * ThemeProvider) — only relocated to /settings/appearance.
  */
 export default function SettingsPage() {
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState('')
   const { profile } = useAuth()
+  const { mode } = useTheme()
 
   const handleLogout = async () => {
     if (isLoggingOut) return
@@ -66,47 +75,73 @@ export default function SettingsPage() {
 
           <main className="pb-24 lg:pb-8">
             {profile && (
-              <section className="mt-3 mx-4 rounded-2xl border border-gray-100 dark:border-white/10 p-4">
-                <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2">Campus identity</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-gray-50">{profile.displayName || 'Student'}</p>
-                <p className="text-xs text-gray-400 dark:text-gray-500">@{profile.username}</p>
-                <div className="mt-2 flex items-center gap-1.5">
-                  {profile.verifiedCampus ? (
-                    <span className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
-                      <ShieldCheck className="w-3 h-3" /> Verified Campus Member
-                    </span>
+              <button
+                type="button"
+                onClick={() => navigate('/profile/edit')}
+                className="flex items-center gap-3 mt-3 mx-4 w-[calc(100%-2rem)] rounded-2xl border border-gray-100 dark:border-white/10 p-4 text-left hover:border-gray-200 dark:hover:border-white/20 transition-all duration-200"
+              >
+                <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center flex-shrink-0 text-blue-600 dark:text-blue-400 font-bold text-lg overflow-hidden">
+                  {getProfileIdentityImage(profile) ? (
+                    <img src={getProfileIdentityImage(profile)} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-[11px] font-semibold text-gray-400 dark:text-gray-500">Not verified</span>
+                    (profile.displayName || '?').slice(0, 1).toUpperCase()
                   )}
                 </div>
-                {(profile.course || profile.year) && (
-                  <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-                    {[profile.course, profile.year].filter(Boolean).join(' · ')}
-                  </p>
-                )}
-              </section>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-bold text-gray-900 dark:text-gray-50 truncate">{profile.displayName || 'Student'}</p>
+                    {profile.verifiedCampus && <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
+                  </div>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 truncate">@{profile.username}</p>
+                  <p className="mt-1 text-[11.5px] font-semibold text-blue-600 dark:text-blue-400">Edit profile</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+              </button>
             )}
 
-            <section className="mt-3 mx-4">
-              <ContentPreferences />
-            </section>
-
-            <section className="mt-2">
-              <AppearanceSettings />
-            </section>
-
-            <section className="mt-2 border-t border-gray-100 dark:border-white/10">
+            <section className="mt-4 border-t border-gray-100 dark:border-white/10">
               <p className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Account</p>
-              <SettingsItem icon={Bookmark} label="Saved" onClick={() => navigate('/saved')} />
-              <SettingsItem icon={User} label="Edit Profile" description="Update your personal information" onClick={() => navigate('/profile/edit')} />
-              <SettingsItem icon={Lock} label="Change Password" description="Update your account password" onClick={() => navigate('/settings/change-password')} />
+              <SettingsItem icon={User} label="Account" description="Profile, password, account status" onClick={() => navigate('/settings/account')} />
             </section>
 
             <section className="mt-2 border-t border-gray-100 dark:border-white/10">
-              <p className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Preferences</p>
+              <p className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Privacy</p>
+              <SettingsItem icon={ShieldCheck} label="Privacy" description="Who can message, mention or find you" onClick={() => navigate('/settings/privacy')} />
+            </section>
+
+            <section className="mt-2 border-t border-gray-100 dark:border-white/10">
+              <p className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Notifications</p>
               <SettingsItem icon={Bell} label="Notifications" description="Choose what you get notified about" onClick={() => navigate('/settings/notifications')} />
-              <SettingsItem icon={Shield} label="Privacy" description="Who can message you, blocked accounts" onClick={() => navigate('/settings/privacy')} />
-              <SettingsItem icon={UserX} label="Blocked Users" description="Manage accounts you've blocked" onClick={() => navigate('/settings/blocked-users')} />
+            </section>
+
+            <section className="mt-2 border-t border-gray-100 dark:border-white/10">
+              <p className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Appearance</p>
+              <SettingsItem
+                icon={Palette}
+                label="Theme"
+                description={MODE_LABELS[mode] || 'System default'}
+                onClick={() => navigate('/settings/appearance')}
+              />
+            </section>
+
+            <section className="mt-2 border-t border-gray-100 dark:border-white/10">
+              <p className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Content & Activity</p>
+              <SettingsItem icon={Sparkles} label="Content & Activity" description="Saved posts, preferences, muted content" onClick={() => navigate('/settings/activity')} />
+            </section>
+
+            <section className="mt-2 border-t border-gray-100 dark:border-white/10">
+              <p className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Messages</p>
+              <SettingsItem icon={Bell} label="Messages" description="Message requests, who can message you" onClick={() => navigate('/settings/messages')} />
+            </section>
+
+            <section className="mt-2 border-t border-gray-100 dark:border-white/10">
+              <p className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Communities</p>
+              <SettingsItem icon={Users} label="Communities" description="Community notifications and preferences" onClick={() => navigate('/settings/communities')} />
+            </section>
+
+            <section className="mt-2 border-t border-gray-100 dark:border-white/10">
+              <p className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Security</p>
+              <SettingsItem icon={Lock} label="Security" description="Password, sessions, two-factor authentication" onClick={() => navigate('/settings/security')} />
             </section>
 
             <section className="mt-2 border-t border-gray-100 dark:border-white/10">

@@ -321,11 +321,15 @@ export async function createShareNotification({
   })
 }
 
-export async function createFollowNotification({ targetUid, actorUid, actorName, actorAvatar }) {
+export async function createFollowNotification({ targetUid, actorUid, actorName, actorAvatar, actorUsername }) {
   return createNotification(targetUid, {
     actorUid,
     actorName: actorName || 'Someone',
     actorAvatar: actorAvatar || '',
+    // NotificationCard.jsx's click handler navigates a 'follow'
+    // notification via notification.actorUsername specifically — omitting
+    // it here meant tapping a follow notification silently did nothing.
+    actorUsername: actorUsername || '',
     type: 'follow'
   })
 }

@@ -1,44 +1,42 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, ChevronRight, Star, UserX } from 'lucide-react'
+import { ArrowLeft, Check, Mail, MessageCircle } from 'lucide-react'
 import Loader from '../auth/components/Loader.jsx'
+import SettingsItem from '../components/SettingsItem.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
 
 const MESSAGE_OPTIONS = [
   { value: 'everyone', label: 'Everyone', description: 'Any signed-in student can send you a message request' },
-  { value: 'following', label: 'People you follow', description: "Only people you follow can message you" }
+  { value: 'following', label: 'People you follow', description: 'Only people you follow can message you' }
 ]
 
 /**
- * The real Privacy page — App.jsx's /settings/privacy route previously
- * rendered <ComingSoon>. "Who can message me" is real, enforced
- * server-of-truth via chatService.js's assertMessagingAllowed (see
- * that file), not a display-only preference — persisted on the
- * existing users/{uid} document as `messagePrivacy`, no new
- * collection. Blocked Users lives on its own page already (more
- * detail than a toggle needs); this links to it rather than
- * duplicating that list here.
+ * "Who can message you" here is the SAME users/{uid}.messagePrivacy
+ * field PrivacySettingsPage.jsx already reads/writes (and
+ * chatService.js already enforces server-side) — not a second,
+ * competing preference. Read receipts have no backing implementation
+ * (MessageBubble.jsx has no read-state field this session confirmed),
+ * so it's shown honestly as disabled rather than a toggle that does
+ * nothing.
  */
-export default function PrivacySettingsPage() {
+export default function MessagesSettingsPage() {
   const navigate = useNavigate()
   const currentUid = auth.currentUser?.uid
 
   const [messagePrivacy, setMessagePrivacy] = useState('everyone')
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
 
   useEffect(() => {
     if (!currentUid) {
-      setError('Not signed in.')
       setLoading(false)
       return
     }
     getUserProfile(currentUid)
       .then((profile) => setMessagePrivacy(profile?.messagePrivacy === 'following' ? 'following' : 'everyone'))
-      .catch((err) => setError(err?.message || 'Could not load your privacy settings.'))
+      .catch(() => {})
       .finally(() => setLoading(false))
   }, [currentUid])
 
@@ -49,8 +47,8 @@ export default function PrivacySettingsPage() {
     setMessagePrivacy(value)
     try {
       await updateUserProfile(currentUid, { messagePrivacy: value })
-      setToast('Privacy updated')
-      window.setTimeout(() => setToast(''), 1800)
+      setToast('Saved')
+      window.setTimeout(() => setToast(''), 1500)
     } catch (err) {
       setMessagePrivacy(previous)
       setToast(err?.message || "Couldn't update this setting.")
@@ -73,21 +71,26 @@ export default function PrivacySettingsPage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">Privacy</span>
+            <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">Messages</span>
           </div>
         </header>
 
-        <main className="px-4 py-4">
+        <main className="py-2 pb-10">
+          <SettingsItem
+            icon={Mail}
+            label="Message requests"
+            description="View pending message requests"
+            onClick={() => navigate('/messages/requests')}
+          />
+
           {loading ? (
-            <div className="py-16 flex justify-center">
+            <div className="py-10 flex justify-center">
               <Loader size="md" tone="dark" />
             </div>
-          ) : error ? (
-            <p className="py-16 text-center text-sm text-gray-400 dark:text-gray-500">{error}</p>
           ) : (
             <>
-              <p className="px-1 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Who can message me</p>
-              <div className="rounded-2xl border border-gray-100 divide-y divide-gray-100 dark:border-white/10 dark:divide-white/10 overflow-hidden">
+              <p className="px-4 pt-5 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Who can message me</p>
+              <div className="mx-4 rounded-2xl border border-gray-100 divide-y divide-gray-100 dark:border-white/10 dark:divide-white/10 overflow-hidden">
                 {MESSAGE_OPTIONS.map((option) => (
                   <button
                     key={option.value}
@@ -109,40 +112,16 @@ export default function PrivacySettingsPage() {
                   </button>
                 ))}
               </div>
-
-              <p className="px-1 pt-6 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Blocking</p>
-              <button
-                type="button"
-                onClick={() => navigate('/settings/blocked-users')}
-                className="w-full flex items-center gap-3 rounded-2xl border border-gray-100 px-4 py-3.5 text-left hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5 transition-all duration-200"
-              >
-                <div className="w-9 h-9 rounded-xl bg-red-50 text-red-500 dark:bg-red-500/15 dark:text-red-400 flex items-center justify-center flex-shrink-0">
-                  <UserX className="w-[18px] h-[18px]" strokeWidth={1.8} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-50">Blocked users</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Manage accounts you've blocked</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-              </button>
-
-              <p className="px-1 pt-6 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Stories</p>
-              <button
-                type="button"
-                onClick={() => navigate('/settings/close-friends')}
-                className="w-full flex items-center gap-3 rounded-2xl border border-gray-100 px-4 py-3.5 text-left hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5 transition-all duration-200"
-              >
-                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 dark:bg-amber-500/15 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
-                  <Star className="w-[18px] h-[18px]" strokeWidth={1.8} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-50">Close Friends</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Manage who sees your Close Friends stories</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-              </button>
             </>
           )}
+
+          <p className="px-4 pt-5 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Preferences</p>
+          <SettingsItem
+            icon={MessageCircle}
+            label="Read receipts"
+            description="Coming soon"
+            rightElement={<span className="text-[11px] font-semibold text-gray-300 dark:text-gray-600">Coming soon</span>}
+          />
         </main>
       </div>
 

@@ -33,6 +33,13 @@ const EventDetailPlaceholder = lazy(() => import('./pages/EventDetailPlaceholder
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'))
 const EditProfilePage = lazy(() => import('./pages/EditProfilePage.jsx'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'))
+const AppearancePage = lazy(() => import('./pages/AppearancePage.jsx'))
+const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage.jsx'))
+const ActivitySettingsPage = lazy(() => import('./pages/ActivitySettingsPage.jsx'))
+const MessagesSettingsPage = lazy(() => import('./pages/MessagesSettingsPage.jsx'))
+const CommunitiesSettingsPage = lazy(() => import('./pages/CommunitiesSettingsPage.jsx'))
+const SecuritySettingsPage = lazy(() => import('./pages/SecuritySettingsPage.jsx'))
+const HashtagPage = lazy(() => import('./pages/HashtagPage.jsx'))
 const CreatePostPage = lazy(() => import('./pages/CreatePostPage.jsx'))
 const PostDetailPage = lazy(() => import('./pages/PostDetailPage.jsx'))
 const MessagesPage = lazy(() => import('./pages/MessagesPage.jsx'))
@@ -163,13 +170,39 @@ export default function App() {
           <Route path="/community/:communityId" element={<CommunityDetailPage />} />
           <Route path="/post/:postId" element={<PostDetailPage />} />
           <Route path="/student/:username" element={<StudentProfilePlaceholder />} />
+          {/* Same fix, same reasoning, applied to the remaining profile-
+              adjacent subpages a "final polish" pass flagged as still
+              using the old standalone phone-width wrapper: Followers/
+              Following/Message Requests/Edit Profile. */}
+          <Route path="/followers/:username?" element={<FollowersPage />} />
+          <Route path="/following/:username?" element={<FollowingPage />} />
+          <Route path="/messages/requests" element={<RequestsPage />} />
+          <Route path="/profile/edit" element={<EditProfilePage />} />
           <Route path="/marketplace" element={<MarketplacePage />} />
           <Route path="/lost-found" element={<LostFoundPage />} />
           <Route path="/messages" element={<MessagesPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          {/* Settings 2.0 — home + every sub-page now share the same
+              AppShell/DesktopSidebar treatment as the rest of the app,
+              instead of each being its own standalone phone-width card. */}
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/appearance" element={<AppearancePage />} />
+          <Route path="/settings/account" element={<AccountSettingsPage />} />
+          <Route path="/settings/activity" element={<ActivitySettingsPage />} />
+          <Route path="/settings/messages" element={<MessagesSettingsPage />} />
+          <Route path="/settings/communities" element={<CommunitiesSettingsPage />} />
+          <Route path="/settings/security" element={<SecuritySettingsPage />} />
+          <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
+          <Route path="/settings/change-password" element={<ChangePasswordPage />} />
+          <Route path="/settings/delete-account" element={<DeleteAccountPage />} />
+          <Route path="/settings/privacy" element={<PrivacySettingsPage />} />
+          <Route path="/settings/blocked-users" element={<BlockedUsersPage />} />
+          <Route path="/settings/close-friends" element={<CloseFriendsPage />} />
+          <Route path="/settings/help" element={<HelpSettingsPage />} />
+          <Route path="/settings/about" element={<AboutSettingsPage />} />
+          <Route path="/hashtag/:tag" element={<HashtagPage />} />
         </Route>
 
         {/* Create Post — now a real page (Feature 4B). */}
@@ -182,14 +215,6 @@ export default function App() {
           }
         />
 
-        <Route
-          path="/messages/requests"
-          element={
-            <ProtectedRoute stage="home">
-              <RequestsPage />
-            </ProtectedRoute>
-          }
-        />
         <Route
           path="/messages/:chatId/info"
           element={
@@ -273,14 +298,6 @@ export default function App() {
           }
         />
         <Route
-          path="/profile/edit"
-          element={
-            <ProtectedRoute stage="home">
-              <EditProfilePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/marketplace/create"
           element={
             <ProtectedRoute stage="home">
@@ -352,86 +369,6 @@ export default function App() {
           }
         />
 
-        <Route
-          path="/followers/:username?"
-          element={
-            <ProtectedRoute stage="home">
-              <FollowersPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/following/:username?"
-          element={
-            <ProtectedRoute stage="home">
-              <FollowingPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings/notifications"
-          element={
-            <ProtectedRoute stage="home">
-              <NotificationSettingsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings/change-password"
-          element={
-            <ProtectedRoute stage="home">
-              <ChangePasswordPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings/delete-account"
-          element={
-            <ProtectedRoute stage="home">
-              <DeleteAccountPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings/privacy"
-          element={
-            <ProtectedRoute stage="home">
-              <PrivacySettingsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings/blocked-users"
-          element={
-            <ProtectedRoute stage="home">
-              <BlockedUsersPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings/close-friends"
-          element={
-            <ProtectedRoute stage="home">
-              <CloseFriendsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings/help"
-          element={
-            <ProtectedRoute stage="home">
-              <HelpSettingsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings/about"
-          element={
-            <ProtectedRoute stage="home">
-              <AboutSettingsPage />
-            </ProtectedRoute>
-          }
-        />
         <Route
           path="/club/:clubId"
           element={

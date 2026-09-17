@@ -391,7 +391,30 @@ export async function searchPostsByHashtag(tag, currentUid, { resultLimit = 20 }
     limit(resultLimit)
   )
   const snap = await getDocs(postsQuery)
-  return snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+  // Same exclusion as getFeedPosts/postFeedShared.js — community posts
+  // belong to their own community's feed, not a general discovery
+  // surface (this function backs both HashtagPage.jsx and SearchPage's
+  // ?tag= mode).
+  return snap.docs.filter((d) => !d.data().communityId).map((docSnap) => mapPostDoc(docSnap, currentUid))
+}
+
+/**
+ * Real post count for a hashtag (HashtagPage.jsx's "128 posts" header) —
+ * getCountFromServer on the exact same query shape searchPostsByHashtag
+ * uses above, so the number always matches what that query would
+ * actually return. A count aggregation transfers only a number, not the
+ * matched documents, so this is cheap even for a heavily-used tag.
+ */
+export async function getHashtagPostCount(tag) {
+  const normalized = normalizeHashtag(tag)
+  if (!normalized) return 0
+  const postsQuery = query(
+    collection(db, COLLECTION),
+    where('visibility', '==', 'public'),
+    where('hashtags', 'array-contains', normalized)
+  )
+  const snap = await getCountFromServer(postsQuery)
+  return snap.data().count
 }
 
 export async function searchPostsByText(term, currentUid, { resultLimit = 20 } = {}) {

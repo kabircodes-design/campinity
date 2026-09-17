@@ -720,6 +720,15 @@ export async function getUserCommunityMemberships(uid) {
   return snap.docs.map((d) => d.data())
 }
 
+/** Communities/Settings page's "Muted communities" — real data, same collection setCommunityMuted() already writes to. */
+export async function getMutedCommunityMemberships(uid) {
+  if (!uid) return []
+  const snap = await getDocs(
+    query(collection(db, 'communityMembers'), where('uid', '==', uid), where('muted', '==', true))
+  )
+  return snap.docs.map((d) => d.data())
+}
+
 export async function getOwnedCommunities(uid) {
   const snap = await getDocs(query(collection(db, 'communities'), where('ownerId', '==', uid)))
   return snap.docs.map(mapCommunityDoc)

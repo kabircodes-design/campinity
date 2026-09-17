@@ -100,9 +100,9 @@ export default function CloseFriendsPage() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white min-h-screen lg:shadow-sm">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+    <div className="h-full w-full max-w-[100vw] lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50">
+      <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white min-h-full lg:min-h-0 lg:my-4 lg:rounded-2xl lg:border lg:border-gray-100 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 lg:rounded-t-2xl">
           <div className="h-14 flex items-center gap-2 px-3">
             <button
               type="button"
