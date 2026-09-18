@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Home, MessageCircle, Orbit, ShoppingBag, User } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { prefetchRoute } from '../routePrefetch.js'
+import { auth } from '../firebase/firebase.js'
+import { subscribeToUnreadChatsCount } from '../firebase/chatService.js'
 
 const navItems = [
   { id: 'home', label: 'Home', icon: Home, to: '/home' },
@@ -54,6 +56,19 @@ export default function BottomNav() {
   const reducedMotion = usePrefersReducedMotion()
   const itemRefs = useRef([])
   const [limelightStyle, setLimelightStyle] = useState({ left: 0, width: 0, opacity: 0 })
+  const [unreadChats, setUnreadChats] = useState(0)
+
+  // Self-contained on purpose — this component is mounted from 6
+  // different pages (AppShell plus 5 standalone renders), so a real
+  // subscription here (not a prop threaded through every one of those
+  // call sites) is the actually-maintainable fix. Cleaned up on every
+  // unmount/uid change like every other listener in this app.
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    if (!uid) return undefined
+    const unsubscribe = subscribeToUnreadChatsCount(uid, setUnreadChats)
+    return () => unsubscribe()
+  }, [])
 
   const activeIndex = navItems.findIndex((item) => location.pathname === item.to)
 
@@ -104,24 +119,33 @@ export default function BottomNav() {
 
         {navItems.map((item, index) => {
           const isActive = index === activeIndex
+          const showUnreadDot = item.id === 'messages' && unreadChats > 0
           return (
             <NavLink
               key={item.id}
               ref={(el) => (itemRefs.current[index] = el)}
               to={item.to}
-              aria-label={item.label}
+              aria-label={showUnreadDot ? `${item.label} — unread messages` : item.label}
               onTouchStart={() => prefetchRoute(item.to)}
               className="relative z-10 flex flex-col items-center justify-center py-1.5"
             >
-              <item.icon
-                className="w-6 h-6 transition-all duration-300"
-                strokeWidth={isActive ? 2.2 : 1.8}
-                style={{
-                  color: isActive ? 'var(--theme-accent)' : 'var(--theme-textSecondary)',
-                  opacity: isActive ? 1 : 0.65,
-                  filter: isActive ? 'drop-shadow(0 0 6px var(--theme-accent))' : 'none'
-                }}
-              />
+              <span className="relative">
+                <item.icon
+                  className="w-6 h-6 transition-all duration-300"
+                  strokeWidth={isActive ? 2.2 : 1.8}
+                  style={{
+                    color: isActive ? 'var(--theme-accent)' : 'var(--theme-textSecondary)',
+                    opacity: isActive ? 1 : 0.65,
+                    filter: isActive ? 'drop-shadow(0 0 6px var(--theme-accent))' : 'none'
+                  }}
+                />
+                {showUnreadDot && (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#09090f]"
+                    aria-hidden="true"
+                  />
+                )}
+              </span>
             </NavLink>
           )
         })}

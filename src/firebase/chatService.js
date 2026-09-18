@@ -84,13 +84,62 @@ export function subscribeToUserChats(uid, onData, onError) {
   return onSnapshot(
     chatsQuery,
     (snap) => {
-      const chats = snap.docs.map((d) => {
-        const data = d.data()
-        return { id: d.id, ...data, otherUid: otherParticipant(data.participants, uid, data.type) }
-      })
+      const chats = snap.docs
+        .map((d) => {
+          const data = d.data()
+          return { id: d.id, ...data, otherUid: otherParticipant(data.participants, uid, data.type) }
+        })
+        // Chats this user deleted (deleteChat below) stay excluded at the
+        // data/subscription level, not hidden with local React state —
+        // a stale listener or a page refresh can never resurrect one,
+        // since the exclusion is re-applied on every single snapshot.
+        .filter((chat) => !(chat.deletedFor || []).includes(uid))
       onData(chats)
     },
     (err) => onError?.(err)
+  )
+}
+
+/**
+ * ROOT CAUSE of "Messages icon has no unread indicator": nothing ever
+ * computed this — BottomNav.jsx/DesktopSidebar.jsx already had a real
+ * unread badge wired for Notifications (subscribeToUnreadCount in
+ * notificationService.js), but Messages had no equivalent subscription
+ * at all, on either mobile or desktop.
+ *
+ * Deliberately its own lightweight query, not a second listener wired
+ * to the same full chat objects subscribeToUserChats already returns —
+ * no orderBy (nothing here needs sorting), so it doesn't even need that
+ * function's composite index, and it only ever emits a small integer,
+ * never a chat array, keeping BottomNav/DesktopSidebar from having to
+ * hold onto full chat data just to show a badge. The "is this chat
+ * unread" check is byte-for-byte the same condition ChatCard.jsx's own
+ * `isUnread` already uses (lastMessage exists, I'm not the last sender,
+ * my uid isn't in readBy yet) — one real definition of "unread,"
+ * reused, not reinvented here. A chat this user deleted-for-me is
+ * excluded the same way subscribeToUserChats excludes it, so a hidden
+ * conversation can never inflate the badge.
+ */
+export function subscribeToUnreadChatsCount(uid, onCount) {
+  if (!uid) return () => {}
+  const chatsQuery = query(
+    collection(db, 'chats'),
+    where('participants', 'array-contains', uid),
+    where('status', '==', 'accepted')
+  )
+  return onSnapshot(
+    chatsQuery,
+    (snap) => {
+      let count = 0
+      snap.docs.forEach((d) => {
+        const data = d.data()
+        if ((data.deletedFor || []).includes(uid)) return
+        const isUnread = data.lastMessage && data.lastSenderId !== uid && !(data.readBy || []).includes(uid)
+        if (isUnread) count += 1
+      })
+      onCount(count)
+    },
+    () => onCount(0)
   )
 }
 
@@ -383,6 +432,16 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
     if (chatData.status === 'pending') {
       chatUpdate.pendingMessageCount = (chatData.pendingMessageCount || 0) + 1
     }
+    // A genuinely new message resurrects this conversation for anyone
+    // who'd previously deleted it (deleteChat below) — real WhatsApp/
+    // Instagram behavior, and exactly what firestore.rules' matching
+    // `deletedFor` clause is written to permit (see that rule's own
+    // comment). Only writes this field when there's actually something
+    // to clear, so the overwhelmingly common case (nobody ever deleted
+    // this chat) never touches it.
+    if ((chatData.deletedFor || []).length > 0) {
+      chatUpdate.deletedFor = []
+    }
     transaction.update(chatDoc(chatId), chatUpdate)
   })
 
@@ -510,12 +569,42 @@ export const togglePinChat = (chatId, uid) => toggleParticipantArrayField(chatId
 export const toggleMuteChat = (chatId, uid) => toggleParticipantArrayField(chatId, uid, 'mutedBy')
 export const toggleArchiveChat = (chatId, uid) => toggleParticipantArrayField(chatId, uid, 'archivedBy')
 
-export async function deleteChat(chatId) {
-  const messagesSnap = await getDocs(collection(db, 'chats', chatId, 'messages'))
-  const batch = writeBatch(db)
-  messagesSnap.docs.forEach((d) => batch.delete(d.ref))
-  batch.delete(chatDoc(chatId))
-  await batch.commit()
+/**
+ * ROOT CAUSE FIX: this used to hard-delete the entire chat document AND
+ * every message in it — global, for BOTH participants, not "delete for
+ * me." Nothing in the app ever actually called this (confirmed by
+ * searching the whole src tree), so there was no existing caller to
+ * preserve compatibility with; it was simply wired up wrong and never
+ * used. Real semantics now match the existing per-message `deletedFor`
+ * pattern one level up: add the caller's own uid to the chat doc's own
+ * `deletedFor` array. No message is touched, the other participant's
+ * copy of the conversation is completely unaffected, and it persists
+ * (survives refresh/logout) because it's a real Firestore field, not
+ * client state. subscribeToUserChats filters it back out below; a
+ * genuinely new message clears it again (see sendMessage above) so the
+ * conversation naturally comes back if it becomes active again.
+ */
+export async function deleteChat(chatId, uid) {
+  if (!uid) throw new Error('You need to be signed in.')
+  await updateDoc(chatDoc(chatId), { deletedFor: arrayUnion(uid) })
+}
+
+/**
+ * Media/Files — "Media/files/links" (group/chat menu). A real query
+ * against this chat's own messages/{messageId} subcollection (image and
+ * file message types), not a client-side filter of whatever happens to
+ * already be loaded in the open conversation — needs only the
+ * automatic single-field index Firestore already provides for a plain
+ * `where('type','in',[...])` with no other filter/orderBy, so no new
+ * composite index is required.
+ */
+export async function getChatMediaMessages(chatId, { pageSize = 60 } = {}) {
+  const snap = await getDocs(
+    query(messagesCollection(chatId), where('type', 'in', ['image', 'file']), limit(pageSize))
+  )
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
 }
 
 /* ============================================================
@@ -607,6 +696,19 @@ export async function markChatRead(chatId, uid) {
   if (chatSnap.exists() && !(chatSnap.data().readBy || []).includes(uid)) {
     await updateDoc(chatDoc(chatId), { readBy: arrayUnion(uid) })
   }
+}
+
+/**
+ * "Mark as unread" from the chat list (long-press/context menu) — the
+ * exact inverse of markChatRead's own readBy write, same field, same
+ * per-user array. Deliberately does NOT touch individual messages'
+ * `read` flags (those reflect the sender's real delivery/read receipts,
+ * which this UI action has no business rewriting) — only the chat
+ * LIST's own unread indicator (ChatCard.jsx's `isUnread`, derived from
+ * `readBy`) is affected, matching what the action visibly does.
+ */
+export async function markChatUnread(chatId, uid) {
+  await updateDoc(chatDoc(chatId), { readBy: arrayRemove(uid) })
 }
 
 const TYPING_STALE_MS = 5000 // client auto-clears at ~1.8s; this is just headroom for the write to land plus a fallback for an abrupt disconnect (no onDisconnect hook without RTDB — same honest limitation presenceService.js already documents for online/offline).
@@ -797,4 +899,40 @@ export async function promoteToGroupAdmin(chatId, requesterUid, targetUid) {
   if (!(data.admins || []).includes(requesterUid)) throw new Error('Only group admins can promote members.')
   if (!data.participants.includes(targetUid)) throw new Error('That person is not a member of this group.')
   await updateDoc(chatDoc(chatId), { admins: Array.from(new Set([...(data.admins || []), targetUid])), updatedAt: serverTimestamp() })
+}
+
+/**
+ * Demote — the missing inverse of promoteToGroupAdmin, same admin-only
+ * gate (enforced here AND independently by firestore.rules' own
+ * `admins`-change branch, which already requires the requester to
+ * already be listed in `admins`). Refuses to remove the group's last
+ * remaining admin — not a rules requirement, a data-integrity guard so
+ * a group can never end up with zero admins able to manage it.
+ */
+export async function demoteGroupAdmin(chatId, requesterUid, targetUid) {
+  const snap = await getDoc(chatDoc(chatId))
+  if (!snap.exists()) throw new Error('This group no longer exists.')
+  const data = snap.data()
+  const currentAdmins = data.admins || []
+  if (!currentAdmins.includes(requesterUid)) throw new Error('Only group admins can demote members.')
+  if (!currentAdmins.includes(targetUid)) throw new Error('That person is not an admin.')
+  if (currentAdmins.length <= 1) throw new Error('A group must have at least one admin.')
+  await updateDoc(chatDoc(chatId), {
+    admins: currentAdmins.filter((id) => id !== targetUid),
+    updatedAt: serverTimestamp()
+  })
+}
+
+/**
+ * Group photo — same chatMedia/{chatId}/{uid}/ Storage path and rule
+ * every other chat attachment already uses (owner-write, signed-in
+ * read; see uploadChatImage above), just feeding updateGroupInfo's
+ * existing groupAvatar field instead of a message. Admin-only is
+ * enforced by updateGroupInfo itself right after this resolves.
+ */
+export async function uploadGroupAvatar(chatId, uid, file) {
+  const path = `chatMedia/${chatId}/${uid}/${Date.now()}-group-avatar-${file.name}`
+  const fileRef = ref(storage, path)
+  await uploadBytes(fileRef, file)
+  return getDownloadURL(fileRef)
 }

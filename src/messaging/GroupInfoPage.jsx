@@ -1,12 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, Crown, LogOut, Pencil, Search, ShieldPlus, UserMinus, UserPlus, Users, X } from 'lucide-react'
+import { ArrowLeft, Camera, Check, Crown, LogOut, Pencil, Search, ShieldMinus, ShieldPlus, UserMinus, UserPlus, Users, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile, searchUsersForShare } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { getChat, addGroupMembers, removeGroupMember, leaveGroup, promoteToGroupAdmin, updateGroupInfo } from '../firebase/chatService.js'
+import {
+  getChat,
+  addGroupMembers,
+  removeGroupMember,
+  leaveGroup,
+  promoteToGroupAdmin,
+  demoteGroupAdmin,
+  updateGroupInfo,
+  uploadGroupAvatar
+} from '../firebase/chatService.js'
 
 /**
  * Client-side admin checks here are a UX convenience (hide buttons a
@@ -32,6 +41,10 @@ export default function GroupInfoPage() {
   const [groupNameDraft, setGroupNameDraft] = useState('')
   const [savingName, setSavingName] = useState(false)
   const [promotingUid, setPromotingUid] = useState(null)
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const avatarInputRef = useRef(null)
 
   const loadChat = async () => {
     const data = await getChat(chatId, currentUid)
@@ -85,8 +98,45 @@ export default function GroupInfoPage() {
   }
 
   const handleLeave = async () => {
-    await leaveGroup(chatId, currentUid)
-    navigate('/messages')
+    if (leaving) return
+    setLeaving(true)
+    try {
+      await leaveGroup(chatId, currentUid)
+      navigate('/messages')
+    } catch (err) {
+      setError(err?.message || 'Could not leave this group.')
+      setLeaving(false)
+    }
+  }
+
+  const handleDemote = async (memberUid) => {
+    setError('')
+    setPromotingUid(memberUid)
+    try {
+      await demoteGroupAdmin(chatId, currentUid, memberUid)
+      await loadChat()
+    } catch (err) {
+      setError(err?.message || 'Could not demote this admin.')
+    } finally {
+      setPromotingUid(null)
+    }
+  }
+
+  const handleAvatarChange = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !isAdmin) return
+    setError('')
+    setUploadingAvatar(true)
+    try {
+      const url = await uploadGroupAvatar(chatId, currentUid, file)
+      await updateGroupInfo(chatId, currentUid, { groupAvatar: url })
+      await loadChat()
+    } catch (err) {
+      setError(err?.message || 'Could not update the group photo.')
+    } finally {
+      setUploadingAvatar(false)
+    }
   }
 
   const startEditingName = () => {
@@ -155,13 +205,33 @@ export default function GroupInfoPage() {
         </header>
 
         <div className="flex flex-col items-center py-6">
-          {chat.groupAvatar ? (
-            <img src={chat.groupAvatar} alt="" className="w-20 h-20 rounded-full object-cover" />
-          ) : (
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
-              <Users className="w-8 h-8 text-white" />
-            </div>
-          )}
+          <div className="relative">
+            {chat.groupAvatar ? (
+              <img src={chat.groupAvatar} alt="" className="w-20 h-20 rounded-full object-cover" />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
+                <Users className="w-8 h-8 text-white" />
+              </div>
+            )}
+            {isAdmin && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  aria-label="Change group photo"
+                  className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-gray-900 text-white flex items-center justify-center border-2 border-white disabled:opacity-50"
+                >
+                  {uploadingAvatar ? (
+                    <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Camera className="w-3.5 h-3.5" />
+                  )}
+                </button>
+                <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarChange} className="sr-only" />
+              </>
+            )}
+          </div>
           {editingName ? (
             <div className="mt-3 flex items-center gap-1.5">
               <input
@@ -270,6 +340,18 @@ export default function GroupInfoPage() {
                     Admin
                   </span>
                 )}
+                {isAdmin && !isSelf && memberIsAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => handleDemote(memberUid)}
+                    disabled={promotingUid === memberUid}
+                    aria-label="Remove admin"
+                    title="Remove admin"
+                    className="text-gray-300 hover:text-amber-600 disabled:opacity-50"
+                  >
+                    <ShieldMinus className="w-4 h-4" />
+                  </button>
+                )}
                 {isAdmin && !isSelf && !memberIsAdmin && (
                   <div className="flex items-center gap-2">
                     <button
@@ -293,12 +375,52 @@ export default function GroupInfoPage() {
         </div>
 
         <div className="mt-4 border-t border-gray-100 pt-2">
-          <button type="button" onClick={handleLeave} className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-medium text-red-500 hover:bg-red-50">
+          <button
+            type="button"
+            onClick={() => setConfirmLeaveOpen(true)}
+            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-medium text-red-500 hover:bg-red-50"
+          >
             <LogOut className="w-4 h-4" />
             Leave Group
           </button>
         </div>
       </div>
+
+      {confirmLeaveOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4">
+          <button
+            type="button"
+            aria-label="Cancel"
+            onClick={() => !leaving && setConfirmLeaveOpen(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5 [animation:modalIn_200ms_cubic-bezier(0.16,1,0.3,1)]">
+            <p className="text-sm font-semibold text-gray-900">Leave this group?</p>
+            <p className="mt-1.5 text-sm text-gray-400">
+              You won't be able to send or receive messages in "{chat.groupName || 'this group'}" unless someone adds you
+              back.
+            </p>
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmLeaveOpen(false)}
+                disabled={leaving}
+                className="flex-1 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-2 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLeave}
+                disabled={leaving}
+                className="flex-1 rounded-full bg-red-600 text-white text-sm font-semibold py-2 disabled:opacity-50"
+              >
+                {leaving ? 'Leaving…' : 'Leave'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

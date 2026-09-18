@@ -2,13 +2,22 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  Bell,
+  BellOff,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Flag,
+  Image as ImageIcon,
+  Info,
+  LogOut,
   MoreVertical,
   Phone,
+  Search,
   UserX,
   Users,
-  Video
+  Video,
+  X
 } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
@@ -18,6 +27,7 @@ import MessageBubble from '../components/MessageBubble.jsx'
 import MessageInput from '../components/MessageInput.jsx'
 import TypingIndicator from '../components/TypingIndicator.jsx'
 import ReportModal from '../components/ReportModal.jsx'
+import ChatMediaModal from '../components/ChatMediaModal.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import {
@@ -27,7 +37,9 @@ import {
   toggleMessageReaction,
   editMessage,
   deleteMessageForMe,
-  deleteMessageForEveryone
+  deleteMessageForEveryone,
+  toggleMuteChat,
+  leaveGroup
 } from '../firebase/chatService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
@@ -80,7 +92,7 @@ export default function ChatPage() {
     chatId,
     otherUid
   )
-  const { startCall, isBusy } = useCallActions()
+  const { startCall, startGroupCall, isBusy } = useCallActions()
 
   const [listChats, setListChats] = useState([])
   const [listSentPending, setListSentPending] = useState([])
@@ -91,6 +103,12 @@ export default function ChatPage() {
   const [chatMenuOpen, setChatMenuOpen] = useState(false)
   const chatMenuRef = useRef(null)
   const fetchedUidsRef = useRef(new Set())
+  const [mediaModalOpen, setMediaModalOpen] = useState(false)
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0)
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
@@ -192,6 +210,29 @@ export default function ChatPage() {
     setHighlightedMessageId(messageId)
     highlightTimeoutRef.current = setTimeout(() => setHighlightedMessageId(null), 1500)
   }
+
+  // "Search in conversation" (group/chat menu) — searches messages
+  // already loaded in this page's real-time subscription, the same
+  // real limitation handleJumpToMessage above already documents and
+  // accepts for this app's paginated message history; an honest, real
+  // search over what's actually in memory, not a fake full-history
+  // search this architecture has no backend for.
+  const searchMatches = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+    if (!term) return []
+    return messages.filter((m) => m.type === 'text' && (m.text || '').toLowerCase().includes(term))
+  }, [messages, searchTerm])
+
+  useEffect(() => {
+    setSearchMatchIndex(0)
+  }, [searchTerm])
+
+  useEffect(() => {
+    if (searchMatches.length === 0) return
+    const clamped = Math.min(searchMatchIndex, searchMatches.length - 1)
+    handleJumpToMessage(searchMatches[clamped].id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchMatchIndex, searchMatches])
 
   const handleReact = (messageId, emoji) => {
     if (!currentUid) return
@@ -296,6 +337,14 @@ export default function ChatPage() {
   const pendingLimitReached = isMyRequest && (chat?.pendingMessageCount || 0) >= 1
   const otherOnline = !isGroup && isOnline(otherProfile)
 
+  // Same "unread" definition as ChatCard.jsx/subscribeToUnreadChatsCount
+  // — derived from listAllChats (this page's own existing
+  // subscribeToUserChats call for its desktop list column), not a
+  // second Firestore listener just for this badge.
+  const desktopUnreadChatsCount = listAllChats.filter(
+    (c) => c.lastMessage && c.lastSenderId !== currentUid && !(c.readBy || []).includes(currentUid)
+  ).length
+
   const handleCall = (type) => {
     // isBusy also guards against rapid double-clicks starting two
     // overlapping calls — startCall() itself no-ops once already
@@ -303,6 +352,11 @@ export default function ChatPage() {
     // (many rapid clicks before the first click's state update lands).
     if (isGroup || !otherUid || isBusy) return
     startCall(otherUid, chatId, type)
+  }
+
+  const handleGroupCall = (type) => {
+    if (!isGroup || isBusy || !chat?.participants?.length) return
+    startGroupCall(chatId, type, chat.participants, chat.groupName, chat.groupAvatar)
   }
 
   // Chat header "..." menu (Report/Block) — replaces the removed
@@ -334,6 +388,24 @@ export default function ChatPage() {
     if (!currentUid || !otherUid) return
     await blockUser(currentUid, otherUid).catch(() => {})
     navigate('/messages')
+  }
+
+  const isMuted = (chat?.mutedBy || []).includes(currentUid)
+  const handleToggleMute = () => {
+    setChatMenuOpen(false)
+    if (!currentUid) return
+    toggleMuteChat(chatId, currentUid).catch(() => {})
+  }
+
+  const handleLeaveGroup = async () => {
+    if (!currentUid || leaving) return
+    setLeaving(true)
+    try {
+      await leaveGroup(chatId, currentUid)
+      navigate('/messages')
+    } catch {
+      setLeaving(false)
+    }
   }
 
   if (loading) {
@@ -370,9 +442,21 @@ export default function ChatPage() {
         className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_1fr]"
         style={{ backgroundColor: '#f8fafc' }}
       >
-        <DesktopSidebar unreadNotifications={unreadNotifCount} profile={profile} />
+        <DesktopSidebar unreadNotifications={unreadNotifCount} unreadMessages={desktopUnreadChatsCount} profile={profile} />
 
-        <div className="flex flex-col h-screen overflow-hidden min-w-0">
+        {/* h-dvh (not h-screen) on mobile — 100vh on real mobile browsers
+            is measured against the LARGEST possible viewport (address bar
+            hidden), so the actual visible area is shorter than 100vh
+            whenever the address bar is showing. That mismatch is what let
+            the page become tall enough to scroll as a whole document,
+            dragging the "sticky" header along with it instead of it
+            staying fixed — sticky only holds still relative to ITS OWN
+            scroll container, and here that container was actually taller
+            than the visible screen. h-dvh tracks the real, current visible
+            viewport on every mobile browser this app targets (already the
+            established pattern in AuthLayout.jsx). Desktop is unaffected —
+            lg:h-screen below still governs at that breakpoint. */}
+        <div className="flex flex-col h-dvh lg:h-screen overflow-hidden min-w-0">
           {/* No page-specific desktop header here (deliberately, per a
               layout-bug fix) — it used to duplicate DesktopSidebar's own
               logo/nav one row down, showing two Campinity logos and two
@@ -400,7 +484,7 @@ export default function ChatPage() {
                 overflow-hidden at every breakpoint (not just lg:), which
                 is the actual fix for "composer moves / have to scroll
                 down manually" on mobile. */}
-            <div className="flex-1 h-screen lg:h-full overflow-hidden flex flex-col min-w-0 bg-white">
+            <div className="flex-1 h-dvh lg:h-full overflow-hidden flex flex-col min-w-0 bg-white">
               <header className="sticky top-0 z-30 bg-white border-b border-gray-100 flex-shrink-0">
                 <div className="h-14 flex items-center gap-2 px-3">
                   <button
@@ -412,19 +496,102 @@ export default function ChatPage() {
                     <ArrowLeft className="w-5 h-5" />
                   </button>
                   {isGroup ? (
-                    <button type="button" onClick={() => navigate(`/messages/${chatId}/info`)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
-                      {chat?.groupAvatar ? (
-                        <img src={chat.groupAvatar} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center flex-shrink-0">
-                          <Users className="w-4 h-4 text-white" />
+                    <>
+                      <button type="button" onClick={() => navigate(`/messages/${chatId}/info`)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                        {chat?.groupAvatar ? (
+                          <img src={chat.groupAvatar} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center flex-shrink-0">
+                            <Users className="w-4 h-4 text-white" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{chat?.groupName || 'Group'}</p>
+                          <p className="text-[11px] text-gray-400 truncate">{chat?.participants?.length || 0} members</p>
                         </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{chat?.groupName || 'Group'}</p>
-                        <p className="text-[11px] text-gray-400 truncate">{chat?.participants?.length || 0} members</p>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Group voice call"
+                        title="Group voice call"
+                        onClick={() => handleGroupCall('voice')}
+                        disabled={isBusy}
+                        className="w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent transition-all duration-200"
+                      >
+                        <Phone className="w-4.5 h-4.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Group video call"
+                        title="Group video call"
+                        onClick={() => handleGroupCall('video')}
+                        disabled={isBusy}
+                        className="w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent transition-all duration-200"
+                      >
+                        <Video className="w-4.5 h-4.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Search in conversation"
+                        title="Search in conversation"
+                        onClick={() => setSearchOpen((v) => !v)}
+                        className="w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200"
+                      >
+                        <Search className="w-4.5 h-4.5" />
+                      </button>
+                      <div className="relative flex-shrink-0" ref={chatMenuRef}>
+                        <button
+                          type="button"
+                          aria-label="Group options"
+                          onClick={() => setChatMenuOpen((v) => !v)}
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200"
+                        >
+                          <MoreVertical className="w-4.5 h-4.5" />
+                        </button>
+                        {chatMenuOpen && (
+                          <div className="absolute right-0 top-11 w-52 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-40">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setChatMenuOpen(false)
+                                navigate(`/messages/${chatId}/info`)
+                              }}
+                              className="w-full flex items-center gap-2 text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                            >
+                              <Info className="w-3.5 h-3.5 text-gray-400" /> Group info
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setChatMenuOpen(false)
+                                setMediaModalOpen(true)
+                              }}
+                              className="w-full flex items-center gap-2 text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5 text-gray-400" /> Media, files &amp; links
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleToggleMute}
+                              className="w-full flex items-center gap-2 text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                            >
+                              {isMuted ? <Bell className="w-3.5 h-3.5 text-gray-400" /> : <BellOff className="w-3.5 h-3.5 text-gray-400" />}
+                              {isMuted ? 'Unmute' : 'Mute'} notifications
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setChatMenuOpen(false)
+                                setConfirmLeaveOpen(true)
+                              }}
+                              className="w-full flex items-center gap-2 text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-all duration-150"
+                            >
+                              <LogOut className="w-3.5 h-3.5" /> Leave group
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </button>
+                    </>
                   ) : (
                     <>
                       {/* Instagram/Facebook-style tap-to-open-profile —
@@ -492,7 +659,36 @@ export default function ChatPage() {
                           <MoreVertical className="w-4.5 h-4.5" />
                         </button>
                         {chatMenuOpen && (
-                          <div className="absolute right-0 top-11 w-40 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-40">
+                          <div className="absolute right-0 top-11 w-48 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-40">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setChatMenuOpen(false)
+                                setSearchOpen((v) => !v)
+                              }}
+                              className="w-full flex items-center gap-2 text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                            >
+                              <Search className="w-3.5 h-3.5 text-gray-400" /> Search in conversation
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setChatMenuOpen(false)
+                                setMediaModalOpen(true)
+                              }}
+                              className="w-full flex items-center gap-2 text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5 text-gray-400" /> Media, files &amp; links
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleToggleMute}
+                              className="w-full flex items-center gap-2 text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
+                            >
+                              {isMuted ? <Bell className="w-3.5 h-3.5 text-gray-400" /> : <BellOff className="w-3.5 h-3.5 text-gray-400" />}
+                              {isMuted ? 'Unmute' : 'Mute'} notifications
+                            </button>
+                            <div className="my-1 border-t border-gray-50" />
                             <button
                               type="button"
                               onClick={() => {
@@ -526,6 +722,60 @@ export default function ChatPage() {
                     <p className="text-[12px] text-amber-700">
                       <span className="font-semibold">Message Request Sent</span> — waiting for acceptance
                     </p>
+                  </div>
+                )}
+
+                {searchOpen && (
+                  <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100 bg-gray-50">
+                    <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <input
+                      type="text"
+                      autoFocus
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') {
+                          setSearchOpen(false)
+                          setSearchTerm('')
+                        }
+                      }}
+                      placeholder="Search in conversation..."
+                      className="flex-1 min-w-0 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 outline-none"
+                    />
+                    {searchTerm.trim() && (
+                      <span className="flex-shrink-0 text-[11px] text-gray-400">
+                        {searchMatches.length > 0 ? `${searchMatchIndex + 1}/${searchMatches.length}` : 'No results'}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      aria-label="Previous match"
+                      disabled={searchMatches.length === 0}
+                      onClick={() => setSearchMatchIndex((i) => (i - 1 + searchMatches.length) % searchMatches.length)}
+                      className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 disabled:opacity-30 transition-colors duration-150"
+                    >
+                      <ChevronUp className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Next match"
+                      disabled={searchMatches.length === 0}
+                      onClick={() => setSearchMatchIndex((i) => (i + 1) % searchMatches.length)}
+                      className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 disabled:opacity-30 transition-colors duration-150"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Close search"
+                      onClick={() => {
+                        setSearchOpen(false)
+                        setSearchTerm('')
+                      }}
+                      className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 transition-colors duration-150"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
                 )}
               </header>
@@ -612,6 +862,44 @@ export default function ChatPage() {
           and returns the moment the user navigates back to /messages.
           It's still rendered normally by AppShell everywhere else. */}
       <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} targetType="user" targetId={otherUid} targetOwnerUid={otherUid} />
+
+      {mediaModalOpen && <ChatMediaModal chatId={chatId} onClose={() => setMediaModalOpen(false)} />}
+
+      {confirmLeaveOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4">
+          <button
+            type="button"
+            aria-label="Cancel"
+            onClick={() => !leaving && setConfirmLeaveOpen(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5 [animation:modalIn_200ms_cubic-bezier(0.16,1,0.3,1)]">
+            <p className="text-sm font-semibold text-gray-900">Leave this group?</p>
+            <p className="mt-1.5 text-sm text-gray-400">
+              You won't be able to send or receive messages in "{chat?.groupName || 'this group'}" unless someone adds you
+              back.
+            </p>
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmLeaveOpen(false)}
+                disabled={leaving}
+                className="flex-1 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-2 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLeaveGroup}
+                disabled={leaving}
+                className="flex-1 rounded-full bg-red-600 text-white text-sm font-semibold py-2 disabled:opacity-50"
+              >
+                {leaving ? 'Leaving…' : 'Leave'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

@@ -74,6 +74,15 @@
       ]
     },
     {
+      "collectionGroup": "groupCalls",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participantUids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "lostFound",
       "queryScope": "COLLECTION",
       "fields": [

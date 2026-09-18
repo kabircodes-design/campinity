@@ -32,7 +32,7 @@ const NAV_ITEMS = [
  * Logo gradient changed from purple/indigo to the brief's specified
  * blue. Notification badge already used blue — unchanged.
  */
-export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
+export default function DesktopSidebar({ unreadNotifications = 0, unreadMessages = 0, profile }) {
   const navigate = useNavigate()
 
   return (
@@ -61,30 +61,23 @@ export default function DesktopSidebar({ unreadNotifications = 0, profile }) {
               }`
             }
           >
-            {({ isActive }) =>
-              isActive ? (
+            {({ isActive }) => {
+              const badgeCount = label === 'Notifications' ? unreadNotifications : label === 'Messages' ? unreadMessages : 0
+              return (
                 <>
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-blue-600" aria-hidden="true" />
-                  <Icon className="w-[18px] h-[18px]" strokeWidth={1.8} />
-                  {label}
-                  {label === 'Notifications' && unreadNotifications > 0 && (
-                    <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
-                      {unreadNotifications > 9 ? '9+' : unreadNotifications}
-                    </span>
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-blue-600" aria-hidden="true" />
                   )}
-                </>
-              ) : (
-                <>
                   <Icon className="w-[18px] h-[18px]" strokeWidth={1.8} />
                   {label}
-                  {label === 'Notifications' && unreadNotifications > 0 && (
+                  {badgeCount > 0 && (
                     <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
-                      {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                      {badgeCount > 9 ? '9+' : badgeCount}
                     </span>
                   )}
                 </>
               )
-            }
+            }}
           </NavLink>
         ))}
       </div>

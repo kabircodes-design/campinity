@@ -461,6 +461,23 @@ service cloud.firestore {
           request.resource.data.get('pendingMessageCount', 0) == resource.data.get('pendingMessageCount', 0) ||
           (resource.data.status == 'pending' && request.auth.uid == resource.data.get('requestedBy', '') &&
            request.resource.data.pendingMessageCount == resource.data.get('pendingMessageCount', 0) + 1)
+        ) &&
+        // deletedFor — "delete chat for me" (deleteChat in chatService.js).
+        // Three allowed shapes, narrowest first: (1) unchanged — the
+        // overwhelming majority of writes to this doc never touch it;
+        // (2) reset to empty — sendMessage() clears it as part of its
+        // normal lastMessage/lastMessageAt update whenever a new message
+        // resurrects a conversation someone had deleted, so this must be
+        // allowed alongside those other field changes, not just alone;
+        // (3) the dedicated delete-for-me write itself, scoped to ONLY
+        // that field and requiring the caller's own uid to be the one
+        // added — the exact same shape already used for a message's own
+        // deletedFor (messages/{messageId}'s update rule below), applied
+        // one level up to the chat doc itself.
+        (
+          request.resource.data.get('deletedFor', []) == resource.data.get('deletedFor', []) ||
+          request.resource.data.get('deletedFor', []) == [] ||
+          (onlyChanged(['deletedFor']) && request.auth.uid in request.resource.data.deletedFor)
         );
 
       allow delete: if isSignedIn() && request.auth.uid in resource.data.participants;
@@ -560,6 +577,83 @@ service cloud.firestore {
         );
         allow create: if isSignedIn() && request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.calleeUid;
         allow update, delete: if false;
+      }
+    }
+
+    // groupCalls/{callId} — WebRTC MESH signaling for group calls
+    // (groupCallService.js), new and additive alongside calls/{callId}
+    // above, not a replacement. The real security boundary everywhere
+    // in this tree is the SAME check, repeated at each level: the
+    // caller must be a genuine member of the group chat this call
+    // belongs to (get() on the real chats/{chatId} doc, never trusting
+    // this call doc's own denormalized `participantUids` field, which
+    // is only ever a query convenience — someone could in principle
+    // write a bogus participantUids array, but every actual read/write
+    // below is independently re-checked against the real chat roster,
+    // so a spoofed array can't grant access to anything).
+    match /groupCalls/{callId} {
+      allow read: if isSignedIn() &&
+        request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants;
+
+      allow create: if isSignedIn() &&
+        request.auth.uid == request.resource.data.hostUid &&
+        request.auth.uid in get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.participants &&
+        get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.get('type', 'direct') == 'group';
+
+      // Only status (+ its timestamps) may ever change here, only by a
+      // real member, and only moving forward — ringing->active/ended,
+      // active->ended. Never backward, never any other field.
+      allow update: if isSignedIn() &&
+        request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants &&
+        onlyChanged(['status', 'updatedAt', 'endedAt']) &&
+        (
+          (resource.data.status == 'ringing' && request.resource.data.status in ['active', 'ended']) ||
+          (resource.data.status == 'active' && request.resource.data.status == 'ended')
+        );
+
+      allow delete: if false;
+
+      // participants/{uid} — one doc per person, doc id IS their own
+      // uid (mirrors typing/{uid}'s own "can't write as someone else"
+      // pattern), so a participant can only ever create/update their
+      // OWN join state, never anyone else's.
+      match /participants/{uid} {
+        allow read: if isSignedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(get(/databases/$(database)/documents/groupCalls/$(callId)).data.chatId)).data.participants;
+        allow create, update: if isSignedIn() && request.auth.uid == uid &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(get(/databases/$(database)/documents/groupCalls/$(callId)).data.chatId)).data.participants;
+        allow delete: if false;
+      }
+
+      // peerLinks/{fromUid_toUid} — one signaling doc per ordered pair.
+      // Only the initiator (fromUid) may create it (writes the offer);
+      // only the recipient (toUid) may update it, and only to add the
+      // answer — the same "each side owns exactly their own half"
+      // shape calls/{callId} already uses for offer vs answer, just
+      // split across who's allowed to touch which field instead of one
+      // shared caller/callee doc.
+      match /peerLinks/{pairId} {
+        allow read: if isSignedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(get(/databases/$(database)/documents/groupCalls/$(callId)).data.chatId)).data.participants;
+        allow create: if isSignedIn() && request.auth.uid == request.resource.data.fromUid &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(get(/databases/$(database)/documents/groupCalls/$(callId)).data.chatId)).data.participants;
+        allow update: if isSignedIn() && request.auth.uid == resource.data.toUid && onlyChanged(['answer']);
+        allow delete: if false;
+
+        match /fromCandidates/{candidateId} {
+          allow read: if isSignedIn() &&
+            request.auth.uid in get(/databases/$(database)/documents/chats/$(get(/databases/$(database)/documents/groupCalls/$(callId)).data.chatId)).data.participants;
+          allow create: if isSignedIn() &&
+            request.auth.uid == get(/databases/$(database)/documents/groupCalls/$(callId)/peerLinks/$(pairId)).data.fromUid;
+          allow update, delete: if false;
+        }
+        match /toCandidates/{candidateId} {
+          allow read: if isSignedIn() &&
+            request.auth.uid in get(/databases/$(database)/documents/chats/$(get(/databases/$(database)/documents/groupCalls/$(callId)).data.chatId)).data.participants;
+          allow create: if isSignedIn() &&
+            request.auth.uid == get(/databases/$(database)/documents/groupCalls/$(callId)/peerLinks/$(pairId)).data.toUid;
+          allow update, delete: if false;
+        }
       }
     }
 

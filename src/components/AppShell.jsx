@@ -7,6 +7,7 @@ import Logo from './Logo.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
+import { subscribeToUnreadChatsCount } from '../firebase/chatService.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 /**
@@ -37,6 +38,7 @@ export default function AppShell() {
   const location = useLocation()
   const { profile } = useAuth()
   const [unreadNotifCount, setUnreadNotifCount] = useState(0)
+  const [unreadChatsCount, setUnreadChatsCount] = useState(0)
   // Mobile-only header cluster (logo/notifications/radar) is a Home-page
   // thing, not a global one — matches how Instagram's own activity/heart
   // icon only lives on its Home tab, not every screen. Desktop is
@@ -49,12 +51,19 @@ export default function AppShell() {
     return () => unsubscribe()
   }, [])
 
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    if (!uid) return undefined
+    const unsubscribe = subscribeToUnreadChatsCount(uid, setUnreadChatsCount)
+    return () => unsubscribe()
+  }, [])
+
   return (
     <>
       <div
         className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_1fr] bg-[#f8fafc] dark:bg-[#09090f]"
       >
-        <DesktopSidebar unreadNotifications={unreadNotifCount} profile={profile} />
+        <DesktopSidebar unreadNotifications={unreadNotifCount} unreadMessages={unreadChatsCount} profile={profile} />
 
         {/* lg:h-screen/lg:overflow-hidden — DESKTOP only, matching what
             every one of these pages' own outer wrapper already had.

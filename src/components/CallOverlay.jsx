@@ -38,6 +38,7 @@ export default function CallOverlay({ call }) {
     toggleCamera,
     switchCamera,
     switchingCamera,
+    facingMode,
     resetCall
   } = call
 
@@ -208,12 +209,27 @@ export default function CallOverlay({ call }) {
               preview blank since the effect never re-ran on remount.
               Kept permanently mounted for the call's lifetime; camera-off
               is now a CSS overlay, not an unmount. */}
+          {/* ROOT CAUSE of "camera feed appears inverted": neither video
+              element ever applied a mirror transform at all. The REMOTE
+              video (above) was already correct by omission — the other
+              person's video should never be mirrored. This local
+              self-preview is the one that needed it: browsers hand back
+              the front camera feed exactly as the sensor sees it
+              (unmirrored), which reads as "backwards" for a selfie-style
+              preview — every real camera/video-call app mirrors ONLY the
+              front-facing camera's own local preview, never the rear
+              camera (flipping a rear/environment shot would make any
+              text or signage in the scene read backwards, genuinely
+              disorienting) and never the remote party's video. Same
+              `-scale-x-100` convention CampusAvatarFlow.jsx's own camera
+              preview already uses, applied conditionally on facingMode
+              so switching to the rear camera correctly drops the mirror. */}
           <video
             ref={localVideoRef}
             autoPlay
             playsInline
             muted
-            className={`w-full h-full object-cover ${cameraOff ? 'hidden' : ''}`}
+            className={`w-full h-full object-cover ${facingMode === 'user' ? '-scale-x-100' : ''} ${cameraOff ? 'hidden' : ''}`}
           />
           {cameraOff && (
             <div className="absolute inset-0 flex items-center justify-center">

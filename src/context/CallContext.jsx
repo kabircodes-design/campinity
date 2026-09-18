@@ -1,7 +1,10 @@
 import { createContext, useContext, useMemo } from 'react'
 import { useCall } from '../hooks/useCall.js'
+import { useGroupCall } from '../hooks/useGroupCall.js'
 import IncomingCallToast from '../components/IncomingCallToast.jsx'
 import CallOverlay from '../components/CallOverlay.jsx'
+import IncomingGroupCallToast from '../components/IncomingGroupCallToast.jsx'
+import GroupCallOverlay from '../components/GroupCallOverlay.jsx'
 
 const CallActionsContext = createContext(null)
 
@@ -39,7 +42,12 @@ const CallActionsContext = createContext(null)
  */
 export function CallProvider({ children }) {
   const call = useCall()
-  const isBusy = call.callState !== 'idle'
+  const groupCall = useGroupCall()
+  // Busy if EITHER a 1:1 or a group call is in progress — additive, not
+  // a replacement: starting a group call while already on a 1:1 (or
+  // vice versa) is refused the same way starting a second 1:1 call
+  // already was, by disabling the trigger buttons via this same flag.
+  const isBusy = call.callState !== 'idle' || groupCall.groupCallState !== 'idle'
 
   // Memoized on the DERIVED boolean, not the raw callState string —
   // callState changes on every transition (calling → connecting →
@@ -47,12 +55,20 @@ export function CallProvider({ children }) {
   // `actions` object (and re-render them) several times per call even
   // though `isBusy` itself only flips twice: true at call start, false
   // again once the terminal screen auto-dismisses back to idle.
-  const actions = useMemo(() => ({ startCall: call.startCall, isBusy }), [call.startCall, isBusy])
+  const actions = useMemo(
+    () => ({ startCall: call.startCall, startGroupCall: groupCall.startGroupCall, isBusy }),
+    [call.startCall, groupCall.startGroupCall, isBusy]
+  )
 
   return (
     <CallActionsContext.Provider value={actions}>
       {children}
       {call.callState === 'incoming' ? <IncomingCallToast call={call} /> : <CallOverlay call={call} />}
+      {groupCall.groupCallState === 'incoming' ? (
+        <IncomingGroupCallToast call={groupCall} />
+      ) : (
+        <GroupCallOverlay call={groupCall} />
+      )}
     </CallActionsContext.Provider>
   )
 }

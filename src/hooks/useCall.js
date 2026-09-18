@@ -139,6 +139,8 @@ export function useCall() {
     if (finalState === 'idle') setActiveCall(null)
     setMuted(false)
     setCameraOff(false)
+    facingModeRef.current = 'user'
+    setFacingMode('user')
     setCallState(finalState)
   }, [])
 
@@ -481,6 +483,15 @@ export function useCall() {
   }, [localStream])
 
   const facingModeRef = useRef('user')
+  // Mirrors facingModeRef into real state — the ref alone (read
+  // synchronously inside switchCamera, avoiding a stale closure across
+  // the async getUserMedia() call) never triggers a re-render, so
+  // CallOverlay had no way to know when to mirror the local preview.
+  // Front camera ('user') is the conventional default for every video
+  // call (starting getUserMedia has no facingMode constraint at all —
+  // browsers already default to front on a phone), so this starts
+  // matching that same assumption.
+  const [facingMode, setFacingMode] = useState('user')
   const [switchingCamera, setSwitchingCamera] = useState(false)
 
   // Front/back camera switch — additive, doesn't touch signaling at all:
@@ -514,6 +525,7 @@ export function useCall() {
       const rebuiltStream = new MediaStream([...localStream.getAudioTracks(), newTrack])
       setLocalStream(rebuiltStream)
       facingModeRef.current = nextFacingMode
+      setFacingMode(nextFacingMode)
     } catch {
       // No second camera, or permission changed mid-call — current
       // camera simply stays active, not a fatal call error.
@@ -549,6 +561,7 @@ export function useCall() {
     toggleCamera,
     switchCamera,
     switchingCamera,
+    facingMode,
     resetCall
   }
 }
