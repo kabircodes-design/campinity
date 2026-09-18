@@ -346,6 +346,7 @@ export default function ProfileHeader({
           open={photoEditorOpen}
           onClose={() => setPhotoEditorOpen(false)}
           currentPhotoUrl={getProfileIdentityImage(profile)}
+          verifiedCampus={profile?.verifiedCampus === true}
         />
       )}
 

@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Camera, X, Sparkles, RefreshCw, Trash2 } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import CollegeSearch from '../components/CollegeSearch.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import CampusAvatarFlow from '../avatar/CampusAvatarFlow.jsx'
+import ProfilePhotoEditor from '../avatar/ProfilePhotoEditor.jsx'
 import { deleteCampusAvatarFile } from '../avatar/avatarStorage.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
@@ -87,12 +89,13 @@ function isProfileComplete({ name, username, bio, selectedCollege, skills, inter
 
 export default function EditProfilePage() {
   const navigate = useNavigate()
-  const fileInputRef = useRef(null)
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
 
-  const [photoPreview, setPhotoPreview] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('') // the real uploaded photo — profile.avatar, resolved for display via getProfileIdentityImage
+  const [verifiedCampus, setVerifiedCampus] = useState(false)
+  const [photoEditorOpen, setPhotoEditorOpen] = useState(false)
   const [campusAvatarUrl, setCampusAvatarUrl] = useState('')
   const [avatarMode, setAvatarMode] = useState('photo')
   const [avatarFlowOpen, setAvatarFlowOpen] = useState(false)
@@ -139,6 +142,8 @@ export default function EditProfilePage() {
           setInterests(profile.interests || [])
           setCampusAvatarUrl(profile.campusAvatarUrl || '')
           setAvatarMode(profile.avatarMode || 'photo')
+          setAvatarUrl(getProfileIdentityImage(profile) || '')
+          setVerifiedCampus(profile.verifiedCampus === true)
         }
       } catch (err) {
         if (!cancelled) setLoadError(err?.message || 'Could not load your profile.')
@@ -154,12 +159,6 @@ export default function EditProfilePage() {
   }, [])
 
   const usernameCheck = useUsernameAvailability(username, originalUsername)
-
-  const handlePhotoChange = (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    setPhotoPreview(URL.createObjectURL(file))
-  }
 
   const validate = () => {
     const next = {}
@@ -300,11 +299,23 @@ export default function EditProfilePage() {
             </p>
           )}
 
+          {/* ROOT CAUSE FIX: this used to be a fully non-functional
+              control — picking a file only set a local object-URL
+              preview (photoPreview) that was NEVER uploaded or saved;
+              clicking Save silently dropped it, and the current real
+              photo was never even displayed here in the first place
+              (always just initials). Now reuses the SAME real,
+              working ProfilePhotoEditor flow ProfileHeader.jsx already
+              uses — one upload implementation, not a second one — so
+              this page can actually change/remove the real photo, and
+              displays the real current image (via the same
+              getProfileIdentityImage resolver every other surface
+              uses) instead of a stale local-only preview. */}
           <div className="flex flex-col items-center">
-            <label htmlFor="edit-photo" className="relative cursor-pointer group">
+            <button type="button" onClick={() => setPhotoEditorOpen(true)} aria-label="Change profile photo" className="relative group">
               <div className="w-20 h-20 rounded-full bg-blue-50 border border-gray-200 overflow-hidden flex items-center justify-center">
-                {photoPreview ? (
-                  <img src={photoPreview} alt="Profile preview" className="w-full h-full object-cover" />
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
                   <Avatar initials={getInitials(name)} colorClass={getAvatarColor(auth.currentUser?.uid)} size="xl" />
                 )}
@@ -312,15 +323,7 @@ export default function EditProfilePage() {
               <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center border-2 border-white group-hover:bg-blue-700 transition-colors duration-300">
                 <Camera className="w-3.5 h-3.5 text-white" strokeWidth={1.8} />
               </span>
-              <input
-                id="edit-photo"
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={handlePhotoChange}
-              />
-            </label>
+            </button>
             <p className="mt-2 text-xs text-gray-400">Change profile photo</p>
           </div>
 
@@ -570,6 +573,14 @@ export default function EditProfilePage() {
           setCampusAvatarUrl(url)
           setAvatarMode('avatar')
         }}
+      />
+
+      <ProfilePhotoEditor
+        open={photoEditorOpen}
+        onClose={() => setPhotoEditorOpen(false)}
+        currentPhotoUrl={avatarUrl}
+        verifiedCampus={verifiedCampus}
+        onSaved={(url) => setAvatarUrl(url)}
       />
     </div>
   )

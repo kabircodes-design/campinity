@@ -5,6 +5,7 @@ import { Camera, Sparkles, Upload, X } from 'lucide-react'
 import ImageCropper from './ImageCropper.jsx'
 import CampinityAvatarPicker from './CampinityAvatarPicker.jsx'
 import { uploadToQuarantine } from './quarantineUpload.js'
+import { uploadCampusAvatar } from './avatarStorage.js'
 import { moderateImage } from '../moderation/imageModeration.js'
 import { updateUserProfile, getUserProfile } from '../firebase/profileService.js'
 import { auth } from '../firebase/firebase.js'
@@ -46,8 +47,23 @@ function mapStorageError(err) {
  * to write to directly, so profile.avatar (the actual, existing field
  * getProfileIdentityImage already reads) still receives the same kind
  * of value as before.
+ *
+ * VERIFIED-USER FAST PATH: an already campus-verified user
+ * (verifiedCampus === true, passed down from the caller's own already-
+ * loaded profile — a value a client can never forge via a direct write,
+ * since firestore.rules requires verifiedCampus stay unchanged on any
+ * owner update) skips quarantine + moderateProfilePhoto entirely and
+ * uploads straight to campusAvatars/{uid}/... via uploadCampusAvatar,
+ * the exact same helper CampusAvatarFlow.jsx already uses for its own
+ * final upload. This is what actually fixes "Your image is being
+ * checked. Please try again shortly." for verified users — that
+ * message only ever came from moderateProfilePhoto (an unverified,
+ * never-successfully-invoked Cloud Function per its own header
+ * comment) being unreachable, not from anything about the photo
+ * itself. Unverified users still go through the existing moderation
+ * flow, unchanged — this doesn't touch or loosen that path.
  */
-export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, onSaved }) {
+export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, verifiedCampus, onSaved }) {
   const [stage, setStage] = useState('sheet') // 'sheet' | 'cropper' | 'error'
   const [rawImageUrl, setRawImageUrl] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
@@ -155,56 +171,74 @@ export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, onS
       return
     }
 
-    console.log(debugTag, { uid: authUid, blobType: blob.type, blobSize: blob.size })
+    console.log(debugTag, { uid: authUid, blobType: blob.type, blobSize: blob.size, verifiedCampus })
 
-    let quarantinePath
-    try {
-      console.log(debugTag, 'QUARANTINE UPLOAD STARTED')
-      quarantinePath = await uploadToQuarantine(authUid, blob)
-      console.log(debugTag, 'QUARANTINE UPLOAD SUCCESS:', quarantinePath)
-    } catch (err) {
-      console.error(debugTag, 'QUARANTINE UPLOAD FAILED', { code: err?.code, message: err?.message })
-      setErrorMessage(mapStorageError(err))
-      setDebugError(err)
-      setStage('error')
-      setSaving(false)
-      return
+    let url
+
+    if (verifiedCampus) {
+      // Verified fast path — no quarantine, no moderateProfilePhoto.
+      try {
+        console.log(debugTag, 'VERIFIED DIRECT UPLOAD STARTED')
+        url = await uploadCampusAvatar(authUid, blob)
+        console.log(debugTag, 'VERIFIED DIRECT UPLOAD SUCCESS:', url)
+      } catch (err) {
+        console.error(debugTag, 'VERIFIED DIRECT UPLOAD FAILED', { code: err?.code, message: err?.message })
+        setErrorMessage(mapStorageError(err))
+        setDebugError(err)
+        setStage('error')
+        setSaving(false)
+        return
+      }
+    } else {
+      let quarantinePath
+      try {
+        console.log(debugTag, 'QUARANTINE UPLOAD STARTED')
+        quarantinePath = await uploadToQuarantine(authUid, blob)
+        console.log(debugTag, 'QUARANTINE UPLOAD SUCCESS:', quarantinePath)
+      } catch (err) {
+        console.error(debugTag, 'QUARANTINE UPLOAD FAILED', { code: err?.code, message: err?.message })
+        setErrorMessage(mapStorageError(err))
+        setDebugError(err)
+        setStage('error')
+        setSaving(false)
+        return
+      }
+
+      let moderationResult
+      try {
+        console.log(debugTag, 'MODERATION STARTED')
+        moderationResult = await moderateImage({ quarantinePath })
+        console.log(debugTag, 'MODERATION RESULT:', moderationResult.decision)
+      } catch (err) {
+        // Provider/network failure — requirement 12: do NOT publish,
+        // keep quarantined, show the exact retry message specified.
+        // The quarantined file itself is untouched server-side.
+        console.error(debugTag, 'MODERATION UNAVAILABLE', { code: err?.code, message: err?.message })
+        setErrorMessage('Your image is being checked. Please try again shortly.')
+        setDebugError(err)
+        setStage('error')
+        setSaving(false)
+        return
+      }
+
+      if (moderationResult.decision === 'BLOCK') {
+        setErrorMessage("That photo doesn't meet Campinity's guidelines. Please try a different one.")
+        setStage('error')
+        setSaving(false)
+        return
+      }
+
+      if (moderationResult.decision === 'REVIEW') {
+        setErrorMessage("Your photo is under review — we'll update your profile once it's approved.")
+        setStage('error')
+        setSaving(false)
+        return
+      }
+
+      // SAFE — moderationResult.finalUrl is the real, final public URL
+      // the Cloud Function already copied the file to.
+      url = moderationResult.finalUrl
     }
-
-    let moderationResult
-    try {
-      console.log(debugTag, 'MODERATION STARTED')
-      moderationResult = await moderateImage({ quarantinePath })
-      console.log(debugTag, 'MODERATION RESULT:', moderationResult.decision)
-    } catch (err) {
-      // Provider/network failure — requirement 12: do NOT publish,
-      // keep quarantined, show the exact retry message specified.
-      // The quarantined file itself is untouched server-side.
-      console.error(debugTag, 'MODERATION UNAVAILABLE', { code: err?.code, message: err?.message })
-      setErrorMessage('Your image is being checked. Please try again shortly.')
-      setDebugError(err)
-      setStage('error')
-      setSaving(false)
-      return
-    }
-
-    if (moderationResult.decision === 'BLOCK') {
-      setErrorMessage("That photo doesn't meet Campinity's guidelines. Please try a different one.")
-      setStage('error')
-      setSaving(false)
-      return
-    }
-
-    if (moderationResult.decision === 'REVIEW') {
-      setErrorMessage("Your photo is under review — we'll update your profile once it's approved.")
-      setStage('error')
-      setSaving(false)
-      return
-    }
-
-    // SAFE — moderationResult.finalUrl is the real, final public URL
-    // the Cloud Function already copied the file to.
-    const url = moderationResult.finalUrl
 
     try {
       console.log(debugTag, 'Firestore update started')
@@ -337,14 +371,13 @@ export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, onS
 
         {stage === 'error' && (
           <div className="text-center py-4">
+            {/* Raw error (code/message) is still captured in debugError
+                and logged to the console via every catch block above —
+                never rendered here. A real Firebase/Cloud Function error
+                like "functions/unavailable" must never reach a normal
+                user; the friendly errorMessage set alongside it in each
+                branch above is the only thing shown. */}
             <p className="text-sm font-semibold text-gray-900">{errorMessage}</p>
-            {debugError && (
-              <div className="mt-3 rounded-lg bg-gray-50 border border-gray-200 p-3 text-left">
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Debug (temporary)</p>
-                <p className="text-xs font-mono text-gray-700 break-all">code: {debugError.code || 'none'}</p>
-                <p className="text-xs font-mono text-gray-700 break-all">message: {debugError.message || 'none'}</p>
-              </div>
-            )}
             <button
               type="button"
               onClick={() => setStage('sheet')}

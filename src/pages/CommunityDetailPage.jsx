@@ -20,7 +20,7 @@ import CommunitySectionNav from '../components/community/CommunitySectionNav.jsx
 import CommunityRightRail from '../components/community/CommunityRightRail.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
-import { getUserProfiles } from '../firebase/profileService.js'
+import { getUserProfile, getUserProfiles } from '../firebase/profileService.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import {
@@ -84,6 +84,28 @@ export default function CommunityDetailPage() {
   const { communityId } = useParams()
   const navigate = useNavigate()
   const uid = auth.currentUser?.uid
+
+  // ROOT CAUSE FIX: this page used to read auth.currentUser?.photoURL
+  // directly for the caller's own avatar (compose-post placeholder +
+  // 3 notification writes below) — a field this app never actually
+  // writes anywhere via Firebase Auth's updateProfile(), so it was
+  // permanently empty, silently falling back to initials/nothing
+  // regardless of the user's real photo/Campus Avatar. Every other
+  // surface in the app resolves the current user through
+  // getProfileIdentityImage(profile) against their real Firestore
+  // users/{uid} doc; this fetches that same doc once, the same way,
+  // for consistency.
+  const [myProfile, setMyProfile] = useState(null)
+  useEffect(() => {
+    if (!uid) return undefined
+    let cancelled = false
+    getUserProfile(uid).then((p) => {
+      if (!cancelled) setMyProfile(p)
+    }).catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [uid])
 
   const [community, setCommunity] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -368,7 +390,7 @@ export default function CommunityDetailPage() {
         targetUid,
         actorUid: uid,
         actorName: auth.currentUser?.displayName || 'A community admin',
-        actorAvatar: auth.currentUser?.photoURL || '',
+        actorAvatar: getProfileIdentityImage(myProfile) || '',
         communityId,
         communityName: community?.name
       }).catch(() => {})
@@ -414,7 +436,7 @@ export default function CommunityDetailPage() {
       targetUid,
       actorUid: uid,
       actorName: auth.currentUser?.displayName || 'A community admin',
-      actorAvatar: auth.currentUser?.photoURL || '',
+      actorAvatar: getProfileIdentityImage(myProfile) || '',
       communityId,
       communityName: community?.name,
       newRole
@@ -489,7 +511,7 @@ export default function CommunityDetailPage() {
         communityName: community.name,
         actorUid: uid,
         actorName: auth.currentUser?.displayName || 'A community admin',
-        actorAvatar: auth.currentUser?.photoURL || '',
+        actorAvatar: getProfileIdentityImage(myProfile) || '',
         message: announcementText.trim()
       })
       setAnnouncementText('')
@@ -830,7 +852,7 @@ export default function CommunityDetailPage() {
                       initials="+"
                       colorClass="from-blue-500 to-blue-600"
                       size="sm"
-                      src={auth.currentUser?.photoURL || undefined}
+                      src={getProfileIdentityImage(myProfile) || undefined}
                     />
                     <span className="flex-1 text-sm text-gray-400">
                       Share something in #{channels.find((c) => c.id === selectedChannelId)?.name?.toLowerCase() || 'general'}…

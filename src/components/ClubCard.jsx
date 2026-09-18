@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 /**
  * `chat` comes from chatService.js's subscribeToUserChats():
@@ -28,7 +29,7 @@ export default function ChatCard({ chat, profile }) {
         initials={getInitials(displayName)}
         colorClass={getAvatarColor(chat.otherUid || chat.id)}
         size="md"
-        src={profile?.avatar || undefined}
+        src={getProfileIdentityImage(profile) || undefined}
       />
 
       <div className="flex-1 min-w-0">

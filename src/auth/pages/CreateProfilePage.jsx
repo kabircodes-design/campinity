@@ -138,9 +138,22 @@ export default function CreateProfilePage() {
         oldUsername: ''
       })
 
-      let photoURL = null
+      // ROOT CAUSE FIX (part of the profile-photo consistency pass):
+      // this used to write the uploaded photo to a `photoURL` field,
+      // while every other surface in the app resolves the real photo
+      // from `avatar` (getProfileIdentityImage's priority: avatarMode
+      // -> campusAvatarUrl, else avatar, else campusAvatarUrl). A
+      // brand-new user's very first photo landed in a field nothing
+      // else treated as primary — mapProfileDoc's own `data.avatar ??
+      // data.photoURL` fallback happened to still surface it almost
+      // everywhere, but not universally, and not as the one
+      // authoritative field. Writing `avatar` directly here closes that
+      // gap for every NEW signup going forward; existing users who only
+      // have `photoURL` set keep resolving correctly via that same
+      // fallback (unchanged, nothing migrated).
+      let avatarUrl = ''
       if (photoFile) {
-        photoURL = await uploadProfileImage(uid, photoFile)
+        avatarUrl = await uploadProfileImage(uid, photoFile)
       }
 
       await saveUserProfile(uid, {
@@ -153,7 +166,7 @@ export default function CreateProfilePage() {
         division: division.trim(),
         bio: bio.trim(),
         interests,
-        photoURL,
+        avatar: avatarUrl,
         role: 'student',
         profileCompleted: true
       })

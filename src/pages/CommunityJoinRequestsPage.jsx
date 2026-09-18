@@ -28,6 +28,15 @@ export default function CommunityJoinRequestsPage() {
   const [communityName, setCommunityName] = useState('')
   const [actioningUid, setActioningUid] = useState(null)
   const [actionError, setActionError] = useState('')
+  // ROOT CAUSE FIX: auth.currentUser?.photoURL is never written anywhere
+  // in this app (confirmed by searching for Firebase Auth's own
+  // updateProfile() calls) — reading it always returned nothing, so the
+  // admin's own avatar on the approval notification silently fell back
+  // to empty regardless of their real photo/Campus Avatar. Same fix as
+  // CommunityDetailPage.jsx: resolve the caller's own current image via
+  // getProfileIdentityImage against their real profile doc, same as
+  // every other surface in the app.
+  const [myProfile, setMyProfile] = useState(null)
 
   const load = async () => {
     setStatus('loading')
@@ -37,10 +46,12 @@ export default function CommunityJoinRequestsPage() {
       return
     }
     try {
-      const [community, membership] = await Promise.all([
+      const [community, membership, ownProfile] = await Promise.all([
         getCommunityById(communityId),
-        getMembership(communityId, uid)
+        getMembership(communityId, uid),
+        getUserProfile(uid).catch(() => null)
       ])
+      setMyProfile(ownProfile)
       const isOwnerOrAdmin =
         community?.ownerId === uid || membership?.role === 'admin' || membership?.role === 'owner'
       if (!community || !isOwnerOrAdmin) {
@@ -85,7 +96,7 @@ export default function CommunityJoinRequestsPage() {
         targetUid: uid,
         actorUid: auth.currentUser?.uid,
         actorName: auth.currentUser?.displayName || 'A community admin',
-        actorAvatar: auth.currentUser?.photoURL || '',
+        actorAvatar: getProfileIdentityImage(myProfile) || '',
         communityId,
         communityName
       }).catch(() => {})
