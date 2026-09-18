@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Sparkles,
+  Users2,
   Users
 } from 'lucide-react'
 import { useAdminSession } from '../hooks/useAdminSession.jsx'
@@ -63,6 +64,7 @@ const QUICK_ACTIONS = [
   { label: 'Moderation', section: 'moderation', icon: Gavel },
   { label: 'Marketplace', section: 'marketplace', icon: ShoppingBag },
   { label: 'Lost & Found', section: 'lost-found', icon: PackageSearch },
+  { label: 'Communities', section: 'communities', icon: Users2 },
   { label: 'Send Notification', section: 'notifications', icon: Bell }
 ]
 

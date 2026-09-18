@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink } from 'lucide-react'
+import { ImageOff } from 'lucide-react'
 import { useAdminSession } from '../hooks/useAdminSession.jsx'
 import { callAdmin } from '../services/adminCallable.js'
 import AdminToast from '../components/AdminToast.jsx'
+import VerificationReviewModal from '../components/VerificationReviewModal.jsx'
 
 /**
  * The real, complete Photo Verification flow: user submits an ID
  * document (submitVerificationRequest in verificationService.js,
  * during onboarding's college_id path) → it lands in
  * verificationRequests/{id} with status 'pending' → this page lists
- * those via adminListVerificationRequests, opens the actual document
- * via a short-lived signed URL (adminGetVerificationDocumentUrl), and
- * Verify/Dismiss calls adminReviewVerificationRequest, which flips
- * users/{uid}.verifiedCampus to true on approval and always writes an
- * audit-log entry. All three Cloud Functions are session-token gated —
- * the same real security boundary as Reports, not a UI-only guard.
+ * those via adminListVerificationRequests → opens the actual document
+ * in a proper in-app review screen (VerificationReviewModal — zoom,
+ * rotate, next/prev, replacing the previous window.open which sent the
+ * admin out of the panel entirely) → Approve/Reject calls
+ * adminReviewVerificationRequest, which flips users/{uid}.verifiedCampus
+ * to true on approval and always writes an audit-log entry. All three
+ * Cloud Functions are session-token gated — the same real security
+ * boundary as Reports, not a UI-only guard.
  */
 export default function AdminPhotoVerificationPage() {
   const { sessionToken } = useAdminSession()
@@ -22,7 +25,7 @@ export default function AdminPhotoVerificationPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [actioningId, setActioningId] = useState(null)
-  const [confirmTarget, setConfirmTarget] = useState(null)
+  const [activeIndex, setActiveIndex] = useState(null)
   const [toast, setToast] = useState(null)
 
   const load = () => {
@@ -36,23 +39,22 @@ export default function AdminPhotoVerificationPage() {
 
   useEffect(load, [sessionToken])
 
-  const handleViewDocument = async (documentPath) => {
-    try {
-      const data = await callAdmin('adminGetVerificationDocumentUrl', { sessionToken, documentPath })
-      window.open(data.url, '_blank', 'noopener,noreferrer')
-    } catch (err) {
-      setToast({ tone: 'error', message: err?.message || 'Could not load the document.' })
-    }
-  }
+  const activeRequest = activeIndex !== null ? requests[activeIndex] : null
 
-  const handleReview = async (req, decision) => {
-    if (actioningId) return
+  const handleReview = async (decision, reason) => {
+    const req = activeRequest
+    if (!req || actioningId) return
     setActioningId(req.id)
-    setConfirmTarget(null)
     try {
-      await callAdmin('adminReviewVerificationRequest', { sessionToken, requestId: req.id, decision })
-      setRequests((prev) => prev.filter((r) => r.id !== req.id))
-      setToast({ tone: 'success', message: decision === 'approved' ? 'Verification approved.' : 'Verification dismissed.' })
+      await callAdmin('adminReviewVerificationRequest', { sessionToken, requestId: req.id, decision, reason })
+      const remaining = requests.filter((r) => r.id !== req.id)
+      setRequests(remaining)
+      setToast({ tone: 'success', message: decision === 'approved' ? 'Verification approved.' : 'Verification rejected.' })
+      // Stay in the reviewer, landing on whichever request now occupies
+      // this same position (or close if the queue is now empty) — keeps
+      // an admin working through a queue from having to reopen each one.
+      if (remaining.length === 0) setActiveIndex(null)
+      else setActiveIndex(Math.min(activeIndex, remaining.length - 1))
     } catch (err) {
       setToast({ tone: 'error', message: err?.message || 'Could not update this request.' })
     } finally {
@@ -67,8 +69,10 @@ export default function AdminPhotoVerificationPage() {
 
       <div className="mt-5">
         {loading ? (
-          <div className="py-16 flex justify-center">
-            <div className="w-5 h-5 rounded-full border-2 border-gray-200 border-t-blue-600 animate-spin" />
+          <div className="space-y-2.5">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 h-[86px] animate-pulse" />
+            ))}
           </div>
         ) : error ? (
           <div className="py-16 text-center">
@@ -79,83 +83,48 @@ export default function AdminPhotoVerificationPage() {
           </div>
         ) : requests.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-sm font-semibold text-gray-900">You're all caught up.</p>
+            <ImageOff className="w-5 h-5 text-gray-300 mx-auto" />
+            <p className="mt-2 text-sm font-semibold text-gray-900">You're all caught up.</p>
             <p className="mt-1 text-sm text-gray-400">No pending photo verifications right now.</p>
           </div>
         ) : (
           <div className="space-y-2.5">
-            {requests.map((req) => (
-              <div key={req.id} className="rounded-xl border border-gray-100 bg-white p-4">
+            {requests.map((req, i) => (
+              <button
+                key={req.id}
+                type="button"
+                onClick={() => setActiveIndex(i)}
+                className="w-full text-left rounded-xl border border-gray-100 bg-white p-4 hover:border-gray-200 hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] transition-all duration-200"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-gray-900">{req.displayName}</p>
                     {req.username && <p className="text-xs text-gray-400">@{req.username}</p>}
                     {req.collegeName && <p className="mt-1 text-xs text-gray-500">{req.collegeName}</p>}
-                    <p className="mt-1 text-[11px] text-gray-300">UID: {req.uid}</p>
                   </div>
                   <span className="flex-shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-amber-50 text-amber-600">
                     Pending
                   </span>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleViewDocument(req.documentPath)}
-                  className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-blue-600"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> View submitted document
-                </button>
-
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setConfirmTarget({ req, decision: 'approved' })}
-                    disabled={actioningId === req.id}
-                    className="rounded-full bg-blue-600 text-white text-xs font-semibold px-3.5 py-1.5 hover:bg-blue-700 disabled:opacity-50 transition-all duration-200"
-                  >
-                    Verify
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmTarget({ req, decision: 'rejected' })}
-                    disabled={actioningId === req.id}
-                    className="rounded-full border border-gray-200 text-gray-600 text-xs font-semibold px-3.5 py-1.5 hover:border-gray-300 disabled:opacity-50 transition-all duration-200"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
       </div>
 
-      {confirmTarget && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center px-4">
-          <button type="button" aria-label="Cancel" onClick={() => setConfirmTarget(null)} className="absolute inset-0 bg-black/40" />
-          <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5">
-            <p className="text-sm font-semibold text-gray-900">
-              {confirmTarget.decision === 'approved' ? `Verify ${confirmTarget.req.displayName}?` : `Dismiss this request?`}
-            </p>
-            <p className="mt-1.5 text-sm text-gray-400">
-              {confirmTarget.decision === 'approved'
-                ? "This marks the user's campus as verified."
-                : 'This request will be marked rejected. The user remains unverified.'}
-            </p>
-            <div className="mt-4 flex items-center gap-2">
-              <button type="button" onClick={() => setConfirmTarget(null)} className="flex-1 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-2">
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => handleReview(confirmTarget.req, confirmTarget.decision)}
-                className="flex-1 rounded-full bg-blue-600 text-white text-sm font-semibold py-2"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
+      {activeRequest && (
+        <VerificationReviewModal
+          sessionToken={sessionToken}
+          request={activeRequest}
+          index={activeIndex}
+          total={requests.length}
+          busy={actioningId === activeRequest.id}
+          onClose={() => setActiveIndex(null)}
+          onPrev={activeIndex > 0 ? () => setActiveIndex(activeIndex - 1) : null}
+          onNext={activeIndex < requests.length - 1 ? () => setActiveIndex(activeIndex + 1) : null}
+          onApprove={() => handleReview('approved')}
+          onReject={(reason) => handleReview('rejected', reason)}
+        />
       )}
 
       <AdminToast toast={toast} onDismiss={() => setToast(null)} />

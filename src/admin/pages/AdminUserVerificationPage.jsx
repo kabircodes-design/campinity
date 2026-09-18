@@ -1,9 +1,14 @@
 import { useState } from 'react'
-import { Search, ShieldCheck, ShieldOff } from 'lucide-react'
+import { Ban, Search, ShieldCheck, ShieldOff } from 'lucide-react'
 import { useAdminSession } from '../hooks/useAdminSession.jsx'
 import { callAdmin } from '../services/adminCallable.js'
 import { searchStudents } from '../../firebase/searchService.js'
 import AdminToast from '../components/AdminToast.jsx'
+
+const MODERATION_LABELS = {
+  restricted: { label: 'Restricted', tone: 'bg-amber-50 text-amber-600' },
+  suspended: { label: 'Suspended', tone: 'bg-red-50 text-red-600' }
+}
 
 /**
  * Deliberately distinct from Photo Verification: that section reviews
@@ -58,6 +63,28 @@ export default function AdminUserVerificationPage() {
     }
   }
 
+  // Same adminModerateContent action set (restricted/suspended) a report
+  // can already trigger, reachable here without needing a report first —
+  // adminSetUserModerationStatus writes the exact same
+  // users/{uid}.moderationStatus field.
+  const handleModerate = async (student, status) => {
+    if (actioningUid) return
+    setActioningUid(student.uid)
+    setConfirmTarget(null)
+    try {
+      await callAdmin('adminSetUserModerationStatus', { sessionToken, uid: student.uid, status })
+      setResults((prev) => prev.map((s) => (s.uid === student.uid ? { ...s, moderationStatus: status === 'active' ? null : status } : s)))
+      setToast({
+        tone: 'success',
+        message: status === 'active' ? `${student.name} restored to good standing.` : `${student.name} is now ${status}.`
+      })
+    } catch (err) {
+      setToast({ tone: 'error', message: err?.message || 'Could not update this user.' })
+    } finally {
+      setActioningUid(null)
+    }
+  }
+
   return (
     <div>
       <h1 className="text-xl font-bold text-gray-900">User Verification</h1>
@@ -93,43 +120,90 @@ export default function AdminUserVerificationPage() {
           </div>
         ) : (
           <div className="space-y-2.5">
-            {results.map((student) => (
-              <div key={student.uid} className="rounded-xl border border-gray-100 bg-white p-4 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{student.name}</p>
-                  <p className="text-xs text-gray-400 truncate">
-                    @{student.username}
-                    {student.course && ` · ${student.course}`}
-                    {student.year && ` · ${student.year}`}
-                  </p>
-                  <span
-                    className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      student.verifiedCampus ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
-                    {student.verifiedCampus ? <ShieldCheck className="w-3 h-3" /> : <ShieldOff className="w-3 h-3" />}
-                    {student.verifiedCampus ? 'Verified' : 'Not verified'}
-                  </span>
+            {results.map((student) => {
+              const modInfo = student.moderationStatus ? MODERATION_LABELS[student.moderationStatus] : null
+              return (
+                <div key={student.uid} className="rounded-xl border border-gray-100 bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{student.name}</p>
+                      <p className="text-xs text-gray-400 truncate">
+                        @{student.username}
+                        {student.course && ` · ${student.course}`}
+                        {student.year && ` · ${student.year}`}
+                      </p>
+                      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                            student.verifiedCampus ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'
+                          }`}
+                        >
+                          {student.verifiedCampus ? <ShieldCheck className="w-3 h-3" /> : <ShieldOff className="w-3 h-3" />}
+                          {student.verifiedCampus ? 'Verified' : 'Not verified'}
+                        </span>
+                        {modInfo && (
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${modInfo.tone}`}>
+                            <Ban className="w-3 h-3" /> {modInfo.label}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmTarget({ kind: 'verification', student, verified: !student.verifiedCampus })}
+                      disabled={actioningUid === student.uid}
+                      className={`flex-shrink-0 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 disabled:opacity-50 ${
+                        student.verifiedCampus
+                          ? 'border border-gray-200 text-gray-600 hover:border-gray-300'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {student.verifiedCampus ? 'Revoke' : 'Verify'}
+                    </button>
+                  </div>
+
+                  {/* Moderation actions — same restricted/suspended states a
+                      report can already trigger via adminModerateContent,
+                      now reachable directly from a user lookup. */}
+                  <div className="mt-3 pt-3 border-t border-gray-50 flex items-center gap-1.5 flex-wrap">
+                    {student.moderationStatus ? (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmTarget({ kind: 'moderation', student, status: 'active' })}
+                        disabled={actioningUid === student.uid}
+                        className="rounded-full border border-gray-200 text-gray-600 hover:border-gray-300 text-[11px] font-semibold px-3 py-1.5 disabled:opacity-50 transition-all duration-200"
+                      >
+                        Restore to good standing
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmTarget({ kind: 'moderation', student, status: 'restricted' })}
+                          disabled={actioningUid === student.uid}
+                          className="rounded-full border border-amber-200 text-amber-600 hover:bg-amber-50 text-[11px] font-semibold px-3 py-1.5 disabled:opacity-50 transition-all duration-200"
+                        >
+                          Restrict
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmTarget({ kind: 'moderation', student, status: 'suspended' })}
+                          disabled={actioningUid === student.uid}
+                          className="rounded-full border border-red-200 text-red-600 hover:bg-red-50 text-[11px] font-semibold px-3 py-1.5 disabled:opacity-50 transition-all duration-200"
+                        >
+                          Suspend
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setConfirmTarget({ student, verified: !student.verifiedCampus })}
-                  disabled={actioningUid === student.uid}
-                  className={`flex-shrink-0 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 disabled:opacity-50 ${
-                    student.verifiedCampus
-                      ? 'border border-gray-200 text-gray-600 hover:border-gray-300'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
-                >
-                  {student.verifiedCampus ? 'Revoke' : 'Verify'}
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
-      {confirmTarget && (
+      {confirmTarget && confirmTarget.kind === 'verification' && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center px-4">
           <button type="button" aria-label="Cancel" onClick={() => setConfirmTarget(null)} className="absolute inset-0 bg-black/40" />
           <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5">
@@ -145,6 +219,38 @@ export default function AdminUserVerificationPage() {
                 type="button"
                 onClick={() => handleToggle(confirmTarget.student, confirmTarget.verified)}
                 className="flex-1 rounded-full bg-blue-600 text-white text-sm font-semibold py-2"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmTarget && confirmTarget.kind === 'moderation' && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center px-4">
+          <button type="button" aria-label="Cancel" onClick={() => setConfirmTarget(null)} className="absolute inset-0 bg-black/40" />
+          <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5">
+            <p className="text-sm font-semibold text-gray-900">
+              {confirmTarget.status === 'active'
+                ? `Restore ${confirmTarget.student.name} to good standing?`
+                : `${confirmTarget.status === 'suspended' ? 'Suspend' : 'Restrict'} ${confirmTarget.student.name}?`}
+            </p>
+            <p className="mt-1.5 text-sm text-gray-400">
+              {confirmTarget.status === 'active'
+                ? 'This clears their restricted/suspended status.'
+                : 'This directly updates their account moderation status.'}
+            </p>
+            <div className="mt-4 flex items-center gap-2">
+              <button type="button" onClick={() => setConfirmTarget(null)} className="flex-1 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-2">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModerate(confirmTarget.student, confirmTarget.status)}
+                className={`flex-1 rounded-full text-white text-sm font-semibold py-2 ${
+                  confirmTarget.status === 'active' ? 'bg-blue-600' : 'bg-red-600'
+                }`}
               >
                 Confirm
               </button>

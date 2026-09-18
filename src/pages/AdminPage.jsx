@@ -7,6 +7,7 @@ import AdminReportsPage from '../admin/pages/AdminReportsPage.jsx'
 import AdminPhotoVerificationPage from '../admin/pages/AdminPhotoVerificationPage.jsx'
 import AdminCollegeRequestsPage from '../admin/pages/AdminCollegeRequestsPage.jsx'
 import AdminUserVerificationPage from '../admin/pages/AdminUserVerificationPage.jsx'
+import AdminCommunitiesPage from '../admin/pages/AdminCommunitiesPage.jsx'
 import AdminModerationPage from '../admin/pages/AdminModerationPage.jsx'
 import AdminLostFoundPage from '../admin/pages/AdminLostFoundPage.jsx'
 import AdminMarketplacePage from '../admin/pages/AdminMarketplacePage.jsx'
@@ -19,6 +20,7 @@ const SECTION_COMPONENTS = {
   'photo-verification': AdminPhotoVerificationPage,
   'college-requests': AdminCollegeRequestsPage,
   'user-verification': AdminUserVerificationPage,
+  communities: AdminCommunitiesPage,
   moderation: AdminModerationPage,
   'lost-found': AdminLostFoundPage,
   marketplace: AdminMarketplacePage,

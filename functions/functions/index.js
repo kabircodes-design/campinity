@@ -878,9 +878,33 @@ exports.adminGetOverviewCounts = onCall({ region: 'us-central1' }, async (reques
  * instead.
  * =====================================================================
  */
+/**
+ * ROOT CAUSE of "already-approved requests reappearing as pending"
+ * (Bug 1): the status field itself is fine, and adminReviewVerificationRequest
+ * (the actual approve/reject action below) correctly flips it — that
+ * write was never broken. The real gap is a SECOND, independent path
+ * that also sets verifiedCampus: adminSetUserVerification (the direct
+ * search-based verify/revoke toggle on the User Verification page) has
+ * no knowledge of any verificationRequests document at all — verifying
+ * someone that way leaves their original submitted request sitting at
+ * status: 'pending' forever, even though the user is already verified.
+ * That's the exact scenario reported: verified via one page, but their
+ * old request keeps showing up as pending on this one.
+ *
+ * Fixed at both ends: adminSetUserVerification (below) now also closes
+ * out any pending request(s) for that uid when verifying someone
+ * directly. This function self-heals any request already left stale by
+ * that gap before this fix existed — for each pending request found,
+ * if the user is already verifiedCampus: true, it's auto-resolved
+ * (status -> 'approved', same fields the real approval path writes)
+ * and excluded from what's returned, instead of just being hidden on
+ * the client. This is a real write correcting real data, not a fake
+ * fallback — a genuinely pending request for a not-yet-verified user is
+ * completely unaffected.
+ */
 exports.adminListVerificationRequests = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, pageSize } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken)
   const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
 
   try {
@@ -891,26 +915,66 @@ exports.adminListVerificationRequests = onCall({ region: 'us-central1' }, async 
       .limit(limitCount)
       .get()
 
-    const requests = await Promise.all(
-      snap.docs.map(async (d) => {
-        const data = d.data()
-        const [userSnap, collegeSnap] = await Promise.all([
-          db().collection('users').doc(data.uid).get().catch(() => null),
-          data.collegeId ? db().collection('colleges').doc(data.collegeId).get().catch(() => null) : Promise.resolve(null)
-        ])
-        const userData = userSnap && userSnap.exists ? userSnap.data() : null
-        return {
-          id: d.id,
-          uid: data.uid,
-          collegeId: data.collegeId || null,
-          documentPath: data.documentPath,
-          createdAt: data.createdAt,
-          displayName: userData?.displayName || userData?.fullName || 'Unknown user',
-          username: userData?.username || '',
-          collegeName: collegeSnap && collegeSnap.exists ? collegeSnap.data().name : ''
-        }
+    const staleRequestIds = []
+    const requests = (
+      await Promise.all(
+        snap.docs.map(async (d) => {
+          const data = d.data()
+          const [userSnap, collegeSnap] = await Promise.all([
+            db().collection('users').doc(data.uid).get().catch(() => null),
+            data.collegeId ? db().collection('colleges').doc(data.collegeId).get().catch(() => null) : Promise.resolve(null)
+          ])
+          const userData = userSnap && userSnap.exists ? userSnap.data() : null
+
+          if (userData?.verifiedCampus === true) {
+            staleRequestIds.push(d.id)
+            return null
+          }
+
+          return {
+            id: d.id,
+            uid: data.uid,
+            collegeId: data.collegeId || null,
+            documentPath: data.documentPath,
+            createdAt: data.createdAt,
+            displayName: userData?.displayName || userData?.fullName || 'Unknown user',
+            username: userData?.username || '',
+            collegeName: collegeSnap && collegeSnap.exists ? collegeSnap.data().name : ''
+          }
+        })
+      )
+    ).filter(Boolean)
+
+    if (staleRequestIds.length > 0) {
+      const batch = db().batch()
+      staleRequestIds.forEach((id) => {
+        batch.update(db().collection('verificationRequests').doc(id), {
+          status: 'approved',
+          reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+          reviewedByAdminSession: true,
+          autoResolvedReason: 'user_already_verified'
+        })
       })
-    )
+      await batch.commit().catch((err) => {
+        // Never let this cleanup write block the actual list response —
+        // the request was already excluded above either way, so the
+        // admin sees a correct queue this load even if the correction
+        // write itself retries on a later one.
+        console.error('[adminListVerificationRequests] stale-request cleanup failed', { message: err?.message })
+      })
+      await Promise.all(
+        staleRequestIds.map((id) =>
+          logAdminAction({
+            adminUid: session.createdByUid,
+            action: 'verification_auto_resolved',
+            targetType: 'verificationRequest',
+            targetId: id,
+            reason: 'user_already_verified'
+          })
+        )
+      )
+    }
+
     return { requests }
   } catch (err) {
     console.error('[adminListVerificationRequests] unexpected error', { message: err?.message })
@@ -918,7 +982,35 @@ exports.adminListVerificationRequests = onCall({ region: 'us-central1' }, async 
   }
 })
 
-/** Short-lived signed URL for a verification document — Admin SDK bucket access bypasses Storage rules entirely (no storage.rules file exists in this repo to safely extend; this sidesteps that gap rather than guessing at rules I can't verify). */
+/**
+ * ROOT CAUSE of "Unable to load verification image": this previously
+ * called bucket().file(documentPath).getSignedUrl() — which, under the
+ * hood, needs to RSA-sign the URL, and Cloud Functions v2 runs under
+ * the project's default compute service account
+ * (NNN-compute@developer.gserviceaccount.com — confirmed directly from
+ * this function's own deployed service config), which does not have a
+ * private key to sign with locally. Signing then requires calling the
+ * IAM Credentials API's signBlob on itself, which needs the
+ * "Service Account Token Creator" role bound to that same service
+ * account — not granted by default. Without it, getSignedUrl() throws,
+ * the catch block below converts that into a generic 'internal' error,
+ * and VerificationReviewModal.jsx's catch turns that into "Unable to
+ * load verification image."
+ *
+ * Fixed by never generating a URL at all: the Admin SDK downloads the
+ * file's bytes directly (a plain object-read, which the Admin SDK
+ * always has — no signing, no extra IAM role, same "bypasses Storage
+ * rules the same way Admin SDK reads already bypass Firestore rules"
+ * pattern every other function in this file already relies on) and
+ * returns them as a base64 data URI in the callable's own response.
+ * The image bytes travel through the SAME already-authenticated,
+ * session-gated callable channel — never a fetchable Storage URL of
+ * any kind, short-lived or not. Storage rules are untouched; nothing
+ * about this makes the document more widely accessible than before.
+ * Works identically for old and new verification requests — this reads
+ * whatever `documentPath` already points at, regardless of when it was
+ * submitted.
+ */
 exports.adminGetVerificationDocumentUrl = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, documentPath } = request.data || {}
   await requireValidAdminSession(sessionToken)
@@ -926,22 +1018,42 @@ exports.adminGetVerificationDocumentUrl = onCall({ region: 'us-central1' }, asyn
     throw new HttpsError('invalid-argument', 'Missing document path.')
   }
   try {
-    const [url] = await bucket()
-      .file(documentPath)
-      .getSignedUrl({ action: 'read', expires: Date.now() + 10 * 60 * 1000 })
-    return { url }
+    const file = bucket().file(documentPath)
+    const [exists] = await file.exists()
+    if (!exists) throw new HttpsError('not-found', 'This document could not be found.')
+
+    const [metadata] = await file.getMetadata()
+    // Callable function responses top out around 10MB; base64 inflates
+    // size by ~4/3, so this caps the SOURCE file well under that with
+    // real margin for JSON overhead — generous for a phone-camera ID
+    // photo, not unbounded, and a real stated limit rather than a
+    // silent failure for an oversized legacy upload.
+    const MAX_SOURCE_BYTES = 6 * 1024 * 1024
+    if (Number(metadata.size) > MAX_SOURCE_BYTES) {
+      throw new HttpsError('resource-exhausted', 'This document is too large to preview.')
+    }
+
+    const [buffer] = await file.download()
+    const contentType = metadata.contentType || 'image/jpeg'
+    return { url: `data:${contentType};base64,${buffer.toString('base64')}` }
   } catch (err) {
+    if (err instanceof HttpsError) throw err
     console.error('[adminGetVerificationDocumentUrl] unexpected error', { documentPath, message: err?.message })
     throw new HttpsError('internal', 'Could not load this document. Please try again.')
   }
 })
 
 exports.adminReviewVerificationRequest = onCall({ region: 'us-central1' }, async (request) => {
-  const { sessionToken, requestId, decision } = request.data || {}
+  const { sessionToken, requestId, decision, reason } = request.data || {}
   const session = await requireValidAdminSession(sessionToken)
   if (!requestId || !['approved', 'rejected'].includes(decision)) {
     throw new HttpsError('invalid-argument', 'Missing requestId or invalid decision.')
   }
+  // Optional, only meaningful on rejection — an approval has nothing to
+  // explain. Free text, capped generously; the client's own preset
+  // reasons (Image unclear / ID doesn't match / etc.) are just strings
+  // like any other, not a separate enum this function needs to know.
+  const trimmedReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : ''
 
   try {
     const reqRef = db().collection('verificationRequests').doc(requestId)
@@ -959,11 +1071,13 @@ exports.adminReviewVerificationRequest = onCall({ region: 'us-central1' }, async
       if (decision === 'approved') {
         tx.update(db().collection('users').doc(data.uid), { verifiedCampus: true })
       }
-      tx.update(reqRef, {
+      const update = {
         status: decision,
         reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
         reviewedByAdminSession: true
-      })
+      }
+      if (decision === 'rejected' && trimmedReason) update.rejectionReason = trimmedReason
+      tx.update(reqRef, update)
     })
 
     await logAdminAction({
@@ -971,7 +1085,8 @@ exports.adminReviewVerificationRequest = onCall({ region: 'us-central1' }, async
       action: decision === 'approved' ? 'verification_approved' : 'verification_rejected',
       targetType: 'verificationRequest',
       targetId: requestId,
-      targetUid
+      targetUid,
+      reason: decision === 'rejected' ? trimmedReason || null : null
     })
     return { ok: true }
   } catch (err) {
@@ -1102,6 +1217,37 @@ exports.adminSetUserVerification = onCall({ region: 'us-central1' }, async (requ
     const snap = await userRef.get()
     if (!snap.exists) throw new HttpsError('not-found', 'This user no longer exists.')
     await userRef.update({ verifiedCampus: verified })
+
+    // Bug 1 fix (prospective half): this is a second, independent path
+    // to verifiedCampus besides adminReviewVerificationRequest, and it
+    // used to have no idea a verificationRequests document could even
+    // exist. Verifying someone here without also closing out their
+    // pending request left it stuck at status: 'pending' forever, so it
+    // kept reappearing in the Photo Verification queue even though the
+    // user was already verified. Only runs on the verify direction —
+    // revoking (verified === false) doesn't reopen or touch a request,
+    // that's a separate concern from an existing submission.
+    if (verified) {
+      // Single-field equality query (uid only, no second .where()) —
+      // deliberately avoids needing a new uid+status composite index;
+      // a single user has at most a couple of these documents, so
+      // filtering 'pending' in memory is cheap and doesn't add another
+      // index this deploy would depend on.
+      const requestsSnap = await db().collection('verificationRequests').where('uid', '==', uid).get()
+      const pendingDocs = requestsSnap.docs.filter((d) => d.data().status === 'pending')
+      if (pendingDocs.length > 0) {
+        const batch = db().batch()
+        pendingDocs.forEach((d) => {
+          batch.update(d.ref, {
+            status: 'approved',
+            reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+            reviewedByAdminSession: true,
+            autoResolvedReason: 'verified_via_user_search'
+          })
+        })
+        await batch.commit()
+      }
+    }
 
     await logAdminAction({
       adminUid: session.createdByUid,
@@ -1297,6 +1443,177 @@ exports.adminModerateProduct = onCall({ region: 'us-central1' }, async (request)
     if (err instanceof HttpsError) throw err
     console.error('[adminModerateProduct] unexpected error', { productId, message: err?.message })
     throw new HttpsError('internal', 'Could not update this listing. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * USER MODERATION STATUS — users/{uid}.moderationStatus, the same field
+ * adminModerateContent already writes when a report leads to "restrict"/
+ * "suspend." This is the same action reachable directly from a user
+ * search result (AdminUserVerificationPage.jsx) instead of only via an
+ * existing report — same field, same allowed values, no new schema.
+ * =====================================================================
+ */
+exports.adminSetUserModerationStatus = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, uid, status } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  const VALID_STATUSES = ['active', 'restricted', 'suspended']
+  if (!uid || !VALID_STATUSES.includes(status)) {
+    throw new HttpsError('invalid-argument', 'Missing uid or invalid status.')
+  }
+
+  try {
+    const userRef = db().collection('users').doc(uid)
+    const snap = await userRef.get()
+    if (!snap.exists) throw new HttpsError('not-found', 'This user no longer exists.')
+    // 'active' clears the flag entirely rather than storing a value that
+    // would otherwise need every reader to special-case as "not really
+    // restricted" — matches how verifiedCampus/hidden fields elsewhere
+    // in this admin panel use absence-of-field as the "normal" state.
+    await userRef.update({
+      moderationStatus: status === 'active' ? admin.firestore.FieldValue.delete() : status
+    })
+
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: status === 'active' ? 'user_restored' : status === 'suspended' ? 'suspended' : 'restricted',
+      targetType: 'user',
+      targetId: uid,
+      targetUid: uid
+    })
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminSetUserModerationStatus] unexpected error', { uid, message: err?.message })
+    throw new HttpsError('internal', 'Could not update this user. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * COMMUNITIES — communities/{id} + communityMembers/{communityId_uid} +
+ * communityBans/{communityId_uid}, the exact same collections/schema
+ * communityService.js's client-side createCommunity/joinCommunity/
+ * removeMember/banMember already use (confirmed by reading that file
+ * directly). Community owners/admins already have remove/ban through
+ * the app itself, gated by firestore.rules checking their real
+ * community role — a platform admin using only the password session has
+ * no such role, so these mirror that exact transaction logic via the
+ * Admin SDK instead of duplicating a second moderation model.
+ * =====================================================================
+ */
+exports.adminListCommunities = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, pageSize } = request.data || {}
+  await requireValidAdminSession(sessionToken)
+  const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
+
+  try {
+    const snap = await db().collection('communities').orderBy('createdAt', 'desc').limit(limitCount).get()
+    return { communities: snap.docs.map((d) => ({ id: d.id, ...d.data() })) }
+  } catch (err) {
+    console.error('[adminListCommunities] unexpected error', { message: err?.message })
+    throw new HttpsError('internal', 'Could not load communities. Please try again.')
+  }
+})
+
+/** Members of one community, newest first, enriched with displayName/username the same way adminListVerificationRequests enriches its queue. */
+exports.adminListCommunityMembers = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, communityId, pageSize } = request.data || {}
+  await requireValidAdminSession(sessionToken)
+  if (!communityId) throw new HttpsError('invalid-argument', 'Missing communityId.')
+  const limitCount = Math.min(Math.max(Number(pageSize) || 50, 1), 200)
+
+  try {
+    const snap = await db()
+      .collection('communityMembers')
+      .where('communityId', '==', communityId)
+      .orderBy('joinedAt', 'desc')
+      .limit(limitCount)
+      .get()
+
+    const members = await Promise.all(
+      snap.docs.map(async (d) => {
+        const data = d.data()
+        const userSnap = await db().collection('users').doc(data.uid).get().catch(() => null)
+        const userData = userSnap && userSnap.exists ? userSnap.data() : null
+        return {
+          uid: data.uid,
+          role: data.role || 'member',
+          joinedAt: data.joinedAt,
+          displayName: userData?.displayName || userData?.fullName || 'Unknown user',
+          username: userData?.username || ''
+        }
+      })
+    )
+    return { members }
+  } catch (err) {
+    console.error('[adminListCommunityMembers] unexpected error', { communityId, message: err?.message })
+    throw new HttpsError('internal', 'Could not load members. Please try again.')
+  }
+})
+
+exports.adminModerateCommunityMember = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, communityId, targetUid, action } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  const VALID_ACTIONS = ['remove', 'ban', 'unban']
+  if (!communityId || !targetUid || !VALID_ACTIONS.includes(action)) {
+    throw new HttpsError('invalid-argument', 'Missing communityId/targetUid or invalid action.')
+  }
+
+  const memberRef = db().collection('communityMembers').doc(`${communityId}_${targetUid}`)
+  const banRef = db().collection('communityBans').doc(`${communityId}_${targetUid}`)
+  const communityRef = db().collection('communities').doc(communityId)
+
+  try {
+    if (action === 'unban') {
+      await banRef.delete().catch(() => {})
+    } else {
+      // 'remove' and 'ban' both start with the same membership cleanup —
+      // ban additionally writes the communityBans record removeMember
+      // never does, exactly mirroring communityService.js's own
+      // removeMember vs banMember distinction.
+      await db().runTransaction(async (tx) => {
+        const communitySnap = await tx.get(communityRef)
+        if (!communitySnap.exists) throw new HttpsError('not-found', 'This community no longer exists.')
+        const community = communitySnap.data()
+        if (community.ownerId === targetUid) {
+          throw new HttpsError('failed-precondition', 'The owner cannot be removed or banned — transfer ownership first.')
+        }
+
+        const memberSnap = await tx.get(memberRef)
+        if (memberSnap.exists) {
+          tx.delete(memberRef)
+          tx.update(communityRef, { membersCount: admin.firestore.FieldValue.increment(-1) })
+          const admins = community.admins || []
+          const moderators = community.moderators || []
+          if (admins.includes(targetUid)) tx.update(communityRef, { admins: admin.firestore.FieldValue.arrayRemove(targetUid) })
+          if (moderators.includes(targetUid)) tx.update(communityRef, { moderators: admin.firestore.FieldValue.arrayRemove(targetUid) })
+        }
+
+        if (action === 'ban') {
+          tx.set(banRef, {
+            communityId,
+            uid: targetUid,
+            bannedBy: session.createdByUid,
+            bannedAt: admin.firestore.FieldValue.serverTimestamp()
+          })
+        }
+      })
+    }
+
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: action === 'remove' ? 'community_member_removed' : action === 'ban' ? 'community_member_banned' : 'community_member_unbanned',
+      targetType: 'communityMember',
+      targetId: communityId,
+      targetUid
+    })
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminModerateCommunityMember] unexpected error', { communityId, targetUid, message: err?.message })
+    throw new HttpsError('internal', 'Could not complete this action. Please try again.')
   }
 })
 
