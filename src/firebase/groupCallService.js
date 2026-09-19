@@ -100,10 +100,37 @@ export function subscribeToGroupCall(callId, onData) {
   return onSnapshot(groupCallDoc(callId), (snap) => onData(snap.exists() ? { id: snap.id, ...snap.data() } : null))
 }
 
-/** Real-time "is a group call ringing for one of my groups" — mirrors subscribeToIncomingCalls' own shape/reasoning exactly. */
+/**
+ * Real-time "is a group call ringing for one of my groups" — mirrors
+ * subscribeToIncomingCalls' own shape/reasoning.
+ *
+ * ROOT-CAUSE HARDENING: this used to combine `array-contains` with an
+ * `in` filter on `status` in the SAME Firestore query — a query shape
+ * that depends entirely on an exactly-right composite index existing
+ * and being correctly matched. This exact class of bug (a query whose
+ * required index is subtly wrong or unbuilt) already caused a real,
+ * confirmed silent failure elsewhere in this app this same session —
+ * the query doesn't throw where it's easy to notice, `onSnapshot`'s
+ * error callback just fires once with an empty result, and a Firestore
+ * webconsole "requires an index" error only ever surfaces in a
+ * Cloud Function's own server-side logs, which this client-only query
+ * has none of. Simplified to a single `array-contains` filter — no
+ * composite index required AT ALL (Firestore's array-contains has an
+ * automatic single-field index by default) — with the ringing/active
+ * status check moved to the client. Trades a very slightly larger read
+ * (every non-deleted group call this user was ever part of, not just
+ * current ones) for eliminating an entire category of "the query
+ * silently returns nothing" failure — the right tradeoff for a query
+ * that only ever returns a handful of documents per user.
+ */
 export function subscribeToIncomingGroupCalls(uid, onData) {
-  const q = query(collection(db, 'groupCalls'), where('participantUids', 'array-contains', uid), where('status', 'in', ['ringing', 'active']))
-  return onSnapshot(q, (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+  const q = query(collection(db, 'groupCalls'), where('participantUids', 'array-contains', uid))
+  return onSnapshot(q, (snap) => {
+    const calls = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((c) => c.status === 'ringing' || c.status === 'active')
+    onData(calls)
+  })
 }
 
 export function subscribeToParticipants(callId, onData) {

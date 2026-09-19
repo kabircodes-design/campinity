@@ -63,7 +63,7 @@ const FollowingPage = lazy(() => import('./pages/FollowingPage.jsx'))
 const CreateCommunityPage = lazy(() => import('./pages/CreateCommunityPage.jsx'))
 const CommunityDetailPage = lazy(() => import('./pages/CommunityDetailPage.jsx'))
 const CommunitySettingsPage = lazy(() => import('./pages/CommunitySettingsPage.jsx'))
-const DiscoverCommunitiesPage = lazy(() => import('./pages/DiscoverCommunitiesPage.jsx'))
+const CommunitiesHubPage = lazy(() => import('./pages/CommunitiesHubPage.jsx'))
 const LostFoundPage = lazy(() => import('./pages/LostFoundPage.jsx'))
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage.jsx'))
 
@@ -160,7 +160,7 @@ export default function App() {
             usage at all even before this pass), not a shell-nested tab. */}
         <Route element={<ProtectedRoute stage="home"><AppShell /></ProtectedRoute>}>
           <Route path="/home" element={<HomePage />} />
-          <Route path="/communities" element={<DiscoverCommunitiesPage />} />
+          <Route path="/communities" element={<CommunitiesHubPage />} />
           {/* Community 2.0: moved inside the shared AppShell (was its own
               full-screen page) so it gets the persistent DesktopSidebar +
               header for free on desktop, instead of centering a phone-width

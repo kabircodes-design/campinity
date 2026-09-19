@@ -3,6 +3,8 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { db, storage } from './firebase.js'
 import { normalizeHashtag } from '../utils/hashtags.js'
+import { enrichWithAuthors } from '../hooks/useAuthorEnrichment.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 const COLLECTION = 'posts'
 
@@ -75,6 +77,7 @@ export function mapPostDoc(docSnap, currentUid) {
     initials: getInitials(data.displayName),
     avatarColor: getAvatarColor(data.userId || data.displayName || docSnap.id),
     avatarUrl: data.profilePhoto || '',
+    isAnonymous: Boolean(data.isAnonymous),
     communityId: data.communityId || null,
     communityName: data.communityName || '',
     department: '',
@@ -109,6 +112,40 @@ export function mapPostDoc(docSnap, currentUid) {
 }
 
 /**
+ * Live-enriches mapPostDoc's output with each author's CURRENT profile,
+ * replacing the write-time `displayName`/`profilePhoto` snapshot with
+ * live name/username/avatar — same fix postFeedShared.js already applies
+ * to the Following/For You feeds (via useAuthorEnrichment.js's shared
+ * cache), extended here to every other surface still built on
+ * mapPostDoc: Profile's Posts tab, Campus tab, Notes tab, single Post
+ * view, hashtag/search results, and community feeds. Root cause this
+ * closes: a profile-photo change previously only ever showed up on
+ * NEW posts going forward — every existing post/comment kept showing
+ * whatever photo the author had at the moment they posted, forever.
+ *
+ * Anonymous posts are skipped outright (isAnonymous stays true → getUid
+ * returns null → enrichWithAuthors never even fetches that profile) —
+ * their displayName/profilePhoto were already anonymized at write time
+ * and must never be replaced with the poster's real live identity.
+ */
+export async function enrichMappedPosts(posts) {
+  return enrichWithAuthors(
+    posts,
+    (post) => (post.isAnonymous ? null : post.userId),
+    (post, profile) =>
+      post.isAnonymous
+        ? post
+        : {
+            ...post,
+            name: profile?.displayName || post.name,
+            username: profile?.username || post.username,
+            avatarUrl: getProfileIdentityImage(profile) || '',
+            initials: getInitials(profile?.displayName || post.name)
+          }
+  )
+}
+
+/**
  * Loads the public Home Feed, newest first.
  *
  * NOTE: this query combines an equality filter (visibility) with an
@@ -134,7 +171,8 @@ export async function getFeedPosts(currentUid, maxResults = 50) {
   // exclusion as postFeedShared.js's shared pipeline, applied here too
   // since this function is Home's "Campus" tab AND SearchPage's
   // "Latest Posts" preview, neither of which routes through that hook.
-  return snap.docs.filter((d) => !d.data().communityId).map((docSnap) => mapPostDoc(docSnap, currentUid))
+  const posts = snap.docs.filter((d) => !d.data().communityId).map((docSnap) => mapPostDoc(docSnap, currentUid))
+  return enrichMappedPosts(posts)
 }
 
 /**
@@ -187,7 +225,8 @@ export async function getUserPosts(userId, currentUid, maxResults = 50) {
     const bTime = b.data().createdAt?.toMillis?.() ?? 0
     return bTime - aTime
   })
-  return sortedDocs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+  const posts = sortedDocs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+  return enrichMappedPosts(posts)
 }
 
 /**
@@ -211,7 +250,8 @@ export async function getNotesPosts(currentUid, maxResults = 100) {
     limit(maxResults)
   )
   const snap = await getDocs(postsQuery)
-  const posts = snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+  const rawPosts = snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+  const posts = await enrichMappedPosts(rawPosts)
   const now = Date.now()
   return posts
     .filter((p) => !p.expiresAtMs || p.expiresAtMs > now)
@@ -225,7 +265,8 @@ export async function getNotesPosts(currentUid, maxResults = 100) {
 export async function getPostById(postId, currentUid) {
   const snap = await getDoc(doc(db, COLLECTION, postId))
   if (!snap.exists()) return null
-  return mapPostDoc(snap, currentUid)
+  const [post] = await enrichMappedPosts([mapPostDoc(snap, currentUid)])
+  return post
 }
 
 /**
@@ -395,7 +436,8 @@ export async function searchPostsByHashtag(tag, currentUid, { resultLimit = 20 }
   // belong to their own community's feed, not a general discovery
   // surface (this function backs both HashtagPage.jsx and SearchPage's
   // ?tag= mode).
-  return snap.docs.filter((d) => !d.data().communityId).map((docSnap) => mapPostDoc(docSnap, currentUid))
+  const posts = snap.docs.filter((d) => !d.data().communityId).map((docSnap) => mapPostDoc(docSnap, currentUid))
+  return enrichMappedPosts(posts)
 }
 
 /**
@@ -429,5 +471,6 @@ export async function searchPostsByText(term, currentUid, { resultLimit = 20 } =
     limit(resultLimit)
   )
   const snap = await getDocs(postsQuery)
-  return snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+  const posts = snap.docs.map((docSnap) => mapPostDoc(docSnap, currentUid))
+  return enrichMappedPosts(posts)
 }

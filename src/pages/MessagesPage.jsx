@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MessageCircle, MessageSquarePlus } from 'lucide-react'
 import ChatListPanel from '../components/ChatListPanel.jsx'
@@ -6,7 +6,7 @@ import Loader from '../auth/components/Loader.jsx'
 import CreateGroupFlow from '../messaging/CreateGroupFlow.jsx'
 import { auth } from '../firebase/firebase.js'
 import { subscribeToUserChats, subscribeToSentPendingChats, subscribeToMessageRequests } from '../firebase/chatService.js'
-import { getUserProfile } from '../firebase/profileService.js'
+import { getProfilesByUids } from '../hooks/useAuthorEnrichment.js'
 
 /**
  * Now rendered inside AppShell's <Outlet/> (see App.jsx's layout-route
@@ -37,7 +37,28 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [chatSearchTerm, setChatSearchTerm] = useState('')
-  const fetchedUidsRef = useRef(new Set())
+
+  // Shared/deduped author-profile cache (useAuthorEnrichment.js) instead
+  // of a page-local getUserProfile()-per-chat fetch+ref — same
+  // mechanism Home/Profile/Comments/Notifications already use, and the
+  // one that's kept live-fresh for the current user (see
+  // primeAuthorCache in useAuthUser.js), so "I changed my photo" now
+  // also propagates to Messages without a hard refresh, without this
+  // file needing its own invalidation logic. Calling it again with an
+  // already-cached uid is cheap (no re-fetch), so this can just run on
+  // every chats update rather than tracking "have I already fetched
+  // this uid" itself.
+  useEffect(() => {
+    const otherUids = [...chats, ...sentPendingChats].map((chat) => chat?.otherUid).filter(Boolean)
+    if (otherUids.length === 0) return
+    getProfilesByUids(otherUids).then((profileByUid) => {
+      const next = {}
+      profileByUid.forEach((profile, uid) => {
+        if (profile) next[uid] = profile
+      })
+      setProfiles((prev) => ({ ...prev, ...next }))
+    })
+  }, [chats, sentPendingChats])
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
@@ -50,19 +71,8 @@ export default function MessagesPage() {
     const unsubscribe = subscribeToUserChats(
       uid,
       (data) => {
-        const safeChats = Array.isArray(data) ? data.filter(Boolean) : []
-        setChats(safeChats)
+        setChats(Array.isArray(data) ? data.filter(Boolean) : [])
         setLoading(false)
-
-        safeChats.forEach((chat) => {
-          if (!chat?.otherUid || fetchedUidsRef.current.has(chat.otherUid)) return
-          fetchedUidsRef.current.add(chat.otherUid)
-          getUserProfile(chat.otherUid)
-            .then((p) => {
-              if (p) setProfiles((prev) => ({ ...prev, [chat.otherUid]: p }))
-            })
-            .catch(() => {})
-        })
       },
       (err) => {
         console.error('Failed to subscribe to chats:', err)
@@ -72,17 +82,7 @@ export default function MessagesPage() {
     )
 
     const unsubscribeSent = subscribeToSentPendingChats(uid, (data) => {
-      const safeSent = Array.isArray(data) ? data.filter(Boolean) : []
-      setSentPendingChats(safeSent)
-      safeSent.forEach((chat) => {
-        if (!chat?.otherUid || fetchedUidsRef.current.has(chat.otherUid)) return
-        fetchedUidsRef.current.add(chat.otherUid)
-        getUserProfile(chat.otherUid)
-          .then((p) => {
-            if (p) setProfiles((prev) => ({ ...prev, [chat.otherUid]: p }))
-          })
-          .catch(() => {})
-      })
+      setSentPendingChats(Array.isArray(data) ? data.filter(Boolean) : [])
     })
 
     return () => {

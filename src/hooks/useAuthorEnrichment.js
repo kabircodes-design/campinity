@@ -78,6 +78,44 @@ async function fetchProfile(uid) {
 }
 
 /**
+ * ROOT CAUSE FIX for "I changed my photo and my profile/sidebar/composer
+ * updated, but my own old posts/comments still show the old avatar":
+ * this cache is deliberately NOT time-invalidated (see the module
+ * comment above) — a uid already in uidProfileCache is never re-fetched
+ * for the rest of the tab's session, by design, to avoid a read storm
+ * for a value that "changes rarely." That tradeoff is fine for OTHER
+ * people's avatars, but it's actively wrong for the CURRENT signed-in
+ * user: useAuthUser.js already keeps a live onSnapshot(users/{uid})
+ * listener on their own profile document for the entire session (how
+ * Profile/sidebar/composer stay live in the first place) — this cache
+ * just never learned about those updates, so every post/comment by that
+ * same uid kept rendering whatever got cached the first time it was
+ * enriched, potentially for the rest of the session, until a full page
+ * reload wiped uidProfileCache clean.
+ *
+ * Call this from useAuthUser.js's onSnapshot callback with every
+ * profile write for the CURRENT user — the one uid this app always has
+ * fresh, authoritative data for. This keeps enrichWithAuthors'/
+ * useAuthorProfile's shared cache honest for that uid without adding a
+ * listener per author (which is exactly the cost this cache exists to
+ * avoid for everyone else), and without any individual screen/component
+ * needing its own invalidation logic — one write path (the profile
+ * document itself, via the one listener that already watches it) keeps
+ * every consumer of this cache in sync.
+ */
+export function primeAuthorCache(uid, profileData) {
+  if (!uid || !profileData) return
+  uidProfileCache.set(uid, {
+    displayName: profileData.displayName || FALLBACK_PROFILE.displayName,
+    username: profileData.username || '',
+    avatar: profileData.avatar || '',
+    campusAvatarUrl: profileData.campusAvatarUrl || '',
+    avatarMode: profileData.avatarMode || 'photo',
+    verifiedCampus: Boolean(profileData.verifiedCampus)
+  })
+}
+
+/**
  * Call once per uid you need enriched right now, memoized per-uid by
  * the caller passing a stable uid — for a LIST of items (a feed, a
  * notifications page), use enrichAuthors() below instead, which
@@ -112,12 +150,28 @@ export function useAuthorProfile(uid) {
  */
 export async function enrichWithAuthors(items, getUid, applyProfile) {
   const uniqueUids = Array.from(new Set(items.map(getUid).filter(Boolean)))
-  const profiles = await Promise.all(uniqueUids.map((uid) => fetchProfile(uid)))
-  const profileByUid = new Map(uniqueUids.map((uid, index) => [uid, profiles[index]]))
+  const profileByUid = await getProfilesByUids(uniqueUids)
 
   return items.map((item) => {
     const uid = getUid(item)
     const profile = uid ? profileByUid.get(uid) || FALLBACK_PROFILE : FALLBACK_PROFILE
     return applyProfile(item, profile)
   })
+}
+
+/**
+ * Same shared cache/dedup as enrichWithAuthors, returned as a plain
+ * uid -> profile Map instead of merged onto a list — for callers that
+ * keep their own `profiles` lookup state rather than a mapped item
+ * array (e.g. MessagesPage.jsx's chat list, which looks up
+ * `profiles[chat.otherUid]` both for rendering AND for search
+ * filtering). Consolidates what used to be a page-local
+ * getUserProfile()-per-chat effect with its own ad hoc dedup ref into
+ * this one already-shared, already-current-user-fresh mechanism —
+ * exactly the "no independent avatar logic per screen" requirement.
+ */
+export async function getProfilesByUids(uids) {
+  const uniqueUids = Array.from(new Set((uids || []).filter(Boolean)))
+  const profiles = await Promise.all(uniqueUids.map((uid) => fetchProfile(uid)))
+  return new Map(uniqueUids.map((uid, index) => [uid, profiles[index]]))
 }

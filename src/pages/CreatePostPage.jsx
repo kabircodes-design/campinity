@@ -925,54 +925,6 @@ export default function CreatePostPage() {
             )}
           </div>
 
-          {!communitiesLoading && !lockedCommunity && myCommunities.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Post to</p>
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setPostTarget('public')}
-                  className={`w-full flex items-center gap-3 text-left rounded-xl border px-4 py-3 transition-all duration-300 ${
-                    postTarget === 'public' ? 'border-blue-500 bg-blue-50/60' : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${
-                      postTarget === 'public' ? 'border-blue-600 bg-blue-600' : 'border-gray-300'
-                    }`}
-                  />
-                  <span className={`text-sm font-medium ${postTarget === 'public' ? 'text-blue-600' : 'text-gray-700'}`}>
-                    Public Feed
-                  </span>
-                </button>
-
-                {myCommunities.map((community) => (
-                  <button
-                    key={community.id}
-                    type="button"
-                    onClick={() => setPostTarget(community.id)}
-                    className={`w-full flex items-center gap-3 text-left rounded-xl border px-4 py-3 transition-all duration-300 ${
-                      postTarget === community.id ? 'border-blue-500 bg-blue-50/60' : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <span
-                      className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${
-                        postTarget === community.id ? 'border-blue-600 bg-blue-600' : 'border-gray-300'
-                      }`}
-                    />
-                    <span
-                      className={`text-sm font-medium truncate ${
-                        postTarget === community.id ? 'text-blue-600' : 'text-gray-700'
-                      }`}
-                    >
-                      {community.name}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {error && (
             <p role="alert" className="rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
               {error}

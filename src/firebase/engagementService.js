@@ -32,6 +32,34 @@ import {
 import { awardXP, getUserProgress, hasReachedDailyCap } from '../gamification/xpService.js'
 import { checkAndAwardBadges } from '../gamification/badgeService.js'
 import { POINTS_REWARDS, REPUTATION_ACTION_REWARDS } from '../gamification/config.js'
+import { enrichWithAuthors } from '../hooks/useAuthorEnrichment.js'
+import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+
+/**
+ * Live-enriches raw comment docs with each commenter's CURRENT profile,
+ * replacing the write-time displayName/avatar snapshot — same root-cause
+ * fix as postService.js's enrichMappedPosts, applied here per this
+ * task's explicit "comments" requirement (previously comments
+ * deliberately stayed on the write-time snapshot; that's overridden by
+ * this explicit instruction that comment identity must track the
+ * user's CURRENT selected image). Uses the same shared/deduped cache as
+ * every other enrichment call, so a comment thread with 40 comments from
+ * 5 people still only fetches 5 profiles, not 40 — same cost profile the
+ * original write-time-snapshot design was trying to protect, just now
+ * with live data instead of a permanent freeze.
+ */
+async function enrichComments(comments) {
+  return enrichWithAuthors(
+    comments,
+    (comment) => comment.userId,
+    (comment, profile) => ({
+      ...comment,
+      displayName: profile?.displayName || comment.displayName,
+      username: profile?.username || comment.username,
+      avatar: getProfileIdentityImage(profile) || ''
+    })
+  )
+}
 
 /**
  * ONE file, per this task's explicit instruction — no parallel
@@ -351,7 +379,7 @@ export async function getComments(postId, { pageSize = 20, cursor = null, creato
   if (cursor) constraints.push(startAfter(cursor))
 
   const snap = await getDocs(query(commentsCollection(postId), ...constraints))
-  const comments = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const comments = await enrichComments(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
 
   return {
     comments: rankComments(comments, creatorUid),
@@ -367,7 +395,9 @@ export function subscribeToComments(postId, { pageSize = 20, creatorUid = null }
     limit(pageSize)
   )
   return onSnapshot(commentsQuery, (snap) => {
-    callback(rankComments(snap.docs.map((d) => ({ id: d.id, ...d.data() })), creatorUid))
+    enrichComments(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).then((comments) => {
+      callback(rankComments(comments, creatorUid))
+    })
   })
 }
 
@@ -395,8 +425,9 @@ export async function getReplies(postId, parentCommentId, { pageSize = 10, curso
   const constraints = [where('parentCommentId', '==', parentCommentId), orderBy('createdAt', 'asc'), limit(pageSize)]
   if (cursor) constraints.push(startAfter(cursor))
   const snap = await getDocs(query(commentsCollection(postId), ...constraints))
+  const replies = await enrichComments(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
   return {
-    replies: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    replies,
     nextCursor: snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1] : null
   }
 }

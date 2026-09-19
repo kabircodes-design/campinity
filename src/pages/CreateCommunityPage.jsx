@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Users } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
 import { COMMUNITY_TYPES, createCommunity } from '../firebase/communityService.js'
@@ -37,10 +37,18 @@ const privacyOptions = [
  * request an owner approves) that doesn't exist yet — surfaced here
  * rather than added as an option that would silently behave like
  * private.
+ *
+ * `?mode=club` (CommunitiesHubPage's Clubs tab entry point): locks
+ * `type` to 'official_club' and hides the Type picker entirely — a club
+ * is already just a community of that pre-existing type, so this is a
+ * relabeled/pre-filled view of the SAME form and the SAME
+ * createCommunity() call, not a second creation flow.
  */
 export default function CreateCommunityPage() {
   const navigate = useNavigate()
   const verified = useMyVerification()
+  const [searchParams] = useSearchParams()
+  const isClubMode = searchParams.get('mode') === 'club'
 
   const [name, setName] = useState('')
   const [handle, setHandle] = useState('')
@@ -142,7 +150,7 @@ export default function CreateCommunityPage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900">Create Community</span>
+            <span className="text-base font-bold tracking-tight text-gray-900">{isClubMode ? 'Create Club' : 'Create Community'}</span>
           </div>
         </header>
 
@@ -213,24 +221,26 @@ export default function CreateCommunityPage() {
             {errors.description && <p className="mt-1 text-xs text-red-500">{errors.description}</p>}
           </div>
 
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Type</p>
-            <div className="flex flex-wrap gap-2">
-              {COMMUNITY_TYPES.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setType(key)}
-                  disabled={isSubmitting}
-                  className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-300 ${
-                    type === key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}
-                >
-                  {typeLabels[key]}
-                </button>
-              ))}
+          {!isClubMode && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Type</p>
+              <div className="flex flex-wrap gap-2">
+                {COMMUNITY_TYPES.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setType(key)}
+                    disabled={isSubmitting}
+                    className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-300 ${
+                      type === key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {typeLabels[key]}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Privacy</p>
@@ -295,7 +305,7 @@ export default function CreateCommunityPage() {
             disabled={isSubmitting}
             className="w-full rounded-full bg-blue-600 text-white text-sm font-semibold py-3 hover:bg-blue-700 disabled:opacity-50 transition-all duration-300"
           >
-            {isSubmitting ? 'Creating…' : 'Create Community'}
+            {isSubmitting ? 'Creating…' : isClubMode ? 'Create Club' : 'Create Community'}
           </button>
         </form>
       </div>

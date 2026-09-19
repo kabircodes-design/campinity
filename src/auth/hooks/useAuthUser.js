@@ -3,6 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '../../firebase/firebase.js'
 import { HEARTBEAT_INTERVAL_MS, touchPresence } from '../../firebase/presenceService.js'
+import { primeAuthorCache } from '../../hooks/useAuthorEnrichment.js'
 
 /**
  * Provides { user, profile, loading } for the currently signed-in user.
@@ -47,8 +48,17 @@ export function useAuthUser() {
       unsubscribeProfile = onSnapshot(
         doc(db, 'users', firebaseUser.uid),
         (snap) => {
-          setProfile(snap.exists() ? snap.data() : null)
+          const data = snap.exists() ? snap.data() : null
+          setProfile(data)
           setLoading(false)
+          // Keeps useAuthorEnrichment.js's shared post/comment-author
+          // cache honest for the CURRENT user specifically — see
+          // primeAuthorCache's own comment for why this is the one uid
+          // this listener can safely push live, without needing a
+          // listener per author. Fixes "I changed my photo and my
+          // profile/sidebar updated, but my own posts/comments still
+          // show the old one until I hard-refresh."
+          primeAuthorCache(firebaseUser.uid, data)
         },
         () => {
           setProfile(null)

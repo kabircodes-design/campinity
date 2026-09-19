@@ -12,7 +12,7 @@
 const importers = {
   '/home': () => import('./pages/HomePage.jsx'),
   '/search': () => import('./pages/SearchPage.jsx'),
-  '/communities': () => import('./pages/DiscoverCommunitiesPage.jsx'),
+  '/communities': () => import('./pages/CommunitiesHubPage.jsx'),
   '/marketplace': () => import('./marketplace/MarketplacePage.jsx'),
   '/lost-found': () => import('./pages/LostFoundPage.jsx'),
   '/messages': () => import('./pages/MessagesPage.jsx'),

@@ -47,7 +47,7 @@ import {
 import { deleteObject, getStorage, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { db } from './firebase.js'
 import { awardXP } from '../gamification/xpService.js'
-import { mapPostDoc } from './postService.js'
+import { mapPostDoc, enrichMappedPosts } from './postService.js'
 
 export const COMMUNITY_TYPES = [
   'official_club',
@@ -777,8 +777,9 @@ export async function getCommunityFeedPosts(communityId, currentUid, { pageSize 
   constraints.push(orderBy('createdAt', 'desc'), limit(pageSize))
   if (cursor) constraints.push(startAfter(cursor))
   const snap = await getDocs(query(collection(db, 'posts'), ...constraints))
+  const rawPosts = snap.docs.map((d) => mapPostDoc(d, currentUid))
   return {
-    posts: snap.docs.map((d) => mapPostDoc(d, currentUid)),
+    posts: await enrichMappedPosts(rawPosts),
     nextCursor: snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1] : null
   }
 }

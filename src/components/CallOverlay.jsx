@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Maximize2, Mic, MicOff, Minimize2, PhoneOff, RefreshCw, Video, VideoOff } from 'lucide-react'
+import { Maximize2, Mic, MicOff, Minimize2, PhoneOff, RefreshCw, Speaker, Video, VideoOff } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { applySinkId, useAudioOutputDevices } from '../hooks/useAudioOutputDevices.js'
 
 function formatDuration(totalSeconds) {
   const m = Math.floor(totalSeconds / 60)
@@ -47,6 +48,22 @@ export default function CallOverlay({ call }) {
   const localVideoRef = useRef(null)
   const remoteVideoRef = useRef(null)
   const remoteAudioRef = useRef(null)
+
+  // Real, feature-detected audio-output switching (never a fake
+  // speaker/earpiece toggle — see the hook's own header for why no such
+  // control genuinely exists cross-platform). Cycles through whatever
+  // navigator.mediaDevices actually reports; the button below only
+  // renders when there's genuinely more than one real device to switch
+  // between AND the platform supports setSinkId at all.
+  const { supported: audioOutputSupported, devices: audioOutputDevices } = useAudioOutputDevices()
+  const [audioOutputIndex, setAudioOutputIndex] = useState(0)
+  const handleCycleAudioOutput = () => {
+    if (audioOutputDevices.length < 2) return
+    const nextIndex = (audioOutputIndex + 1) % audioOutputDevices.length
+    const device = audioOutputDevices[nextIndex]
+    applySinkId([remoteAudioRef.current, remoteVideoRef.current], device.deviceId)
+    setAudioOutputIndex(nextIndex)
+  }
 
   const otherUid = activeCall?.otherUid || null
   const type = activeCall?.type || 'voice'
@@ -273,6 +290,22 @@ export default function CallOverlay({ call }) {
                 className="w-12 h-12 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-white active:scale-95 disabled:opacity-50 transition-all duration-200"
               >
                 <RefreshCw className={`w-5 h-5 ${switchingCamera ? 'animate-spin' : ''}`} />
+              </button>
+            )}
+            {/* Only rendered when the platform genuinely exposes more
+                than one real audio output — never a fake toggle. Tap
+                cycles to the next real device (e.g. phone speaker vs a
+                connected Bluetooth headset); its label is exactly what
+                the OS reports, nothing invented. */}
+            {audioOutputSupported && audioOutputDevices.length > 1 && (
+              <button
+                type="button"
+                onClick={handleCycleAudioOutput}
+                aria-label={`Audio output: ${audioOutputDevices[audioOutputIndex]?.label || 'switch'}`}
+                title={audioOutputDevices[audioOutputIndex]?.label || 'Switch audio output'}
+                className="w-12 h-12 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-white active:scale-95 transition-all duration-200"
+              >
+                <Speaker className="w-5 h-5" />
               </button>
             )}
             <button

@@ -41,9 +41,21 @@ const TYPE_FILTERS = [
  * the same already-fetched, membersCount-sorted list this page already
  * has (getTrendingCommunities orders by membersCount desc server-side)
  * — zero new query, zero fabricated activity metric.
+ *
+ * `clubsOnly` (added for CommunitiesHubPage's [Communities][Clubs] tabs):
+ * this is deliberately the SAME component and the SAME queries, not a
+ * second parallel Clubs implementation — 'official_club' is already a
+ * real, pre-existing entry in COMMUNITY_TYPES, so a club IS a community
+ * of that type, not a different schema/entity. clubsOnly just filters
+ * every already-fetched list down to that type client-side (no new
+ * query, no new composite index — the trending/campus lists here are
+ * already small, capped fetches) and swaps the page copy. Any bug fix
+ * or feature added to community discovery here automatically applies to
+ * Clubs too, rather than needing to be duplicated by hand.
  */
-export default function DiscoverCommunitiesPage() {
+export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
   const navigate = useNavigate()
+  const clubFilter = (list) => (clubsOnly ? list.filter((c) => c.type === 'official_club') : list)
   const [communities, setCommunities] = useState([])
   const [membershipStates, setMembershipStates] = useState(new Map())
   const [loading, setLoading] = useState(true)
@@ -175,11 +187,12 @@ export default function DiscoverCommunitiesPage() {
     // benefit. Only when NOT text-searching does a type filter use the
     // real category query above (categoryResults).
     if (searchResults !== null) {
-      return typeFilter === 'all' ? searchResults : searchResults.filter((c) => c.type === typeFilter)
+      const base = clubFilter(searchResults)
+      return typeFilter === 'all' ? base : base.filter((c) => c.type === typeFilter)
     }
-    if (typeFilter !== 'all') return categoryResults || []
-    return communities
-  }, [communities, searchResults, typeFilter, categoryResults])
+    if (typeFilter !== 'all') return clubFilter(categoryResults || [])
+    return clubFilter(communities)
+  }, [communities, searchResults, typeFilter, categoryResults, clubsOnly])
 
   // "Your Communities" is derived from the already-fetched trending
   // list filtered by membership, NOT a second Firestore fetch — this
@@ -187,26 +200,29 @@ export default function DiscoverCommunitiesPage() {
   // in the trending set, a stated trade-off in exchange for not
   // introducing an extra query just for this section.
   const yourCommunities = useMemo(
-    () => communities.filter((c) => {
+    () => clubFilter(communities).filter((c) => {
       const state = membershipStates.get(c.id)
       return state === 'owner' || state === 'member'
     }),
-    [communities, membershipStates]
+    [communities, membershipStates, clubsOnly]
   )
   const discoverCommunities = useMemo(
     () => filteredCommunities.filter((c) => !membershipStates.has(c.id) || membershipStates.get(c.id) === 'pending'),
     [filteredCommunities, membershipStates]
   )
-  const trendingCommunities = useMemo(() => communities.slice(0, 5), [communities])
+  const trendingCommunities = useMemo(() => clubFilter(communities).slice(0, 5), [communities, clubsOnly])
 
   const quickStats = useMemo(
     () => [
-      { key: 'total', label: 'Communities', value: communities.length, tint: 'bg-blue-50 text-blue-600', icon: Users },
+      { key: 'total', label: clubsOnly ? 'Clubs' : 'Communities', value: clubFilter(communities).length, tint: 'bg-blue-50 text-blue-600', icon: Users },
       { key: 'yours', label: 'Yours', value: yourCommunities.length, tint: 'bg-emerald-50 text-emerald-600', icon: Check },
-      { key: 'new', label: 'New This Week', value: communities.filter((c) => c.createdAt?.toMillis && Date.now() - c.createdAt.toMillis() < 7 * 24 * 60 * 60 * 1000).length, tint: 'bg-pink-50 text-pink-600', icon: Sparkles }
+      { key: 'new', label: 'New This Week', value: clubFilter(communities).filter((c) => c.createdAt?.toMillis && Date.now() - c.createdAt.toMillis() < 7 * 24 * 60 * 60 * 1000).length, tint: 'bg-pink-50 text-pink-600', icon: Sparkles }
     ],
-    [communities, yourCommunities]
+    [communities, yourCommunities, clubsOnly]
   )
+
+  const filteredCampusCommunities = useMemo(() => clubFilter(campusCommunities), [campusCommunities, clubsOnly])
+  const hasAnyBaseResults = clubFilter(communities).length > 0
 
   const isSearchingOrFiltering = searchTerm.trim() || typeFilter !== 'all'
 
@@ -233,21 +249,23 @@ export default function DiscoverCommunitiesPage() {
               <div className="relative flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-blue-700/70 uppercase">
-                    <Users className="w-3.5 h-3.5" /> Communities
+                    <Users className="w-3.5 h-3.5" /> {clubsOnly ? 'Clubs' : 'Communities'}
                   </p>
                   <h1 className="mt-1.5 text-2xl lg:text-[28px] font-bold text-gray-900 tracking-tight leading-tight max-w-sm">
-                    Find your people.
+                    {clubsOnly ? 'Find your club.' : 'Find your people.'}
                   </h1>
                   <p className="mt-2 text-[13px] lg:text-sm text-gray-500 max-w-sm leading-relaxed">
-                    Discover communities, clubs and campus groups that feel like home.
+                    {clubsOnly
+                      ? 'Discover official campus clubs — join, follow their posts, and get involved.'
+                      : 'Discover communities, clubs and campus groups that feel like home.'}
                   </p>
                   <div className="mt-4">
                     <button
                       type="button"
-                      onClick={() => navigate('/community/create')}
+                      onClick={() => navigate(clubsOnly ? '/community/create?mode=club' : '/community/create')}
                       className="flex items-center gap-1.5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 active:scale-[0.98] transition-all duration-200"
                     >
-                      <Plus className="w-4 h-4" /> Create Community
+                      <Plus className="w-4 h-4" /> {clubsOnly ? 'Create Club' : 'Create Community'}
                     </button>
                   </div>
                 </div>
@@ -273,27 +291,31 @@ export default function DiscoverCommunitiesPage() {
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search communities..."
-                aria-label="Search communities"
+                placeholder={clubsOnly ? 'Search clubs...' : 'Search communities...'}
+                aria-label={clubsOnly ? 'Search clubs' : 'Search communities'}
                 className="w-full rounded-2xl border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-200"
               />
             </div>
 
-            {/* Category filters */}
-            <div className="flex items-center gap-2 mb-4 overflow-x-auto scroll-hidden">
-              {TYPE_FILTERS.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setTypeFilter(f.id)}
-                  className={`flex-shrink-0 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
-                    typeFilter === f.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+            {/* Category filters — hidden in Clubs mode: every result here
+                is already type='official_club', a type chip row would be
+                redundant (there's no club sub-type to filter by yet). */}
+            {!clubsOnly && (
+              <div className="flex items-center gap-2 mb-4 overflow-x-auto scroll-hidden">
+                {TYPE_FILTERS.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setTypeFilter(f.id)}
+                    className={`flex-shrink-0 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
+                      typeFilter === f.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {loading ? (
               <div className="py-16 flex justify-center">
@@ -310,28 +332,28 @@ export default function DiscoverCommunitiesPage() {
                   Try Again
                 </button>
               </div>
-            ) : communities.length === 0 && !searchTerm ? (
+            ) : !hasAnyBaseResults && !searchTerm ? (
               <div className="py-16 text-center">
                 <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
                   <Users className="w-5 h-5 text-blue-500" />
                 </div>
-                <p className="mt-3 text-sm font-semibold text-gray-900">No communities here yet</p>
+                <p className="mt-3 text-sm font-semibold text-gray-900">{clubsOnly ? 'No clubs here yet' : 'No communities here yet'}</p>
                 <p className="mt-1 text-sm text-gray-400 max-w-[280px] mx-auto leading-relaxed">
                   Be the first to bring people together.
                 </p>
                 <button
                   type="button"
-                  onClick={() => navigate('/community/create')}
+                  onClick={() => navigate(clubsOnly ? '/community/create?mode=club' : '/community/create')}
                   className="mt-5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
                 >
-                  Create Community
+                  {clubsOnly ? 'Create Club' : 'Create Community'}
                 </button>
               </div>
             ) : (
               <>
                 {!isSearchingOrFiltering && yourCommunities.length > 0 && (
                   <div className="mb-5">
-                    <p className="mb-2.5 text-sm font-bold text-gray-900">Your Communities</p>
+                    <p className="mb-2.5 text-sm font-bold text-gray-900">{clubsOnly ? 'Your Clubs' : 'Your Communities'}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {yourCommunities.map((community) => (
                         <CommunityCard key={community.id} community={community} membershipState={membershipStates.get(community.id)} />
@@ -340,11 +362,11 @@ export default function DiscoverCommunitiesPage() {
                   </div>
                 )}
 
-                {!isSearchingOrFiltering && campusCommunities.length > 0 && (
+                {!isSearchingOrFiltering && filteredCampusCommunities.length > 0 && (
                   <div className="mb-5">
                     <p className="mb-2.5 text-sm font-bold text-gray-900">For Your Campus</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {campusCommunities.slice(0, 6).map((community) => (
+                      {filteredCampusCommunities.slice(0, 6).map((community) => (
                         <CommunityCard
                           key={community.id}
                           community={community}
@@ -368,7 +390,7 @@ export default function DiscoverCommunitiesPage() {
                       <Search className="w-5 h-5 text-blue-500" />
                     </div>
                     <p className="mt-3 text-sm font-semibold text-gray-900">
-                      {isSearchingOrFiltering ? 'No communities found' : 'No more communities to discover'}
+                      {isSearchingOrFiltering ? (clubsOnly ? 'No clubs found' : 'No communities found') : (clubsOnly ? 'No more clubs to discover' : 'No more communities to discover')}
                     </p>
                     <p className="mt-1 text-sm text-gray-400 max-w-[280px] mx-auto leading-relaxed">
                       {isSearchingOrFiltering ? 'Try a different name or category.' : 'Check back soon, or start your own.'}
@@ -378,7 +400,9 @@ export default function DiscoverCommunitiesPage() {
                   <div>
                     {!isSearchingOrFiltering ? (
                       <p className="mb-2.5 text-sm font-bold text-gray-900">
-                        {yourCommunities.length > 0 || campusCommunities.length > 0 ? 'Popular Communities' : 'Discover Communities'}
+                        {yourCommunities.length > 0 || filteredCampusCommunities.length > 0
+                          ? (clubsOnly ? 'Popular Clubs' : 'Popular Communities')
+                          : (clubsOnly ? 'Discover Clubs' : 'Discover Communities')}
                       </p>
                     ) : typeFilter !== 'all' ? (
                       <p className="mb-2.5 text-sm font-bold text-gray-900">{TYPE_FILTERS.find((f) => f.id === typeFilter)?.label}</p>
@@ -424,7 +448,7 @@ export default function DiscoverCommunitiesPage() {
           {trendingCommunities.length > 0 && (
             <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
               <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-3">
-                <TrendingUp className="w-4 h-4 text-blue-500" /> Trending on Campus
+                <TrendingUp className="w-4 h-4 text-blue-500" /> {clubsOnly ? 'Trending Clubs' : 'Trending on Campus'}
               </p>
               <div className="space-y-1.5">
                 {trendingCommunities.map((community, i) => (
@@ -455,17 +479,17 @@ export default function DiscoverCommunitiesPage() {
 
           <div className="rounded-2xl p-4 text-white relative overflow-hidden" style={{ backgroundColor: '#1677ff' }}>
             <p className="relative flex items-center gap-1.5 text-sm font-bold">
-              <Sparkles className="w-4 h-4" /> Start your own community
+              <Sparkles className="w-4 h-4" /> {clubsOnly ? 'Start your own club' : 'Start your own community'}
             </p>
             <p className="relative mt-1.5 text-xs text-blue-100 leading-relaxed">
               Have a club, project or campus idea? Bring people together.
             </p>
             <button
               type="button"
-              onClick={() => navigate('/community/create')}
+              onClick={() => navigate(clubsOnly ? '/community/create?mode=club' : '/community/create')}
               className="relative mt-3 w-full rounded-full bg-white text-blue-700 text-xs font-semibold py-2.5 hover:bg-blue-50 active:scale-[0.98] transition-all duration-200"
             >
-              Create Community →
+              {clubsOnly ? 'Create Club →' : 'Create Community →'}
             </button>
           </div>
         </aside>

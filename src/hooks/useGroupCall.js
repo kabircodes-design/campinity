@@ -396,9 +396,25 @@ export function useGroupCall() {
   const switchCamera = useCallback(async () => {
     if (!localStreamRef.current || switchingCamera || typeRef.current !== 'video') return
     setSwitchingCamera(true)
+    // Same root-cause fix as useCall.js's 1:1 switchCamera — a plain
+    // `{ facingMode: 'environment' }` is only a hint, so a device with
+    // just a front camera can silently hand back the SAME camera again
+    // instead of rejecting the request, making the switch look like it
+    // does nothing. `{ exact }` forces a real, catchable rejection.
+    const nextFacingMode = facingModeRef.current === 'user' ? 'environment' : 'user'
+    let newStream
     try {
-      const nextFacingMode = facingModeRef.current === 'user' ? 'environment' : 'user'
-      const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: nextFacingMode } })
+      newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: nextFacingMode } } })
+    } catch {
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: nextFacingMode } })
+      } catch {
+        setSwitchingCamera(false)
+        return
+      }
+    }
+
+    try {
       const newTrack = newStream.getVideoTracks()[0]
       if (!newTrack) return
 
@@ -419,7 +435,7 @@ export function useGroupCall() {
       facingModeRef.current = nextFacingMode
       setFacingMode(nextFacingMode)
     } catch {
-      // No second camera, or permission changed mid-call — current camera stays active.
+      newStream.getTracks().forEach((t) => t.stop())
     } finally {
       setSwitchingCamera(false)
     }

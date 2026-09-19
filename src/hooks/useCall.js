@@ -326,6 +326,23 @@ export function useCall() {
             teardown('declined')
             return
           }
+          // ROOT CAUSE of "if the other person ends the call, my call UI/
+          // timer keeps running": answerCall()'s own subscription already
+          // had this exact check (`data?.status === 'ended'`) — this one,
+          // the CALLER's side, never did. So when the CALLEE hung up
+          // first, this listener received status:'ended' and matched none
+          // of the branches above, doing nothing with it. The caller only
+          // ever noticed via pc.onconnectionstatechange eventually
+          // reporting 'disconnected'/'closed' — real, but slow and not
+          // guaranteed to fire promptly, since closing a peer connection
+          // doesn't reliably push anything to the remote side. Now
+          // symmetric with answerCall(): whichever side ends the call,
+          // the other tears down immediately via the same signaling
+          // channel, not by waiting on ICE to notice.
+          if (call.status === 'ended' && callStateRef.current !== 'idle' && callStateRef.current !== 'ended') {
+            teardown('ended')
+            return
+          }
           if (call.status === 'active' && call.answer?.type && call.answer?.sdp && !remoteDescSetRef.current) {
             remoteDescSetRef.current = true
             clearRingTimeout()
@@ -509,9 +526,36 @@ export function useCall() {
     if (type !== 'video') return
 
     setSwitchingCamera(true)
+    // ROOT CAUSE of "switch camera UI exists but does nothing": a plain
+    // `{ facingMode: 'environment' }` constraint is only a HINT, not a
+    // requirement — per spec, if a device doesn't have a camera facing
+    // that direction, browsers are allowed to silently substitute
+    // whatever camera IS available instead of rejecting the request.
+    // getUserMedia() then resolves successfully with a track that's
+    // often just the SAME camera again, so replaceTrack() "succeeds"
+    // with no visible change and no error to catch — indistinguishable
+    // from a no-op. `{ exact: ... }` forces the browser to genuinely
+    // reject (a real caught error, handled below) when that facing
+    // camera truly isn't available, instead of quietly pretending.
+    const nextFacingMode = facingModeRef.current === 'user' ? 'environment' : 'user'
+    let newStream
     try {
-      const nextFacingMode = facingModeRef.current === 'user' ? 'environment' : 'user'
-      const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: nextFacingMode } })
+      newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: nextFacingMode } } })
+    } catch {
+      // Some browsers still don't honor `exact` correctly for facingMode
+      // (notably older Android WebViews) and throw even when a second
+      // camera genuinely exists. One retry with the plain hint — if THIS
+      // also fails, there's truly no second camera, handled below.
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: nextFacingMode } })
+      } catch (err) {
+        setCallError(err?.name === 'NotAllowedError' ? 'Camera access was denied.' : "This device doesn't have another camera to switch to.")
+        setSwitchingCamera(false)
+        return
+      }
+    }
+
+    try {
       const newTrack = newStream.getVideoTracks()[0]
       if (!newTrack) return
 
@@ -527,8 +571,8 @@ export function useCall() {
       facingModeRef.current = nextFacingMode
       setFacingMode(nextFacingMode)
     } catch {
-      // No second camera, or permission changed mid-call — current
-      // camera simply stays active, not a fatal call error.
+      newStream.getTracks().forEach((t) => t.stop())
+      setCallError('Could not switch cameras. Please try again.')
     } finally {
       setSwitchingCamera(false)
     }

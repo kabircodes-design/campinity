@@ -242,7 +242,20 @@ export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, ver
 
     try {
       console.log(debugTag, 'Firestore update started')
-      await updateUserProfile(authUid, { avatar: url })
+      // ROOT CAUSE of "real photo upload doesn't become my DP": this used
+      // to write only { avatar: url }, never touching avatarMode. If the
+      // user had EVER picked a Campinity Avatar before (avatarMode:
+      // 'avatar', set by CampinityAvatarPicker.jsx/CampusAvatarFlow.jsx),
+      // getProfileIdentityImage's own first priority rule
+      // (avatarMode==='avatar' && campusAvatarUrl -> use campusAvatarUrl)
+      // kept winning over the freshly-uploaded `avatar` forever after —
+      // the upload itself always succeeded, but the resolver never
+      // switched back to showing it. Explicitly setting avatarMode:
+      // 'photo' here is what actually makes the new upload the active
+      // identity, exactly mirroring what CampinityAvatarPicker already
+      // does for its own side (write BOTH the image field AND the mode
+      // in the same update) — not a new field, not a new resolver rule.
+      await updateUserProfile(authUid, { avatar: url, avatarMode: 'photo' })
       console.log(debugTag, 'Firestore update completed. final URL:', url)
       onSaved?.(url)
       resetAndClose()

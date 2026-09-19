@@ -31,16 +31,15 @@ import {
  * without the complexity of a full modal component this task didn't
  * specifically ask for.
  *
- * Author display (name/avatar/username) uses what's stored directly
- * on the comment document at write time, NOT live re-enriched via
- * useAuthorEnrichment.js (unlike posts/notifications elsewhere in
- * this project). Deliberate: a comment thread can have dozens of
- * authors visible at once, and live-enriching all of them would be
- * one profile read per unique commenter every time a thread opens —
- * a real cost this task's own "avoid unnecessary Firestore reads"
- * requirement argues against, for a field (a name/avatar at the
- * moment of comment) that's also reasonably expected to reflect what
- * it looked like when written, not necessarily right now.
+ * Author display (name/avatar/username) is live-enriched with each
+ * commenter's CURRENT profile before this component ever sees it —
+ * see engagementService.js's enrichComments (getComments/
+ * subscribeToComments/getReplies all route through it). This component
+ * just renders comment.avatar/displayName/username as given; it has no
+ * enrichment logic of its own to duplicate. The batching/dedup/caching
+ * that keeps a dozen-author thread cheap lives in useAuthorEnrichment.js
+ * (enrichWithAuthors' module-level cache), shared with every other
+ * consumer of it in this project.
  */
 export default function CommentCard({
   comment,
