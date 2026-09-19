@@ -7,6 +7,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   limit,
   onSnapshot,
   orderBy,
@@ -429,6 +430,17 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
       lastSenderId: senderId,
       readBy: [senderId]
     }
+    // Real per-user unread COUNT (not just readBy's read/unread boolean)
+    // — a map field on the chat doc, incremented for every OTHER
+    // participant on every message. Works identically for 1:1 and group
+    // chats since `participants` is already the same array-of-uids
+    // field for both. Read live via the SAME subscribeToUserChats
+    // listener the chat list already has open — no new query, no count
+    // aggregation, no per-chat listener.
+    ;(chatData.participants || []).forEach((participantUid) => {
+      if (participantUid === senderId) return
+      chatUpdate[`unreadCount.${participantUid}`] = increment(1)
+    })
     if (chatData.status === 'pending') {
       chatUpdate.pendingMessageCount = (chatData.pendingMessageCount || 0) + 1
     }
@@ -693,9 +705,15 @@ export async function markChatRead(chatId, uid) {
   if (touched) await batch.commit()
 
   const chatSnap = await getDoc(chatDoc(chatId))
-  if (chatSnap.exists() && !(chatSnap.data().readBy || []).includes(uid)) {
-    await updateDoc(chatDoc(chatId), { readBy: arrayUnion(uid) })
-  }
+  if (!chatSnap.exists()) return
+  const data = chatSnap.data()
+  const readUpdate = {}
+  if (!(data.readBy || []).includes(uid)) readUpdate.readBy = arrayUnion(uid)
+  // Real unread count reset — the actual fix for "badge should clear
+  // once you've reached the latest messages," not just the old
+  // read/unread boolean this used to only maintain.
+  if ((data.unreadCount?.[uid] || 0) !== 0) readUpdate[`unreadCount.${uid}`] = 0
+  if (Object.keys(readUpdate).length > 0) await updateDoc(chatDoc(chatId), readUpdate)
 }
 
 /**
@@ -708,7 +726,16 @@ export async function markChatRead(chatId, uid) {
  * `readBy`) is affected, matching what the action visibly does.
  */
 export async function markChatUnread(chatId, uid) {
-  await updateDoc(chatDoc(chatId), { readBy: arrayRemove(uid) })
+  const snap = await getDoc(chatDoc(chatId))
+  const update = { readBy: arrayRemove(uid) }
+  // A manual "mark unread" has no real per-message count behind it —
+  // matches the old boolean semantics, just expressed as "at least 1"
+  // so the list's count badge has something honest to show rather than
+  // staying at a stale 0 while the row itself now reads as unread.
+  if (!(snap.exists() && (snap.data().unreadCount?.[uid] || 0) > 0)) {
+    update[`unreadCount.${uid}`] = 1
+  }
+  await updateDoc(chatDoc(chatId), update)
 }
 
 const TYPING_STALE_MS = 5000 // client auto-clears at ~1.8s; this is just headroom for the write to land plus a fallback for an abrupt disconnect (no onDisconnect hook without RTDB — same honest limitation presenceService.js already documents for online/offline).

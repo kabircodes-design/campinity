@@ -40,7 +40,11 @@ export default function CommunityCard({ community, membershipState = null, onSta
   const [gateOpen, setGateOpen] = useState(false)
 
   const state = hasOverride ? localState : membershipState
-  const goToCommunity = () => navigate(`/community/${community.id}`)
+  // A club (type: 'official_club') opens its own dedicated discussion
+  // experience (ClubDetailPage, /club/:id) instead of the general
+  // community feed page — same underlying communities/{id} document,
+  // different route/UI for the same reason Clubs has its own tab now.
+  const goToCommunity = () => navigate(community.type === 'official_club' ? `/club/${community.id}` : `/community/${community.id}`)
   const isNew = community.createdAt?.toMillis && Date.now() - community.createdAt.toMillis() < NEW_WINDOW_MS
 
   const handleAction = async (event) => {

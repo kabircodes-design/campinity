@@ -18,9 +18,12 @@ import { useAuth } from '../context/AuthContext.jsx'
 
 // Real types, taken directly from CommunityCard.jsx's own typeLabels
 // — not invented. "All" is added as the default/unfiltered option.
+// 'official_club' deliberately excluded — Clubs has its own tab/route
+// now, and the Communities tab's base list already filters that type
+// out entirely (see clubFilter above), so a "Clubs" chip here would
+// only ever return zero results.
 const TYPE_FILTERS = [
   { id: 'all', label: 'All' },
-  { id: 'official_club', label: 'Clubs' },
   { id: 'study_group', label: 'Study' },
   { id: 'society', label: 'Society' },
   { id: 'event', label: 'Events' },
@@ -55,7 +58,12 @@ const TYPE_FILTERS = [
  */
 export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
   const navigate = useNavigate()
-  const clubFilter = (list) => (clubsOnly ? list.filter((c) => c.type === 'official_club') : list)
+  // Communities and Clubs are two distinct product concepts now — the
+  // Communities tab filters OUT official_club entries (legacy clubs
+  // created before Clubs had its own tab/route must not keep showing up
+  // mixed into general community discovery), and the Clubs tab filters
+  // IN only that type. Same list, opposite ends of one condition.
+  const clubFilter = (list) => list.filter((c) => (clubsOnly ? c.type === 'official_club' : c.type !== 'official_club'))
   const [communities, setCommunities] = useState([])
   const [membershipStates, setMembershipStates] = useState(new Map())
   const [loading, setLoading] = useState(true)
@@ -262,7 +270,7 @@ export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
                   <div className="mt-4">
                     <button
                       type="button"
-                      onClick={() => navigate(clubsOnly ? '/community/create?mode=club' : '/community/create')}
+                      onClick={() => navigate(clubsOnly ? '/club/create' : '/community/create')}
                       className="flex items-center gap-1.5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 active:scale-[0.98] transition-all duration-200"
                     >
                       <Plus className="w-4 h-4" /> {clubsOnly ? 'Create Club' : 'Create Community'}
@@ -343,7 +351,7 @@ export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
                 </p>
                 <button
                   type="button"
-                  onClick={() => navigate(clubsOnly ? '/community/create?mode=club' : '/community/create')}
+                  onClick={() => navigate(clubsOnly ? '/club/create' : '/community/create')}
                   className="mt-5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
                 >
                   {clubsOnly ? 'Create Club' : 'Create Community'}
@@ -486,7 +494,7 @@ export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
             </p>
             <button
               type="button"
-              onClick={() => navigate(clubsOnly ? '/community/create?mode=club' : '/community/create')}
+              onClick={() => navigate(clubsOnly ? '/club/create' : '/community/create')}
               className="relative mt-3 w-full rounded-full bg-white text-blue-700 text-xs font-semibold py-2.5 hover:bg-blue-50 active:scale-[0.98] transition-all duration-200"
             >
               {clubsOnly ? 'Create Club →' : 'Create Community →'}

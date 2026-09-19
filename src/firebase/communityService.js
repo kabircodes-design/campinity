@@ -796,3 +796,32 @@ export function subscribeToCommunity(communityId, callback) {
     callback(snap.exists() ? mapCommunityDoc(snap) : null)
   })
 }
+
+/**
+ * Live discussion feed for ClubDetailPage.jsx — same posts/{postId}
+ * collection and the same mapPostDoc + enrichMappedPosts pipeline
+ * getCommunityFeedPosts already uses (a club post IS a community post,
+ * same schema, same communityId scoping field), just delivered as a
+ * real-time onSnapshot instead of a one-time page fetch. A Club is
+ * framed as an ongoing discussion, which only actually feels real-time
+ * if new messages appear without a manual refresh — Communities' own
+ * card-feed tab still uses the paginated one-time fetch above, since
+ * that surface was never asked to behave like live chat.
+ */
+export function subscribeToCommunityFeedPosts(communityId, currentUid, onData, { pageSize = 50 } = {}) {
+  const postsQuery = query(
+    collection(db, 'posts'),
+    where('communityId', '==', communityId),
+    orderBy('createdAt', 'desc'),
+    limit(pageSize)
+  )
+  let sequence = 0
+  return onSnapshot(postsQuery, (snap) => {
+    const thisSequence = ++sequence
+    const rawPosts = snap.docs.map((d) => mapPostDoc(d, currentUid))
+    enrichMappedPosts(rawPosts).then((enriched) => {
+      if (sequence !== thisSequence) return
+      onData(enriched.slice().reverse()) // oldest-first — a discussion reads top-to-bottom, newest at the bottom, like a conversation
+    })
+  })
+}

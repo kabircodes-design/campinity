@@ -571,9 +571,9 @@ export default function CreatePostPage() {
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
-          <div className="h-14 flex items-center justify-between px-3">
+      <div className="mx-auto max-w-[480px] lg:max-w-[900px] bg-white min-h-screen lg:min-h-0 lg:my-8 lg:rounded-2xl lg:border lg:border-gray-100 lg:shadow-sm">
+        <header className="sticky top-0 lg:relative z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 lg:rounded-t-2xl">
+          <div className="h-14 lg:h-16 flex items-center justify-between px-3 lg:px-8">
             <button
               type="button"
               aria-label="Cancel"
@@ -582,21 +582,29 @@ export default function CreatePostPage() {
             >
               <X className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900">
+            <span className="text-base lg:text-lg font-bold tracking-tight text-gray-900">
               {lockedCommunity ? 'New Community Post' : 'New Post'}
             </span>
             <button
               type="button"
               onClick={handlePublish}
               disabled={!isValid || isPublishing}
-              className="rounded-full bg-blue-600 text-white text-sm font-semibold px-4 py-2 hover:bg-blue-700 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
+              className="rounded-full bg-blue-600 text-white text-sm font-semibold px-4 lg:px-6 py-2 hover:bg-blue-700 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
             >
               {isPublishing ? 'Publishing…' : 'Publish'}
             </button>
           </div>
         </header>
 
-        <div className="px-4 py-4 pb-24 space-y-5">
+        <div className="px-4 py-4 pb-24 lg:px-8 lg:py-8 lg:pb-16 space-y-5">
+          {/* Desktop: a real two-column workspace (composer + a settings
+              sidebar), not the mobile card stretched wider. On mobile
+              (below lg) this wrapper is a plain block, so the two
+              sections below still stack in exactly the same order they
+              always have — zero change to mobile's DOM order or
+              spacing, only how desktop lays the SAME content out. */}
+          <div className="lg:flex lg:items-start lg:gap-8 space-y-5 lg:space-y-0">
+          <div className="flex-1 min-w-0 space-y-5">
           {lockedCommunity && (
             <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50/60 px-3.5 py-2.5">
               <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -694,7 +702,7 @@ export default function CreatePostPage() {
                     : `Share something with ${lockedCommunity.name}...`
                   : "What's happening on campus? Use @ to mention someone."
               }
-              className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+              className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 lg:px-5 lg:py-4 lg:min-h-[180px] text-[15px] lg:text-base text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
             />
             <p className="mt-1 text-right text-xs text-gray-400">
               {postText.length}/{MAX_LENGTH}
@@ -816,7 +824,9 @@ export default function CreatePostPage() {
               </button>
             )}
           </div>
+          </div>
 
+          <div className="lg:w-[300px] lg:flex-shrink-0 space-y-5">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Category</p>
             <div className="flex flex-wrap gap-2">
@@ -924,6 +934,8 @@ export default function CreatePostPage() {
               </button>
             )}
           </div>
+          </div>
+          </div>
 
           {error && (
             <p role="alert" className="rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
@@ -931,12 +943,12 @@ export default function CreatePostPage() {
             </p>
           )}
 
-          <div className="flex items-center gap-3 pt-1">
+          <div className="flex items-center gap-3 pt-1 lg:justify-end">
             <button
               type="button"
               onClick={() => navigate('/home')}
               disabled={isPublishing}
-              className="flex-1 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-3 hover:border-gray-300 transition-all duration-300 disabled:opacity-50"
+              className="flex-1 lg:flex-none lg:w-auto lg:px-8 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-3 hover:border-gray-300 transition-all duration-300 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -944,7 +956,7 @@ export default function CreatePostPage() {
               type="button"
               onClick={handlePublish}
               disabled={!isValid || isPublishing}
-              className="flex-1 rounded-full bg-blue-600 text-white text-sm font-semibold py-3 hover:bg-blue-700 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
+              className="flex-1 lg:flex-none lg:w-auto lg:px-8 rounded-full bg-blue-600 text-white text-sm font-semibold py-3 hover:bg-blue-700 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
             >
               {isPublishing ? 'Publishing…' : 'Publish'}
             </button>

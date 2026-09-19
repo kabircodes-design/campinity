@@ -8,6 +8,7 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { isOnline } from '../firebase/presenceService.js'
 import { deleteChat, markChatRead, markChatUnread, toggleMuteChat } from '../firebase/chatService.js'
 import ChatActionSheet from './ChatActionSheet.jsx'
+import { useAuthorProfile } from '../hooks/useAuthorEnrichment.js'
 
 const LONG_PRESS_MS = 500
 
@@ -43,8 +44,26 @@ export default function ChatCard({ chat, profile }) {
   const subtitle = isGroup ? `${chat.participants?.length || 0} members` : null
   const isPinned = (chat.pinnedBy || []).includes(uid)
   const isMuted = (chat.mutedBy || []).includes(uid)
-  const isUnread = chat.lastMessage && chat.lastSenderId !== uid && !(chat.readBy || []).includes(uid)
+  // Real per-message unread COUNT (chatService.js's sendMessage
+  // increments unreadCount.{uid} for every other participant, and
+  // markChatRead/markChatUnread reset it) — not just the old readBy
+  // read/unread boolean, which could never say "how many," only
+  // "any." isUnread now derives from the same real number instead of
+  // a separately-maintained flag, so the two can't disagree.
+  const unreadCount = chat.unreadCount?.[uid] || 0
+  const isUnread = unreadCount > 0
+  const unreadLabel = unreadCount > 9 ? '9+' : String(unreadCount)
   const online = !isGroup && isOnline(profile)
+
+  // Smart group preview — "Rahul: Hey, are we meeting today?" instead of
+  // a bare message with no sender identity, which is the actual reason
+  // a busy group's list becomes hard to scan. Only fetched for groups
+  // (1:1 has no ambiguity about who sent it), and reuses the same
+  // shared/deduped author cache every other avatar/name consumer in the
+  // app now uses — not a new lookup system.
+  const lastSenderIsMe = chat.lastSenderId === uid
+  const lastSenderProfile = useAuthorProfile(isGroup && chat.lastSenderId && !lastSenderIsMe ? chat.lastSenderId : null)
+  const groupPreviewPrefix = isGroup && chat.lastMessage ? (lastSenderIsMe ? 'You: ' : lastSenderProfile ? `${lastSenderProfile.displayName?.split(' ')[0] || 'Someone'}: ` : '') : ''
 
   const openSheet = () => setSheetOpen(true)
 
@@ -150,13 +169,29 @@ export default function ChatCard({ chat, profile }) {
           </div>
           {subtitle && <p className="text-[11px] text-gray-400 truncate">{subtitle}</p>}
           <p className={`text-xs truncate ${isUnread ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
-            {chat.isPendingSent ? 'Message Request Sent' : chat.lastMessage || 'Say hello 👋'}
+            {chat.isPendingSent ? (
+              'Message Request Sent'
+            ) : chat.lastMessage ? (
+              <>
+                {groupPreviewPrefix && <span className="text-gray-500">{groupPreviewPrefix}</span>}
+                {chat.lastMessage}
+              </>
+            ) : (
+              'Say hello 👋'
+            )}
           </p>
         </div>
 
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           <span className="text-[11px] text-gray-400">{formatTimeAgo(chat.lastMessageAt)}</span>
-          {isUnread && <span className="w-2 h-2 rounded-full bg-blue-600" aria-hidden="true" />}
+          {isUnread && (
+            <span
+              className="min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center"
+              aria-label={`${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}`}
+            >
+              {unreadLabel}
+            </span>
+          )}
         </div>
       </button>
 

@@ -286,21 +286,35 @@ export default function CommunitySettingsPage() {
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Type {!isOwner && <span className="normal-case font-normal">(owner only)</span>}
             </p>
-            <div className="flex flex-wrap gap-2">
-              {COMMUNITY_TYPES.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => isOwner && setType(key)}
-                  disabled={!isOwner}
-                  className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-300 disabled:opacity-50 ${
-                    type === key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}
-                >
-                  {typeLabels[key]}
-                </button>
-              ))}
-            </div>
+            {/* Communities and Clubs are two distinct product concepts
+                now (CreateCommunityPage.jsx/CreateClubPage.jsx already
+                enforce this at creation) — this picker must not become a
+                backdoor around that: a community already created as
+                'official_club' (a Club) can't be retyped into a plain
+                community here, and a plain community can't be retyped
+                INTO 'official_club' either. If this entity is already a
+                club, its type shows as fixed, not a re-pickable list. */}
+            {type === 'official_club' ? (
+              <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-600 text-xs font-semibold px-3.5 py-1.5">
+                Official Club — managed from the Clubs section
+              </span>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {COMMUNITY_TYPES.filter((key) => key !== 'official_club').map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => isOwner && setType(key)}
+                    disabled={!isOwner}
+                    className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-300 disabled:opacity-50 ${
+                      type === key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {typeLabels[key]}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>

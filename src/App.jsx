@@ -64,6 +64,8 @@ const CreateCommunityPage = lazy(() => import('./pages/CreateCommunityPage.jsx')
 const CommunityDetailPage = lazy(() => import('./pages/CommunityDetailPage.jsx'))
 const CommunitySettingsPage = lazy(() => import('./pages/CommunitySettingsPage.jsx'))
 const CommunitiesHubPage = lazy(() => import('./pages/CommunitiesHubPage.jsx'))
+const CreateClubPage = lazy(() => import('./pages/CreateClubPage.jsx'))
+const ClubDetailPage = lazy(() => import('./pages/ClubDetailPage.jsx'))
 const LostFoundPage = lazy(() => import('./pages/LostFoundPage.jsx'))
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage.jsx'))
 
@@ -349,6 +351,23 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <CreateCommunityPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* /club/create must also come before any dynamic /club/:communityId route. */}
+        <Route
+          path="/club/create"
+          element={
+            <ProtectedRoute stage="home">
+              <CreateClubPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/club/:communityId"
+          element={
+            <ProtectedRoute stage="home">
+              <ClubDetailPage />
             </ProtectedRoute>
           }
         />

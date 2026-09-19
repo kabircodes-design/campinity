@@ -1,78 +1,65 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Users } from 'lucide-react'
+import { ArrowLeft, Sparkles } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
-import { COMMUNITY_TYPES, createCommunity } from '../firebase/communityService.js'
+import { createCommunity } from '../firebase/communityService.js'
 import { useMyVerification } from '../access/useMyVerification.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
 
-const typeLabels = {
-  study_group: 'Study Group',
-  hostel: 'Hostel',
-  branch: 'Branch',
-  batch: 'Batch',
-  society: 'Society',
-  event: 'Event',
-  custom: 'Custom'
-}
+// Club "category" reuses the community schema's existing free-form
+// `tags` field (communityService.js) rather than inventing a new
+// category field — these are just suggested starting tags specific to
+// what a club actually is, picked from (not a hardcoded enum the
+// backend enforces). A club can still type its own tags too.
+const CLUB_CATEGORIES = [
+  'Academic', 'Sports', 'Arts & Culture', 'Technology', 'Social', 'Volunteering', 'Music', 'Gaming'
+]
 
-// 'official_club' deliberately excluded from this picker — Communities
-// and Clubs are now two distinct product concepts (Clubs has its own
-// CreateClubPage.jsx / /club/create route). COMMUNITY_TYPES itself
-// (communityService.js) still includes 'official_club', unchanged —
-// that's the backend validation list and existing club documents still
-// legitimately carry that type; this is only the UI offering it as a
-// choice when creating a plain Community.
-const COMMUNITY_ONLY_TYPES = COMMUNITY_TYPES.filter((t) => t !== 'official_club')
-
-const privacyOptions = [
-  { key: 'public', label: 'Public', description: 'Anyone can find and join instantly.' },
-  { key: 'private', label: 'Private', description: 'Anyone can find it, but joining needs approval.' }
+const accessOptions = [
+  { key: 'public', label: 'Open to join', description: 'Anyone can join instantly and jump into the discussion.' },
+  { key: 'private', label: 'Approval required', description: 'New members request to join; an admin approves them.' }
 ]
 
 /**
- * Form pattern follows AddCollegePage.jsx (labeled fields, inline
- * validation, disabled-while-submitting), category selection follows
- * CreatePostPage.jsx's chip-row pattern. Talks directly to
- * communityService.createCommunity — no duplicate Firestore logic
- * here, this page is UI + validation only.
- *
- * Invite-only privacy from the brief isn't implemented: Phase 1's
- * communityService only supports 'public' | 'private' (join-instantly
- * vs request-to-join). A third invite-only mode needs its own
- * membership path (an invite document a user redeems, distinct from a
- * request an owner approves) that doesn't exist yet — surfaced here
- * rather than added as an option that would silently behave like
- * private.
- *
- * Desktop: a real two-column workspace (preview + form vs. mobile's
- * single stacked card), same pattern as CreatePostPage.jsx's own
- * desktop pass — not the mobile modal simply stretched wider.
+ * Create Club — deliberately its OWN page, not CreateCommunityPage
+ * with a query flag. Clubs and Communities are two distinct product
+ * concepts now (Clubs = focused ongoing discussion groups; Communities
+ * = broader campus/discovery spaces), so this needed its own identity,
+ * not a relabeled community form. It still calls the exact same
+ * createCommunity() backend as CreateCommunityPage — 'official_club'
+ * was already a real, pre-existing COMMUNITY_TYPES value before this
+ * page existed, so a club really IS a community of that type under the
+ * hood; only the type is now fixed here (never shown/pickable — the
+ * whole point of this page IS that type), and the fields/copy/visual
+ * language are club-specific instead of generic community fields.
  */
-export default function CreateCommunityPage() {
+export default function CreateClubPage() {
   const navigate = useNavigate()
   const verified = useMyVerification()
 
   const [name, setName] = useState('')
   const [handle, setHandle] = useState('')
   const [description, setDescription] = useState('')
-  const [type, setType] = useState('custom')
-  const [privacy, setPrivacy] = useState('public')
-  const [tagsInput, setTagsInput] = useState('')
+  const [selectedCategories, setSelectedCategories] = useState([])
+  const [access, setAccess] = useState('public')
   const [rules, setRules] = useState('')
   const [errors, setErrors] = useState({})
   const [submitError, setSubmitError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const toggleCategory = (cat) => {
+    setSelectedCategories((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat].slice(0, 4)))
+  }
+
   const validate = () => {
     const next = {}
-    if (!name.trim()) next.name = 'Community name is required'
+    if (!name.trim()) next.name = 'Give your club a name'
     if (!handle.trim()) next.handle = 'A handle is required'
     else if (!/^[a-z0-9_]{3,24}$/.test(handle.trim().toLowerCase())) {
       next.handle = '3-24 characters, lowercase letters, numbers, underscores only'
     }
-    if (!description.trim()) next.description = 'A short description helps people know what this is'
+    if (!description.trim()) next.description = "Tell people what this club is about"
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -83,7 +70,7 @@ export default function CreateCommunityPage() {
 
     const uid = auth.currentUser?.uid
     if (!uid) {
-      setSubmitError('You need to be signed in to create a community.')
+      setSubmitError('You need to be signed in to create a club.')
       return
     }
 
@@ -91,34 +78,24 @@ export default function CreateCommunityPage() {
     setIsSubmitting(true)
 
     try {
-      const tags = tagsInput
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter(Boolean)
-        .slice(0, 8)
-
-      const communityId = await createCommunity({
+      const clubId = await createCommunity({
         uid,
         name: name.trim(),
         handle: handle.trim(),
         description: description.trim(),
-        type,
-        privacy,
-        tags,
+        type: 'official_club',
+        privacy: access,
+        tags: selectedCategories,
         rules: rules.trim()
       })
 
-      navigate(`/community/${communityId}`)
+      navigate(`/club/${clubId}`)
     } catch (err) {
-      setSubmitError(err?.message || 'Could not create this community. Please try again.')
+      setSubmitError(err?.message || 'Could not create this club. Please try again.')
       setIsSubmitting(false)
     }
   }
 
-  // Defense in depth against direct navigation to /community/create —
-  // DesktopRightRail.jsx's own "Create Community" button already gates
-  // itself with the same feature, but that only covers that one entry
-  // point; the real boundary is communities/{communityId}'s create rule.
   if (verified === false) {
     return (
       <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
@@ -154,39 +131,43 @@ export default function CreateCommunityPage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-base lg:text-lg font-bold tracking-tight text-gray-900">Create Community</span>
+            <span className="text-base lg:text-lg font-bold tracking-tight text-gray-900">Create Club</span>
           </div>
         </header>
 
         <form onSubmit={handleSubmit} className="px-4 py-5 lg:px-8 lg:py-8 pb-10 lg:pb-12">
           <div className="lg:flex lg:items-start lg:gap-10 space-y-5 lg:space-y-0">
             <div className="lg:w-[280px] lg:flex-shrink-0 space-y-5">
-              <div className="flex flex-col items-center text-center gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-5 lg:sticky lg:top-24">
-                <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-2xl bg-blue-600 flex items-center justify-center flex-shrink-0">
-                  <Users className="w-7 h-7 lg:w-9 lg:h-9 text-white" strokeWidth={1.8} />
+              <div
+                className="flex flex-col items-center text-center gap-3 rounded-2xl p-5 lg:sticky lg:top-24"
+                style={{ background: 'linear-gradient(135deg, #eef4ff 0%, #f3ecff 100%)' }}
+              >
+                <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <Sparkles className="w-7 h-7 lg:w-9 lg:h-9 text-white" strokeWidth={1.8} />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{name.trim() || 'Your community name'}</p>
+                  <p className="text-sm font-semibold text-gray-900">{name.trim() || 'Your club name'}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{handle.trim() ? `@${handle.trim()}` : 'your-handle'}</p>
                 </div>
                 <p className="text-[12.5px] text-gray-500 leading-relaxed">
-                  You'll be the owner. Cover image and logo can be added right after creation.
+                  You'll be the owner. Clubs are built for ongoing discussion — a logo and cover can be added right after
+                  creation.
                 </p>
               </div>
             </div>
 
             <div className="flex-1 min-w-0 space-y-5">
               <div>
-                <label htmlFor="cc-name" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                  Community name
+                <label htmlFor="clb-name" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                  Club name
                 </label>
                 <input
-                  id="cc-name"
+                  id="clb-name"
                   type="text"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   disabled={isSubmitting}
-                  placeholder="e.g. Photography Enthusiasts"
+                  placeholder="e.g. Debate Club"
                   className={`w-full rounded-xl border bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
                     errors.name ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
                   }`}
@@ -195,18 +176,18 @@ export default function CreateCommunityPage() {
               </div>
 
               <div>
-                <label htmlFor="cc-handle" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                <label htmlFor="clb-handle" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                   Handle
                 </label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">@</span>
                   <input
-                    id="cc-handle"
+                    id="clb-handle"
                     type="text"
                     value={handle}
                     onChange={(event) => setHandle(event.target.value.toLowerCase())}
                     disabled={isSubmitting}
-                    placeholder="photography-enthusiasts"
+                    placeholder="debate-club"
                     className={`w-full rounded-xl border bg-gray-50 pl-8 pr-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
                       errors.handle ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
                     }`}
@@ -216,16 +197,16 @@ export default function CreateCommunityPage() {
               </div>
 
               <div>
-                <label htmlFor="cc-description" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                  Description
+                <label htmlFor="clb-description" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                  What's this club about?
                 </label>
                 <textarea
-                  id="cc-description"
+                  id="clb-description"
                   rows={3}
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                   disabled={isSubmitting}
-                  placeholder="What's this community about?"
+                  placeholder="What will members discuss here? What's the club's purpose?"
                   className={`w-full resize-none rounded-xl border bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
                     errors.description ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
                   }`}
@@ -234,38 +215,42 @@ export default function CreateCommunityPage() {
               </div>
 
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Type</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Category <span className="normal-case font-normal text-gray-400">(pick up to 4)</span>
+                </p>
                 <div className="flex flex-wrap gap-2">
-                  {COMMUNITY_ONLY_TYPES.map((key) => (
+                  {CLUB_CATEGORIES.map((cat) => (
                     <button
-                      key={key}
+                      key={cat}
                       type="button"
-                      onClick={() => setType(key)}
+                      onClick={() => toggleCategory(cat)}
                       disabled={isSubmitting}
                       className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-300 ${
-                        type === key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        selectedCategories.includes(cat)
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                       }`}
                     >
-                      {typeLabels[key]}
+                      {cat}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Privacy</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Access</p>
                 <div className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0">
-                  {privacyOptions.map((option) => (
+                  {accessOptions.map((option) => (
                     <button
                       key={option.key}
                       type="button"
-                      onClick={() => setPrivacy(option.key)}
+                      onClick={() => setAccess(option.key)}
                       disabled={isSubmitting}
                       className={`w-full text-left rounded-xl border px-4 py-3 transition-all duration-300 ${
-                        privacy === option.key ? 'border-blue-500 bg-blue-50/60' : 'border-gray-200 hover:border-gray-300'
+                        access === option.key ? 'border-indigo-500 bg-indigo-50/60' : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
-                      <p className={`text-sm font-semibold ${privacy === option.key ? 'text-blue-600' : 'text-gray-900'}`}>
+                      <p className={`text-sm font-semibold ${access === option.key ? 'text-indigo-600' : 'text-gray-900'}`}>
                         {option.label}
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">{option.description}</p>
@@ -274,36 +259,19 @@ export default function CreateCommunityPage() {
                 </div>
               </div>
 
-              <div className="lg:grid lg:grid-cols-2 lg:gap-5 space-y-5 lg:space-y-0">
-                <div>
-                  <label htmlFor="cc-tags" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                    Tags <span className="normal-case font-normal text-gray-400">(comma-separated, optional)</span>
-                  </label>
-                  <input
-                    id="cc-tags"
-                    type="text"
-                    value={tagsInput}
-                    onChange={(event) => setTagsInput(event.target.value)}
-                    disabled={isSubmitting}
-                    placeholder="photography, arts, meetups."
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="cc-rules" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                    Rules <span className="normal-case font-normal text-gray-400">(optional)</span>
-                  </label>
-                  <textarea
-                    id="cc-rules"
-                    rows={1}
-                    value={rules}
-                    onChange={(event) => setRules(event.target.value)}
-                    disabled={isSubmitting}
-                    placeholder="Be respectful..."
-                    className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300 lg:h-[42px]"
-                  />
-                </div>
+              <div>
+                <label htmlFor="clb-rules" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                  Club rules <span className="normal-case font-normal text-gray-400">(optional)</span>
+                </label>
+                <textarea
+                  id="clb-rules"
+                  rows={2}
+                  value={rules}
+                  onChange={(event) => setRules(event.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="Stay on topic, be respectful, no spam..."
+                  className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+                />
               </div>
 
               {submitError && (
@@ -324,9 +292,9 @@ export default function CreateCommunityPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 lg:flex-none lg:w-auto lg:px-8 rounded-full bg-blue-600 text-white text-sm font-semibold py-3 hover:bg-blue-700 disabled:opacity-50 transition-all duration-300"
+                  className="flex-1 lg:flex-none lg:w-auto lg:px-8 rounded-full bg-indigo-600 text-white text-sm font-semibold py-3 hover:bg-indigo-700 disabled:opacity-50 transition-all duration-300"
                 >
-                  {isSubmitting ? 'Creating…' : 'Create Community'}
+                  {isSubmitting ? 'Creating…' : 'Create Club'}
                 </button>
               </div>
             </div>

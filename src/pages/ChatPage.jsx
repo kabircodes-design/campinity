@@ -834,6 +834,7 @@ export default function ChatPage() {
                 chatId={chatId}
                 currentUid={currentUid}
                 otherDisplayName={!isGroup ? otherProfile?.displayName : undefined}
+                otherPhotoUrl={!isGroup ? getProfileIdentityImage(otherProfile) : undefined}
               />
 
               <div className="flex-shrink-0 border-t border-gray-100 bg-white pb-[env(safe-area-inset-bottom)]">
