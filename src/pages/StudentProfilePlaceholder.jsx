@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, MoreHorizontal } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, MoreHorizontal } from 'lucide-react'
+import VerifiedAchievementDetailModal from '../components/VerifiedAchievementDetailModal.jsx'
+import { getVerifiedAchievements } from '../firebase/achievementService.js'
 import ProfileHeader from '../components/ProfileHeader.jsx'
 import PostCard from '../components/PostCard.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
@@ -148,6 +150,19 @@ export default function StudentProfilePlaceholder() {
       cancelled = true
     }
   }, [activeTab, profile, communitiesLoadedOnce])
+
+  const [verifiedAchievements, setVerifiedAchievements] = useState([])
+  const [selectedAchievement, setSelectedAchievement] = useState(null)
+  useEffect(() => {
+    if (!profile?.uid) return
+    let cancelled = false
+    getVerifiedAchievements(profile.uid).then((rows) => {
+      if (!cancelled) setVerifiedAchievements(rows)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.uid])
 
   const [college, setCollege] = useState(null)
   useEffect(() => {
@@ -309,6 +324,28 @@ export default function StudentProfilePlaceholder() {
           mutualFollowers={mutualFollowers}
         />
 
+        {/* Verified Campus Achievements — public, per the brief's "when
+            another user clicks a verified achievement" spec. Renders
+            nothing if empty rather than an empty state, since this is
+            someone else's profile, not the owner's dashboard. */}
+        {verifiedAchievements.length > 0 && (
+          <div className="px-4 mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
+            {verifiedAchievements.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => setSelectedAchievement(a)}
+                className="flex-shrink-0 flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50/60 pl-1.5 pr-3 py-1.5 hover:border-blue-200 transition-colors"
+              >
+                <span className="w-5 h-5 rounded-full bg-white flex items-center justify-center">
+                  <BadgeCheck className="w-3 h-3 text-blue-600" />
+                </span>
+                <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">{a.title}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {messageError && (
           <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-[999] w-[calc(100%-2rem)] max-w-[360px]">
             <div className="flex items-center gap-2.5 rounded-xl bg-gray-900 text-white text-sm px-4 py-3 shadow-lg">
@@ -321,6 +358,13 @@ export default function StudentProfilePlaceholder() {
         )}
 
         <VerificationGate open={messageGateOpen} onClose={() => setMessageGateOpen(false)} feature={FEATURES.SEND_MESSAGE} />
+
+        <VerifiedAchievementDetailModal
+          open={Boolean(selectedAchievement)}
+          onClose={() => setSelectedAchievement(null)}
+          achievement={selectedAchievement}
+          collegeName={college?.name}
+        />
 
         <ShareBottomSheet
           open={shareOpen}

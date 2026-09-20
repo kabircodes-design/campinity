@@ -2,7 +2,7 @@ import { getOrCreateChat, sendMessage } from '../firebase/chatService.js'
 import { incrementShareCount } from '../firebase/engagementService.js'
 import { createShareNotification } from '../firebase/notificationService.js'
 import { awardXP, hasReachedDailyCap } from '../gamification/xpService.js'
-import { POINTS_REWARDS } from '../gamification/config.js'
+import { POINTS_REWARDS, DAILY_CAPS } from '../gamification/config.js'
 
 /**
  * Orchestrates a share to one or more recipients — reuses
@@ -94,7 +94,7 @@ export async function shareContentToRecipients({
   // that's the actual anti-farming concern for an action with no
   // natural one-time-per-target identity.
   if (succeeded.length > 0) {
-    const capped = await hasReachedDailyCap(currentUid, 'share', 15).catch(() => true)
+    const capped = await hasReachedDailyCap(currentUid, 'share', DAILY_CAPS.share).catch(() => true)
     if (!capped) {
       await awardXP(currentUid, 'share', { campusPoints: POINTS_REWARDS.share || 0 }).catch(() => {})
     }

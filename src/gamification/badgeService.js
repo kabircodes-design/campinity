@@ -1,7 +1,8 @@
-import { collection, doc, getDoc, getDocs, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, increment, query, setDoc, serverTimestamp, updateDoc, where } from 'firebase/firestore'
 import { db } from '../firebase/firebase.js'
 import { BADGES } from './config.js'
 import { createBadgeNotification } from '../firebase/notificationService.js'
+import { progressDoc } from './xpService.js'
 
 /**
  * Badge checking runs AFTER awardXP, reading real data (xpLog counts,
@@ -23,7 +24,16 @@ import { createBadgeNotification } from '../firebase/notificationService.js'
  * admin action, not faked here.
  */
 
-async function countEventsOfType(uid, activityType) {
+/** Real earned-badge records for BadgesPage — { badgeId, earnedAt }[], most recent first. */
+export async function getEarnedBadges(uid) {
+  const snap = await getDocs(collection(db, 'userBadges', uid, 'earned'))
+  return snap.docs
+    .map((d) => ({ badgeId: d.id, earnedAt: d.data().earnedAt || null }))
+    .sort((a, b) => (b.earnedAt?.toMillis?.() || 0) - (a.earnedAt?.toMillis?.() || 0))
+}
+
+/** Exported — reused by BadgesPage to compute real "3 / 5" progress on locked badges without duplicating this query logic. */
+export async function countEventsOfType(uid, activityType) {
   const snap = await getDocs(query(collection(db, 'xpLog', uid, 'entries'), where('activityType', '==', activityType)))
   return snap.size
 }
@@ -42,9 +52,40 @@ async function awardBadge(uid, badgeId) {
 
   await setDoc(ref, { badgeId, earnedAt: serverTimestamp(), seen: false })
 
+  // Denormalized count for the leaderboard's Badges tab — a plain
+  // increment(), not a second transaction, so it doesn't contend with
+  // the transaction awardXP already runs against this same hot doc.
+  await updateDoc(progressDoc(uid), { badgeCount: increment(1), updatedAt: serverTimestamp() }).catch(() => {})
+
   await createBadgeNotification({ targetUid: uid, badgeId, badgeLabel: badge.label, badgeEmoji: badge.emoji }).catch(() => {})
 
   return true
+}
+
+/**
+ * Given a badge and a progress snapshot, returns real, currently-known
+ * progress toward it as { current, target } — used by BadgesPage for
+ * locked-badge progress bars. Never fabricated: badges with no
+ * checkable criteria (manual) or ones needing an extra fetch this
+ * function intentionally doesn't do (joined_before) return null,
+ * which the UI renders as "no progress tracking available" rather
+ * than a fake number.
+ */
+export async function getBadgeProgress(uid, badge, progressSnapshot) {
+  const { type, value } = badge.criteria || {}
+  if (type === 'streak_reached') return { current: progressSnapshot?.streak || 0, target: value }
+  if (type === 'level_reached') return { current: progressSnapshot?.level || 1, target: value }
+  if (type === 'posts_created') return { current: await countEventsOfType(uid, 'post_created'), target: value }
+  if (type === 'comments_created') return { current: await countEventsOfType(uid, 'comment_created'), target: value }
+  if (type === 'comments_received') return { current: await countEventsOfType(uid, 'comment_received'), target: value }
+  if (type === 'likes_received') return { current: await countEventsOfType(uid, 'like_received'), target: value }
+  if (type === 'events_attended') return { current: await countEventsOfType(uid, 'event_attended'), target: value }
+  if (type === 'stories_uploaded') return { current: await countEventsOfType(uid, 'story_uploaded'), target: value }
+  if (type === 'notes_uploaded') return { current: await countEventsOfType(uid, 'notes_uploaded'), target: value }
+  if (type === 'communities_joined') return { current: await countEventsOfType(uid, 'club_joined'), target: value }
+  if (type === 'lostfound_resolved') return { current: await countEventsOfType(uid, 'lostfound_resolved'), target: value }
+  if (type === 'campus_verified') return { current: progressSnapshot?.verifiedCampus ? 1 : 0, target: 1 }
+  return null
 }
 
 /**
@@ -67,26 +108,46 @@ export async function checkAndAwardBadges(uid, progressSnapshot) {
     let earned = false
 
     if (type === 'streak_reached') {
-      earned = (progressSnapshot?.currentStreak || 0) >= value
+      // Fixed pre-existing bug: every call site here passes the
+      // getUserProgress() DISPLAY shape (buildDisplayProgress's
+      // `streak` field), never the raw userProgress doc's
+      // `currentStreak` field — this read the wrong key and could
+      // never actually true (streak-based badges could never
+      // auto-award).
+      earned = (progressSnapshot?.streak || 0) >= value
     } else if (type === 'level_reached') {
       earned = (progressSnapshot?.level || 1) >= value
     } else if (type === 'posts_created') {
       earned = (await countEventsOfType(uid, 'post_created')) >= value
     } else if (type === 'comments_created') {
       earned = (await countEventsOfType(uid, 'comment_created')) >= value
+    } else if (type === 'comments_received') {
+      earned = (await countEventsOfType(uid, 'comment_received')) >= value
     } else if (type === 'likes_received') {
       earned = (await countEventsOfType(uid, 'like_received')) >= value
     } else if (type === 'events_attended') {
       earned = (await countEventsOfType(uid, 'event_attended')) >= value
     } else if (type === 'stories_uploaded') {
       earned = (await countEventsOfType(uid, 'story_uploaded')) >= value
+    } else if (type === 'notes_uploaded') {
+      earned = (await countEventsOfType(uid, 'notes_uploaded')) >= value
+    } else if (type === 'communities_joined') {
+      earned = (await countEventsOfType(uid, 'club_joined')) >= value
+    } else if (type === 'lostfound_resolved') {
+      earned = (await countEventsOfType(uid, 'lostfound_resolved')) >= value
     } else if (type === 'campus_verified') {
       earned = Boolean(progressSnapshot?.verifiedCampus)
+    } else if (type === 'joined_before') {
+      // Needs the account creation date, which lives on users/{uid},
+      // not userProgress — fetched only here, once, and only for a
+      // still-unearned joined_before badge, to avoid an extra read on
+      // every single badge check for every user.
+      const userSnap = await getDoc(doc(db, 'users', uid))
+      const createdAt = userSnap.exists() ? userSnap.data()?.createdAt : null
+      if (createdAt?.toDate) {
+        earned = createdAt.toDate() < new Date(value)
+      }
     }
-    // 'joined_before' (Early Bird) intentionally not evaluated here —
-    // it needs the user's account creation date, which lives on
-    // users/{uid}, not userProgress — left for a follow-up pass rather
-    // than guessed at with the wrong document.
 
     if (earned && (await awardBadge(uid, badgeId))) {
       newlyAwarded.push({ badgeId, ...badge })

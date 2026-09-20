@@ -31,7 +31,7 @@ import {
 } from './notificationService.js'
 import { awardXP, getUserProgress, hasReachedDailyCap } from '../gamification/xpService.js'
 import { checkAndAwardBadges } from '../gamification/badgeService.js'
-import { POINTS_REWARDS, REPUTATION_ACTION_REWARDS } from '../gamification/config.js'
+import { POINTS_REWARDS, REPUTATION_ACTION_REWARDS, DAILY_CAPS } from '../gamification/config.js'
 import { enrichWithAuthors } from '../hooks/useAuthorEnrichment.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
@@ -166,7 +166,7 @@ export async function likePost(postId, uid) {
   // — the same person unliking and reliking the same post can never
   // re-earn this reward, since the key would already exist in xpLog.
   if (!alreadyLiked) {
-    const likeGivenCapped = await hasReachedDailyCap(uid, 'like_given', 30).catch(() => true)
+    const likeGivenCapped = await hasReachedDailyCap(uid, 'like_given', DAILY_CAPS.like_given).catch(() => true)
     if (!likeGivenCapped) {
       await awardXP(uid, 'like_given', { dedupeKey: `like_given_${postId}_${uid}` }).catch(() => {})
     }
@@ -288,10 +288,16 @@ export async function addComment(postId, { uid, displayName, username, avatar, t
   // Gamification — deduped by the comment's own real Firestore id,
   // which only exists once this document has actually been created —
   // structurally impossible to double-award for the "same" comment.
-  const commentAward = await awardXP(uid, 'comment_created', {
-    campusPoints: POINTS_REWARDS.comment_created || 0,
-    dedupeKey: `comment_created_${newCommentRef.id}`
-  }).catch(() => null)
+  // Also daily-capped: unlike likes/shares, a comment previously had no
+  // cap at all — a user could otherwise farm XP by spamming trivial
+  // one-word comments all day.
+  const commentCreatedCapped = await hasReachedDailyCap(uid, 'comment_created', DAILY_CAPS.comment_created).catch(() => true)
+  const commentAward = commentCreatedCapped
+    ? null
+    : await awardXP(uid, 'comment_created', {
+        campusPoints: POINTS_REWARDS.comment_created || 0,
+        dedupeKey: `comment_created_${newCommentRef.id}`
+      }).catch(() => null)
   if (commentAward) {
     const progress = await getUserProgress(uid).catch(() => null)
     if (progress) await checkAndAwardBadges(uid, progress).catch(() => {})

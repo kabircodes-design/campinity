@@ -810,6 +810,105 @@ async function logAdminAction({ adminUid, action, targetType, targetId, targetUi
 }
 
 /**
+ * =====================================================================
+ * GAMIFICATION (Admin-SDK side) — the two reputation events that only
+ * ever happen through an admin action (campus verification approval,
+ * moderation penalties), so they're applied here rather than from the
+ * browser. These CANNOT import src/gamification/config.js — this
+ * functions/ package is a separate Node module tree with no build step
+ * wiring it to the client bundle — so the three constants below are a
+ * deliberate, disclosed duplication of config.js's REPUTATION_
+ * VERIFIED_CAMPUS_BONUS / REPUTATION_MODERATION_PENALTY. If those
+ * change on the client, update them here too.
+ *
+ * Both helpers write directly to userProgress/{uid} with the Admin SDK,
+ * which bypasses firestore.rules entirely (no client-side trust issue),
+ * and log a matching xpLog entry so getReputationBreakdown() on the
+ * client sees these events in the same place it sees everything else.
+ * =====================================================================
+ */
+const REPUTATION_VERIFIED_CAMPUS_BONUS = 50
+const REPUTATION_MODERATION_PENALTY = { restricted: -30, suspended: -75 }
+
+async function applyVerifiedCampusReputationBonus(uid) {
+  if (!uid) return
+  const progressRef = db().collection('userProgress').doc(uid)
+  const dedupeKey = 'campus_verified_bonus'
+
+  try {
+    const alreadyAwarded = await db()
+      .collection('xpLog').doc(uid).collection('entries')
+      .where('dedupeKey', '==', dedupeKey).limit(1).get()
+    if (!alreadyAwarded.empty) return
+
+    await progressRef.set(
+      {
+        verifiedCampus: true,
+        reputationScore: admin.firestore.FieldValue.increment(REPUTATION_VERIFIED_CAMPUS_BONUS),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    )
+    await db().collection('xpLog').doc(uid).collection('entries').add({
+      activityType: 'campus_verified_bonus',
+      xpAwarded: 0,
+      pointsAwarded: 0,
+      reputationAwarded: REPUTATION_VERIFIED_CAMPUS_BONUS,
+      dedupeKey,
+      metadata: {},
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    })
+  } catch (err) {
+    // Non-fatal — verification itself must still succeed even if this
+    // bonus write fails; logged for follow-up rather than surfaced to
+    // the admin as an error on an otherwise-successful approval.
+    console.error('[applyVerifiedCampusReputationBonus] failed', { uid, message: err?.message })
+  }
+}
+
+/**
+ * Applies a one-time reputation penalty when a user's moderationStatus
+ * transitions to 'restricted' or 'suspended'. Deduped per (uid, status)
+ * so the SAME status can never double-penalize (e.g. two reports both
+ * resulting in "restricted"), but escalating restricted -> suspended
+ * penalizes again since that's a materially worse outcome. Reversing a
+ * status back to 'active' does NOT reverse this penalty — treated as a
+ * historical mark, not a toggle, since nothing in this schema tracks
+ * "this specific penalty was later undone."
+ */
+async function applyModerationReputationPenalty(uid, status) {
+  const delta = REPUTATION_MODERATION_PENALTY[status]
+  if (!uid || !delta) return
+  const dedupeKey = `moderation_penalty_${uid}_${status}`
+
+  try {
+    const alreadyApplied = await db()
+      .collection('xpLog').doc(uid).collection('entries')
+      .where('dedupeKey', '==', dedupeKey).limit(1).get()
+    if (!alreadyApplied.empty) return
+
+    await db().collection('userProgress').doc(uid).set(
+      {
+        reputationScore: admin.firestore.FieldValue.increment(delta),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    )
+    await db().collection('xpLog').doc(uid).collection('entries').add({
+      activityType: 'moderation_penalty',
+      xpAwarded: 0,
+      pointsAwarded: 0,
+      reputationAwarded: delta,
+      dedupeKey,
+      metadata: { status },
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    })
+  } catch (err) {
+    console.error('[applyModerationReputationPenalty] failed', { uid, status, message: err?.message })
+  }
+}
+
+/**
  * adminGetOverviewCounts — real counts via Firestore's count() aggregation
  * (one small read per collection, not a full document fetch), replacing
  * AdminOverviewPage.jsx's "Unavailable" placeholders with real numbers.
@@ -1080,6 +1179,10 @@ exports.adminReviewVerificationRequest = onCall({ region: 'us-central1' }, async
       tx.update(reqRef, update)
     })
 
+    if (decision === 'approved' && targetUid) {
+      await applyVerifiedCampusReputationBonus(targetUid)
+    }
+
     await logAdminAction({
       adminUid: session.createdByUid,
       action: decision === 'approved' ? 'verification_approved' : 'verification_rejected',
@@ -1093,6 +1196,178 @@ exports.adminReviewVerificationRequest = onCall({ region: 'us-central1' }, async
     if (err instanceof HttpsError) throw err
     console.error('[adminReviewVerificationRequest] unexpected error', { requestId, message: err?.message })
     throw new HttpsError('internal', 'Could not update this request. Please try again.')
+  }
+})
+
+/**
+ * =====================================================================
+ * VERIFIED CAMPUS CERTIFICATES — users/{uid}/achievementSubmissions/{id}
+ * (created client-side, mirroring submitVerificationRequest's exact
+ * shape: a unique-per-submission Storage path under
+ * achievementCertificates/{uid}/{submissionId}/..., only the
+ * `documentPath` stored in Firestore, never a public download URL) and
+ * users/{uid}/verifiedAchievements/{id} (Admin-SDK-only, created here
+ * on approval — never client-writable, so a user can never self-award
+ * an official achievement). Preview reuses the EXISTING
+ * adminGetVerificationDocumentUrl function unchanged below — it already
+ * takes an arbitrary documentPath and returns a base64 data URI, so no
+ * second preview function was needed for this feature.
+ *
+ * The submission doc id itself is the anti-farming mechanism: the
+ * client derives it deterministically from (title, issuer, year) via a
+ * slug (see achievementService.js), so re-submitting the exact same
+ * achievement twice is structurally a Firestore "already exists" case
+ * — firestore.rules blocks both overwriting an existing submission
+ * (create-only) and ever updating one, so the same certificate can
+ * never be resubmitted to farm a second review/reward.
+ * =====================================================================
+ */
+async function sendSystemNotification(uid, data) {
+  try {
+    await db().collection('users').doc(uid).collection('notifications').add({
+      actorUid: uid,
+      actorName: 'Campinity',
+      actorAvatar: '',
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...data
+    })
+  } catch (err) {
+    console.error('[sendSystemNotification] failed', { uid, type: data?.type, message: err?.message })
+  }
+}
+
+exports.adminListAchievementSubmissions = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, status, pageSize } = request.data || {}
+  await requireValidAdminSession(sessionToken)
+  const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
+  const statusFilter = ['pending', 'approved', 'rejected'].includes(status) ? status : 'pending'
+
+  try {
+    const snap = await db()
+      .collectionGroup('achievementSubmissions')
+      .where('status', '==', statusFilter)
+      .orderBy('submittedAt', 'desc')
+      .limit(limitCount)
+      .get()
+
+    const submissions = await Promise.all(
+      snap.docs.map(async (d) => {
+        const data = d.data()
+        const uid = d.ref.parent.parent.id
+        const [userSnap, collegeSnap] = await Promise.all([
+          db().collection('users').doc(uid).get().catch(() => null),
+          data.collegeId ? db().collection('colleges').doc(data.collegeId).get().catch(() => null) : Promise.resolve(null)
+        ])
+        const userData = userSnap && userSnap.exists ? userSnap.data() : null
+
+        return {
+          id: d.id,
+          uid,
+          title: data.title || '',
+          issuer: data.issuer || '',
+          category: data.category || 'other',
+          year: data.year || null,
+          description: data.description || '',
+          documentPath: data.documentPath || null,
+          fileType: data.fileType || null,
+          status: data.status,
+          submittedAt: data.submittedAt,
+          rejectionReason: data.rejectionReason || null,
+          displayName: userData?.displayName || userData?.fullName || 'Unknown user',
+          username: userData?.username || '',
+          profilePhoto: userData?.profilePhoto || '',
+          collegeName: collegeSnap && collegeSnap.exists ? collegeSnap.data().name : ''
+        }
+      })
+    )
+
+    return { submissions }
+  } catch (err) {
+    console.error('[adminListAchievementSubmissions] unexpected error', { message: err?.message })
+    throw new HttpsError('internal', 'Could not load achievement submissions. Please try again.')
+  }
+})
+
+exports.adminReviewAchievementSubmission = onCall({ region: 'us-central1' }, async (request) => {
+  const { sessionToken, uid, submissionId, decision, reason } = request.data || {}
+  const session = await requireValidAdminSession(sessionToken)
+  if (!uid || !submissionId || !['approved', 'rejected'].includes(decision)) {
+    throw new HttpsError('invalid-argument', 'Missing uid/submissionId or invalid decision.')
+  }
+  const trimmedReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : ''
+
+  try {
+    const subRef = db().collection('users').doc(uid).collection('achievementSubmissions').doc(submissionId)
+    let submissionData = null
+
+    await db().runTransaction(async (tx) => {
+      const snap = await tx.get(subRef)
+      if (!snap.exists) throw new HttpsError('not-found', 'This submission no longer exists.')
+      const data = snap.data()
+      if (data.status !== 'pending') {
+        throw new HttpsError('failed-precondition', `This submission was already ${data.status}.`)
+      }
+      submissionData = data
+
+      if (decision === 'approved') {
+        // Doc id reused from the submission — the same "doc id as
+        // idempotency key" pattern userBadges/{uid}/earned already
+        // uses, so re-approving (which can't happen anyway, status is
+        // checked above) could never create a duplicate record.
+        const achievementRef = db().collection('users').doc(uid).collection('verifiedAchievements').doc(submissionId)
+        tx.set(achievementRef, {
+          title: data.title,
+          issuer: data.issuer,
+          collegeId: data.collegeId || null,
+          category: data.category || 'other',
+          year: data.year || null,
+          description: data.description || '',
+          verified: true,
+          verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+          verifiedBy: session.createdByUid,
+          relatedSubmissionId: submissionId,
+          earnedAt: admin.firestore.FieldValue.serverTimestamp(),
+          seen: false
+        })
+      }
+
+      const update = {
+        status: decision,
+        reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+        reviewedByAdminSession: true
+      }
+      if (decision === 'rejected' && trimmedReason) update.rejectionReason = trimmedReason
+      tx.update(subRef, update)
+    })
+
+    if (decision === 'approved') {
+      await sendSystemNotification(uid, {
+        type: 'achievement_verified',
+        achievementId: submissionId,
+        achievementTitle: submissionData?.title || 'Achievement'
+      })
+    } else {
+      await sendSystemNotification(uid, {
+        type: 'achievement_rejected',
+        achievementTitle: submissionData?.title || 'Achievement',
+        rejectionReason: trimmedReason || null
+      })
+    }
+
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: decision === 'approved' ? 'achievement_verified' : 'achievement_rejected',
+      targetType: 'achievementSubmission',
+      targetId: submissionId,
+      targetUid: uid,
+      reason: decision === 'rejected' ? trimmedReason || null : null
+    })
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err
+    console.error('[adminReviewAchievementSubmission] unexpected error', { uid, submissionId, message: err?.message })
+    throw new HttpsError('internal', 'Could not update this submission. Please try again.')
   }
 })
 
@@ -1218,6 +1493,10 @@ exports.adminSetUserVerification = onCall({ region: 'us-central1' }, async (requ
     if (!snap.exists) throw new HttpsError('not-found', 'This user no longer exists.')
     await userRef.update({ verifiedCampus: verified })
 
+    if (verified) {
+      await applyVerifiedCampusReputationBonus(uid)
+    }
+
     // Bug 1 fix (prospective half): this is a second, independent path
     // to verifiedCampus besides adminReviewVerificationRequest, and it
     // used to have no idea a verificationRequests document could even
@@ -1307,6 +1586,7 @@ exports.adminModerateContent = onCall({ region: 'us-central1' }, async (request)
 
     if ((moderationAction === 'restricted' || moderationAction === 'suspended') && targetOwnerUid) {
       await db().collection('users').doc(targetOwnerUid).update({ moderationStatus: moderationAction })
+      await applyModerationReputationPenalty(targetOwnerUid, moderationAction)
     }
 
     await reportRef.update({
@@ -1474,6 +1754,10 @@ exports.adminSetUserModerationStatus = onCall({ region: 'us-central1' }, async (
     await userRef.update({
       moderationStatus: status === 'active' ? admin.firestore.FieldValue.delete() : status
     })
+
+    if (status === 'restricted' || status === 'suspended') {
+      await applyModerationReputationPenalty(uid, status)
+    }
 
     await logAdminAction({
       adminUid: session.createdByUid,

@@ -8,8 +8,13 @@ import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getCollegeById } from '../data/dummyColleges.js'
-import { getLatestBadges, getLeaderboard, getLeaderboardUserCount } from '../firebase/leaderboardService.js'
-import { useProgress } from '../gamification/useProgress.js'
+import {
+  LEADERBOARD_METRICS,
+  getLatestBadges,
+  getLeaderboard,
+  getLeaderboardUserCount,
+  getUserMetricRank
+} from '../firebase/leaderboardService.js'
 
 const MEDALS = ['🥇', '🥈', '🥉']
 
@@ -20,36 +25,38 @@ const MEDALS = ['🥇', '🥈', '🥉']
  * modals), and a modal would be cramped for podium + a scrollable full
  * ranking + a sticky current-user affordance anyway.
  *
- * Ranking scope: real "Global" (userProgress ordered by xp, the same
- * live query the profile card's own rank is built from) and, only when
- * the viewer's own profile has a collegeId, a real "My College" filter
- * over that same fetched window — see leaderboardService.js's own
- * comment for why this is a client-side filter over a bounded top-N
- * window rather than a true full-population per-college query (no
- * collegeId field exists on userProgress docs, so Firestore can't do
- * this server-side without a schema change this task doesn't need to
- * make). No "This Week"/"This Month" scope is offered — this schema's
- * xp is an all-time running total with no windowed aggregate available
- * without scanning every user's full xpLog, so a real weekly/monthly
- * leaderboard isn't something this pass can honestly build; the scope
- * list is a plain array specifically so a future real scope slots in
- * without restructuring this page.
+ * Metrics: XP / Reputation / Contributions / Badges — four real,
+ * server-orderable fields on userProgress (see leaderboardService.js),
+ * giving different kinds of students a real way to be recognized
+ * rather than one XP-only ranking.
+ *
+ * Ranking scope: "Global" and, only when the viewer's own profile has
+ * a collegeId, "My College" — now a REAL server-side query
+ * (where('collegeId','==', myCollegeId).orderBy(metric,'desc')), not a
+ * client-side filter over a truncated top-100 window as before. No
+ * "This Week"/"This Month" scope is offered — every one of these
+ * metrics is an all-time running total with no windowed aggregate
+ * available without scanning every user's full xpLog, so a real
+ * weekly/monthly leaderboard isn't something this pass can honestly
+ * build.
  */
 export default function LeaderboardPage() {
   const navigate = useNavigate()
   const myUid = auth.currentUser?.uid
 
+  const [metric, setMetric] = useState('xp')
+  const [scope, setScope] = useState('global')
   const [entries, setEntries] = useState([])
   const [totalCount, setTotalCount] = useState(null)
   const [myProfile, setMyProfile] = useState(null)
   const [myCollegeName, setMyCollegeName] = useState('')
   const [badgesByUid, setBadgesByUid] = useState(new Map())
+  const [myMetricRank, setMyMetricRank] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [scope, setScope] = useState('global')
   const [reloadKey, setReloadKey] = useState(0)
 
-  const { progress: myProgress } = useProgress(myUid)
+  const activeMetric = LEADERBOARD_METRICS.find((m) => m.id === metric) || LEADERBOARD_METRICS[0]
 
   useEffect(() => {
     if (myUid) getUserProfile(myUid).then(setMyProfile).catch(() => {})
@@ -69,14 +76,20 @@ export default function LeaderboardPage() {
   }, [myProfile?.collegeId])
 
   useEffect(() => {
+    if (scope === 'college' && !myProfile?.collegeId) return
     let cancelled = false
     setLoading(true)
     setError('')
-    Promise.all([getLeaderboard({ pageSize: 100 }), getLeaderboardUserCount().catch(() => null)])
-      .then(([data, count]) => {
+    Promise.all([
+      getLeaderboard({ metric, scope, collegeId: myProfile?.collegeId || null, pageSize: 100 }),
+      getLeaderboardUserCount().catch(() => null),
+      myUid ? getUserMetricRank({ uid: myUid, metric, scope, collegeId: myProfile?.collegeId || null }).catch(() => null) : null
+    ])
+      .then(([data, count, myRank]) => {
         if (cancelled) return
         setEntries(data)
         setTotalCount(count)
+        setMyMetricRank(myRank)
       })
       .catch((err) => {
         if (cancelled) return
@@ -89,26 +102,11 @@ export default function LeaderboardPage() {
     return () => {
       cancelled = true
     }
-  }, [reloadKey])
+  }, [metric, scope, myProfile?.collegeId, myUid, reloadKey])
 
-  // `displayRank` (position within the CURRENT scope) is deliberately
-  // separate from `rank` (the true global rank from the userProgress
-  // query) — using global rank for podium medals/row numbers in the
-  // "My College" scope would misassign medals (a campus's #1 might be
-  // global #47) and mislabel every row's position. Both numbers are
-  // real; `displayRank` drives the UI, `rank` is shown as a secondary
-  // "Global #N" tag whenever the two scopes diverge.
-  const scopedEntries = useMemo(() => {
-    const base =
-      scope === 'college' && myProfile?.collegeId
-        ? entries.filter((e) => e.profile.collegeId === myProfile.collegeId)
-        : entries
-    return base.map((e, index) => ({ ...e, displayRank: index + 1 }))
-  }, [entries, scope, myProfile?.collegeId])
-
-  const podium = scopedEntries.slice(0, 3)
-  const rest = scopedEntries.slice(3)
-  const myEntry = scopedEntries.find((e) => e.uid === myUid)
+  const podium = entries.slice(0, 3)
+  const rest = entries.slice(3)
+  const myEntry = entries.find((e) => e.uid === myUid)
 
   useEffect(() => {
     const uids = podium.map((p) => p.uid)
@@ -123,27 +121,15 @@ export default function LeaderboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [podium.map((p) => p.uid).join(',')])
 
+  // A percentile is meaningless with too small a population ("Top 100%"
+  // when you're the only ranked student is technically the math but
+  // reads as nonsense) — below this floor, show a plain "#N of M" count
+  // instead (see the standing strip below), never a percentage.
+  const MIN_POPULATION_FOR_PERCENTILE = 5
   const percentile = useMemo(() => {
-    if (!totalCount || !myProgress?.rank) return null
-    return Math.max(1, Math.min(100, Math.round((1 - (myProgress.rank - 1) / totalCount) * 100)))
-  }, [totalCount, myProgress?.rank])
-
-  // Standing strip mirrors whichever scope is active — showing global
-  // rank/percentile while the "My College" tab is open would put a
-  // number in a campus-labeled context that doesn't describe campus
-  // standing at all.
-  const standing = useMemo(() => {
-    if (!myProgress) return null
-    if (scope !== 'college') {
-      return { rankLabel: `#${myProgress.rank}`, rankSub: 'Your Rank', pct: percentile, pctSub: 'of Campinity' }
-    }
-    if (!myEntry) return { rankLabel: '—', rankSub: 'Campus Rank', pct: null, pctSub: '' }
-    const campusPct =
-      scopedEntries.length > 0
-        ? Math.max(1, Math.min(100, Math.round((1 - (myEntry.displayRank - 1) / scopedEntries.length) * 100)))
-        : null
-    return { rankLabel: `#${myEntry.displayRank}`, rankSub: 'Campus Rank', pct: campusPct, pctSub: 'of your campus' }
-  }, [scope, myProgress, myEntry, scopedEntries.length, percentile])
+    if (!totalCount || totalCount < MIN_POPULATION_FOR_PERCENTILE || !myMetricRank?.rank) return null
+    return Math.max(1, Math.min(99, Math.round((1 - (myMetricRank.rank - 1) / totalCount) * 100)))
+  }, [totalCount, myMetricRank])
 
   const scopes = useMemo(() => {
     const base = [{ id: 'global', label: 'Global' }]
@@ -151,7 +137,7 @@ export default function LeaderboardPage() {
     return base
   }, [myProfile?.collegeId])
 
-  const showFloatingRank = scope === 'global' && !loading && !error && myProgress && !myEntry
+  const showFloatingRank = !loading && !error && myMetricRank && !myEntry
 
   const goToProfile = (entry) => {
     if (entry.uid === myUid) navigate('/profile')
@@ -197,29 +183,50 @@ export default function LeaderboardPage() {
         </div>
 
         {/* Your standing strip — real numbers only, scoped to whichever
-            tab is active */}
-        {!loading && !error && standing && (
+            metric/tab is active */}
+        {!loading && !error && myMetricRank && (
           <div className="mx-4 mt-4 flex items-center gap-2.5">
             <div className="flex-1 rounded-xl border border-gray-100 px-3 py-2.5 text-center">
-              <p className="text-base font-bold text-gray-900">{standing.rankLabel}</p>
-              <p className="text-[10px] text-gray-400">{standing.rankSub}</p>
+              <p className="text-base font-bold text-gray-900">#{myMetricRank.rank}</p>
+              <p className="text-[10px] text-gray-400">{scope === 'college' ? 'Campus Rank' : 'Your Rank'}</p>
             </div>
             <div className="flex-1 rounded-xl border border-gray-100 px-3 py-2.5 text-center">
-              <p className="text-base font-bold text-gray-900">{myProgress.xp}</p>
-              <p className="text-[10px] text-gray-400">Total XP</p>
+              <p className="text-base font-bold text-gray-900">{myMetricRank.value}</p>
+              <p className="text-[10px] text-gray-400">Your {activeMetric.label}</p>
             </div>
-            {standing.pct !== null && (
+            {percentile !== null ? (
               <div className="flex-1 rounded-xl border border-gray-100 px-3 py-2.5 text-center">
-                <p className="text-base font-bold text-gray-900">Top {standing.pct}%</p>
-                <p className="text-[10px] text-gray-400">{standing.pctSub}</p>
+                <p className="text-base font-bold text-gray-900">Top {percentile}%</p>
+                <p className="text-[10px] text-gray-400">of Campinity</p>
               </div>
-            )}
+            ) : totalCount ? (
+              <div className="flex-1 rounded-xl border border-gray-100 px-3 py-2.5 text-center">
+                <p className="text-base font-bold text-gray-900">of {totalCount}</p>
+                <p className="text-[10px] text-gray-400">ranked students</p>
+              </div>
+            ) : null}
           </div>
         )}
 
+        {/* Metric tabs */}
+        <div className="mx-4 mt-4 flex items-center gap-2 overflow-x-auto no-scrollbar">
+          {LEADERBOARD_METRICS.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setMetric(m.id)}
+              className={`flex-shrink-0 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
+                metric === m.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
         {/* Scope tabs */}
         {scopes.length > 1 && (
-          <div className="mx-4 mt-4 flex items-center gap-2">
+          <div className="mx-4 mt-2 flex items-center gap-2">
             {scopes.map((s) => (
               <button
                 key={s.id}
@@ -249,7 +256,7 @@ export default function LeaderboardPage() {
                 Try Again
               </button>
             </div>
-          ) : scopedEntries.length === 0 ? (
+          ) : entries.length === 0 ? (
             <div className="py-16 text-center">
               <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
                 <Trophy className="w-5 h-5 text-blue-500" />
@@ -259,8 +266,8 @@ export default function LeaderboardPage() {
               </p>
               <p className="mt-1 text-sm text-gray-400 max-w-[280px] mx-auto leading-relaxed">
                 {scope === 'college'
-                  ? "You don't appear in the current top rankings yet — keep earning XP to represent your campus."
-                  : 'Be the first to start earning XP on Campinity.'}
+                  ? "No one from your campus has ranked here yet — keep earning to represent your campus."
+                  : `Be the first to start earning ${activeMetric.label} on Campinity.`}
               </p>
             </div>
           ) : (
@@ -269,7 +276,7 @@ export default function LeaderboardPage() {
               <div className="flex items-end justify-center gap-2 mb-6">
                 {[podium[1], podium[0], podium[2]].map((entry, slot) => {
                   if (!entry) return <div key={slot} className="flex-1 max-w-[110px]" />
-                  const positionIndex = entry.displayRank - 1
+                  const positionIndex = entry.rank - 1
                   const isFirst = positionIndex === 0
                   const badge = badgesByUid.get(entry.uid)
                   const isMe = entry.uid === myUid
@@ -281,7 +288,7 @@ export default function LeaderboardPage() {
                       emphasized={isFirst}
                       badge={badge}
                       isMe={isMe}
-                      showGlobalRank={scope === 'college'}
+                      suffix={activeMetric.suffix}
                       onClick={() => goToProfile(entry)}
                     />
                   )
@@ -296,7 +303,7 @@ export default function LeaderboardPage() {
                       key={entry.uid}
                       entry={entry}
                       isMe={entry.uid === myUid}
-                      showGlobalRank={scope === 'college'}
+                      suffix={activeMetric.suffix}
                       onClick={() => goToProfile(entry)}
                     />
                   ))}
@@ -304,7 +311,7 @@ export default function LeaderboardPage() {
               )}
 
               <p className="mt-5 text-center text-[11px] text-gray-300">
-                Showing the top {entries.length} most active students
+                Showing the top {entries.length} students by {activeMetric.label.toLowerCase()}
                 {scope === 'college' ? ' — filtered to your campus' : ''}.
               </p>
             </>
@@ -326,7 +333,9 @@ export default function LeaderboardPage() {
             />
             <div className="min-w-0 flex-1">
               <p className="text-xs text-white/60">Your Rank</p>
-              <p className="text-sm font-bold truncate">#{myProgress.rank} · {myProgress.xp} XP</p>
+              <p className="text-sm font-bold truncate">
+                #{myMetricRank.rank} · {myMetricRank.value} {activeMetric.suffix}
+              </p>
             </div>
           </div>
         </div>
@@ -339,7 +348,7 @@ export default function LeaderboardPage() {
   )
 }
 
-function PodiumSlot({ entry, medal, emphasized, badge, isMe, showGlobalRank, onClick }) {
+function PodiumSlot({ entry, medal, emphasized, badge, isMe, suffix, onClick }) {
   return (
     <button
       type="button"
@@ -359,8 +368,7 @@ function PodiumSlot({ entry, medal, emphasized, badge, isMe, showGlobalRank, onC
       </div>
       <p className="mt-2 text-sm font-bold text-gray-900 truncate w-full">{entry.profile.displayName || 'Student'}</p>
       {entry.profile.username && <p className="text-[11px] text-gray-400 truncate w-full">@{entry.profile.username}</p>}
-      <p className="mt-1 text-xs font-semibold text-blue-600">{entry.xp} XP</p>
-      {showGlobalRank && <p className="text-[10px] text-gray-400">Global #{entry.rank}</p>}
+      <p className="mt-1 text-xs font-semibold text-blue-600">{entry.value} {suffix}</p>
       {badge && (
         <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 text-[9px] font-bold px-2 py-0.5 truncate max-w-full">
           {badge.emoji} {badge.label}
@@ -371,7 +379,7 @@ function PodiumSlot({ entry, medal, emphasized, badge, isMe, showGlobalRank, onC
   )
 }
 
-function RankRow({ entry, isMe, showGlobalRank, onClick }) {
+function RankRow({ entry, isMe, suffix, onClick }) {
   return (
     <button
       type="button"
@@ -381,7 +389,7 @@ function RankRow({ entry, isMe, showGlobalRank, onClick }) {
       }`}
     >
       <span className={`w-7 flex-shrink-0 text-xs font-bold text-center ${isMe ? 'text-blue-600' : 'text-gray-400'}`}>
-        {entry.displayRank}
+        {entry.rank}
       </span>
       <Avatar
         initials={getInitials(entry.profile.displayName)}
@@ -393,12 +401,11 @@ function RankRow({ entry, isMe, showGlobalRank, onClick }) {
         <p className={`text-sm truncate ${isMe ? 'font-bold text-blue-700' : 'font-semibold text-gray-900'}`}>
           {isMe ? 'You' : entry.profile.displayName || 'Student'}
         </p>
-        <p className="text-[11px] text-gray-400 truncate">
-          {entry.profile.username && `@${entry.profile.username}`}
-          {showGlobalRank && (entry.profile.username ? ` · Global #${entry.rank}` : `Global #${entry.rank}`)}
-        </p>
+        {entry.profile.username && <p className="text-[11px] text-gray-400 truncate">@{entry.profile.username}</p>}
       </div>
-      <span className="flex-shrink-0 text-sm font-bold text-gray-900">{entry.xp} <span className="text-[10px] font-medium text-gray-400">XP</span></span>
+      <span className="flex-shrink-0 text-sm font-bold text-gray-900">
+        {entry.value} <span className="text-[10px] font-medium text-gray-400">{suffix}</span>
+      </span>
     </button>
   )
 }

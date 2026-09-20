@@ -58,6 +58,17 @@ service firebase.storage {
       allow read, write: if isOwner(uid);
     }
 
+    // achievementCertificates/{uid}/{submissionId}/{file} — Verified
+    // Campus Certificates upload (achievementService.js). Same
+    // reasoning as verificationDocuments directly above: owner-only,
+    // fully private — a certificate must not be publicly downloadable
+    // by default. Admin preview reuses adminGetVerificationDocumentUrl
+    // unchanged (Admin SDK, bypasses these rules), so no admin-read
+    // branch is needed here either.
+    match /achievementCertificates/{uid}/{submissionId}/{fileName} {
+      allow read, write: if isOwner(uid);
+    }
+
     // campusAvatars/{uid}/{file} — avatarStorage.js. Same reasoning as
     // profileImages: identity-setup content, not gated.
     match /campusAvatars/{uid}/{fileName} {

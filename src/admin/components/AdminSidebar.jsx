@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutGrid, Flag, Image, GraduationCap, ShieldCheck, Gavel, PackageSearch, ShoppingBag, Bell, History, LogOut, Users } from 'lucide-react'
+import { LayoutGrid, Flag, Image, GraduationCap, ShieldCheck, Gavel, PackageSearch, ShoppingBag, Bell, History, LogOut, Users, Award } from 'lucide-react'
 import { useAdminSession } from '../hooks/useAdminSession.jsx'
 import { adminLogout } from '../services/adminAuthService.js'
 
@@ -16,6 +16,7 @@ const NAV_GROUPS = [
     items: [
       { key: 'reports', label: 'Reports', icon: Flag },
       { key: 'photo-verification', label: 'Photo Verification', icon: Image },
+      { key: 'achievement-verification', label: 'Achievement Verification', icon: Award },
       { key: 'user-verification', label: 'User Verification', icon: ShieldCheck },
       { key: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
       { key: 'lost-found', label: 'Lost & Found', icon: PackageSearch }

@@ -15,9 +15,9 @@ import { savePostDraft, getPostDraft, clearPostDraft } from '../utils/postDraft.
 import { extractHashtags } from '../utils/hashtags.js'
 import { moderateText } from '../moderation/profanityFilter.js'
 import { usePostingStatus } from '../context/PostingStatusContext.jsx'
-import { awardXP, getUserProgress } from '../gamification/xpService.js'
+import { awardXP, getUserProgress, hasReachedDailyCap } from '../gamification/xpService.js'
 import { checkAndAwardBadges } from '../gamification/badgeService.js'
-import { POINTS_REWARDS } from '../gamification/config.js'
+import { POINTS_REWARDS, DAILY_CAPS } from '../gamification/config.js'
 import { useMyVerification } from '../access/useMyVerification.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
@@ -468,11 +468,32 @@ export default function CreatePostPage() {
         )
       }
 
-      const postAward = await awardXP(publishData.uid, 'post_created', {
-        campusPoints: POINTS_REWARDS.post_created || 0,
-        dedupeKey: `post_created_${newPostId}`
-      }).catch(() => null)
-      if (postAward) {
+      const postCreatedCapped = await hasReachedDailyCap(publishData.uid, 'post_created', DAILY_CAPS.post_created).catch(() => true)
+      const postAward = postCreatedCapped
+        ? null
+        : await awardXP(publishData.uid, 'post_created', {
+            campusPoints: POINTS_REWARDS.post_created || 0,
+            dedupeKey: `post_created_${newPostId}`
+          }).catch(() => null)
+
+      // Notes get a distinct, additional XP type (on top of the
+      // generic post_created above) — a real, separately-countable
+      // "notes contribution" signal for the Notes Contributor/
+      // Knowledge Sharer badges and the Profile's Campus Impact card,
+      // not just a post like any other. Capped separately from
+      // post_created so a burst of notes uploads can't bypass the
+      // general post cap.
+      let notesAward = null
+      if (publishData.category === 'notes') {
+        const notesCapped = await hasReachedDailyCap(publishData.uid, 'notes_uploaded', DAILY_CAPS.notes_uploaded).catch(() => true)
+        if (!notesCapped) {
+          notesAward = await awardXP(publishData.uid, 'notes_uploaded', {
+            dedupeKey: `notes_uploaded_${newPostId}`
+          }).catch(() => null)
+        }
+      }
+
+      if (postAward || notesAward) {
         const progress = await getUserProgress(publishData.uid).catch(() => null)
         if (progress) await checkAndAwardBadges(publishData.uid, progress).catch(() => {})
       }

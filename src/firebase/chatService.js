@@ -28,6 +28,7 @@ import { createMessageRequestNotification, createMessageRequestAcceptedNotificat
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { SHARE_TYPE_LABELS } from '../sharing/shareTypes.js'
 import { awardXP, hasReachedDailyCap } from '../gamification/xpService.js'
+import { DAILY_CAPS } from '../gamification/config.js'
 
 const DEBUG_CHAT_FLOW = import.meta.env.DEV
 
@@ -463,7 +464,7 @@ export async function sendMessage(chatId, senderId, text, options = {}) {
   // anything that would make "the same message twice" a meaningful
   // concept to dedupe against). Sending never blocks on this — only
   // XP stops accruing once the cap is hit for the day.
-  const dailyCapped = await hasReachedDailyCap(senderId, 'message_sent', 20).catch(() => true)
+  const dailyCapped = await hasReachedDailyCap(senderId, 'message_sent', DAILY_CAPS.message_sent).catch(() => true)
   if (!dailyCapped) {
     await awardXP(senderId, 'message_sent', {}).catch(() => {})
   }

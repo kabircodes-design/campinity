@@ -4,6 +4,8 @@ import { Bell, Radar } from 'lucide-react'
 import DesktopSidebar from './DesktopSidebar.jsx'
 import BottomNav from './BottomNav.jsx'
 import Logo from './Logo.jsx'
+import BadgeUnlockToast from './BadgeUnlockToast.jsx'
+import VerifiedAchievementUnlockToast from './VerifiedAchievementUnlockToast.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
@@ -165,6 +167,9 @@ export default function AppShell() {
       <div className="lg:hidden">
         <BottomNav />
       </div>
+
+      <BadgeUnlockToast uid={auth.currentUser?.uid} />
+      <VerifiedAchievementUnlockToast uid={auth.currentUser?.uid} />
     </>
   )
 }

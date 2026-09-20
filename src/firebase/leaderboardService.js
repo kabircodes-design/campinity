@@ -1,4 +1,4 @@
-import { collection, getCountFromServer, getDocs, limit, orderBy, query } from 'firebase/firestore'
+import { collection, doc, getCountFromServer, getDoc, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
 import { db } from './firebase.js'
 import { getUserProfile } from './profileService.js'
 import { BADGES } from '../gamification/config.js'
@@ -8,9 +8,7 @@ import { BADGES } from '../gamification/config.js'
  * collection — no new collection, no scheduled job. SCHEMA.md's own
  * note confirms this is the intended approach for the "overall" scope
  * before the app has enough users to need the deferred, precomputed
- * `leaderboards/{scope}` collection: `orderBy('xp','desc')` directly on
- * `userProgress`, which every user can already read (see firestore.rules
- * — `allow read: if isSignedIn()` on both `userProgress` and `users`).
+ * `leaderboards/{scope}` collection.
  *
  * `pageSize` is a single fetch, not paginated — an honest scale
  * trade-off matching this collection's existing `getUserRank()`
@@ -18,21 +16,74 @@ import { BADGES } from '../gamification/config.js'
  * artificially limited to 3-5 users" holds in practice without the
  * complexity of cursor-based infinite scroll for a dataset this app
  * doesn't have thousands of rows in yet.
+ *
+ * `metric` picks which real, server-orderable userProgress field to
+ * rank by — every one of these is a genuine denormalized counter
+ * (xp/reputationScore have always existed; contributionsCount/
+ * badgeCount are maintained by xpService.js's awardXP transaction and
+ * badgeService.js's awardBadge respectively), never a client-computed
+ * approximation.
+ *
+ * `scope: 'college'` is now a REAL server-side query
+ * (where('collegeId','==', collegeId).orderBy(metric,'desc')), not a
+ * client-side filter over the global top-N window — replacing the
+ * previous approach, which made a user outside the global top 100
+ * invisible to their own college's ranking. This needs collegeId
+ * denormalized onto userProgress (done lazily in xpService.js's
+ * getUserProgress) and the composite indexes declared in
+ * firestore.indexes.json. A disclosed limitation: a user whose
+ * collegeId hasn't been backfilled onto their userProgress doc yet
+ * (i.e. they haven't had a profile read trigger the self-heal since
+ * this shipped) won't appear in college-scoped results until they do.
  */
 const DEFAULT_PAGE_SIZE = 100
+export const LEADERBOARD_METRICS = [
+  { id: 'xp', field: 'xp', label: 'XP', suffix: 'XP' },
+  { id: 'reputationScore', field: 'reputationScore', label: 'Reputation', suffix: 'REP' },
+  { id: 'contributionsCount', field: 'contributionsCount', label: 'Contributions', suffix: 'contributions' },
+  { id: 'badgeCount', field: 'badgeCount', label: 'Badges', suffix: 'badges' }
+]
 
-export async function getLeaderboard({ pageSize = DEFAULT_PAGE_SIZE } = {}) {
-  const snap = await getDocs(query(collection(db, 'userProgress'), orderBy('xp', 'desc'), limit(pageSize)))
-  const rows = snap.docs.map((d) => ({ uid: d.id, xp: d.data().xp || 0 }))
+export async function getLeaderboard({ metric = 'xp', scope = 'global', collegeId = null, pageSize = DEFAULT_PAGE_SIZE } = {}) {
+  const field = LEADERBOARD_METRICS.find((m) => m.id === metric)?.field || 'xp'
+
+  const constraints =
+    scope === 'college' && collegeId
+      ? [where('collegeId', '==', collegeId), orderBy(field, 'desc'), limit(pageSize)]
+      : [orderBy(field, 'desc'), limit(pageSize)]
+
+  const snap = await getDocs(query(collection(db, 'userProgress'), ...constraints))
+  const rows = snap.docs.map((d) => ({ uid: d.id, value: d.data()[field] || 0 }))
 
   const profiles = await Promise.all(rows.map((row) => getUserProfile(row.uid).catch(() => null)))
 
   return rows.map((row, index) => ({
     uid: row.uid,
     rank: index + 1,
-    xp: row.xp,
+    value: row.value,
     profile: profiles[index] || { displayName: 'Student', username: '', avatar: '', collegeId: null }
   }))
+}
+
+/**
+ * Real live rank for ANY metric/scope combination — the same
+ * "count how many people are strictly ahead of me" approach
+ * xpService.js's getUserRank already uses for the profile card's XP
+ * rank, generalized so the leaderboard's Reputation/Contributions/
+ * Badges tabs and college scope can show a real "Your Rank" even when
+ * the viewer isn't in the currently-fetched top-N window, instead of
+ * only supporting this for XP.
+ */
+export async function getUserMetricRank({ uid, metric = 'xp', scope = 'global', collegeId = null }) {
+  const field = LEADERBOARD_METRICS.find((m) => m.id === metric)?.field || 'xp'
+  const progressSnap = await getDoc(doc(db, 'userProgress', uid))
+  const value = progressSnap.exists() ? progressSnap.data()[field] || 0 : 0
+
+  const constraints =
+    scope === 'college' && collegeId ? [where('collegeId', '==', collegeId), where(field, '>', value)] : [where(field, '>', value)]
+
+  const snap = await getDocs(query(collection(db, 'userProgress'), ...constraints))
+  return { rank: snap.size + 1, value }
 }
 
 /**

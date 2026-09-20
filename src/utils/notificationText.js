@@ -20,6 +20,9 @@ export const NOTIFICATION_ICONS = {
   share: 'Share2',
   badge: 'Award',
   level_up: 'Star',
+  streak: 'Flame',
+  achievement_verified: 'BadgeCheck',
+  achievement_rejected: 'FileWarning',
   invite: 'Mail',
   announcement: 'Megaphone',
   message_request: 'Mail',
@@ -60,6 +63,16 @@ export function getNotificationText(notification) {
       return { lead: `${notification.badgeEmoji || '🏆'} Badge Unlocked`, action: notification.badgeLabel || 'New badge', preview: null }
     case 'level_up':
       return { lead: `⭐ Level ${notification.newLevel}`, action: notification.levelTitle ? `You're now ${notification.levelTitle}` : 'Level up!', preview: null }
+    case 'streak':
+      return { lead: `🔥 ${notification.streakDays}-Day Streak`, action: "You're on a roll — keep it going", preview: null }
+    case 'achievement_verified':
+      return { lead: '🎉 Achievement Verified', action: `${notification.achievementTitle || 'Your achievement'} is now part of your Campinity profile.`, preview: null }
+    case 'achievement_rejected':
+      return {
+        lead: 'Achievement Submission',
+        action: 'needs attention',
+        preview: notification.rejectionReason || null
+      }
     case 'invite':
       return {
         lead: notification.communityName || 'A club',

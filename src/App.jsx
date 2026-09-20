@@ -68,6 +68,10 @@ const CreateClubPage = lazy(() => import('./pages/CreateClubPage.jsx'))
 const ClubDetailPage = lazy(() => import('./pages/ClubDetailPage.jsx'))
 const LostFoundPage = lazy(() => import('./pages/LostFoundPage.jsx'))
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage.jsx'))
+const BadgesPage = lazy(() => import('./pages/BadgesPage.jsx'))
+const ProgressPage = lazy(() => import('./pages/ProgressPage.jsx'))
+const ReputationPage = lazy(() => import('./pages/ReputationPage.jsx'))
+const AddAchievementPage = lazy(() => import('./pages/AddAchievementPage.jsx'))
 
 export default function App() {
   return (
@@ -296,6 +300,38 @@ export default function App() {
           element={
             <ProtectedRoute stage="home">
               <LeaderboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/badges"
+          element={
+            <ProtectedRoute stage="home">
+              <BadgesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/progress"
+          element={
+            <ProtectedRoute stage="home">
+              <ProgressPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reputation"
+          element={
+            <ProtectedRoute stage="home">
+              <ReputationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/achievements/add"
+          element={
+            <ProtectedRoute stage="home">
+              <AddAchievementPage />
             </ProtectedRoute>
           }
         />

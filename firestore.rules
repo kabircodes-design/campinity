@@ -30,6 +30,26 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
 
+    // Gamification anti-abuse helpers — a circuit breaker, not
+    // server-authoritative enforcement. There is no isAdmin()
+    // distinction anywhere in this ruleset (the gamification block
+    // below is deliberately open to any signed-in client, since XP is
+    // awarded to OTHER users as a side effect of their actions), so
+    // these only bound the blast radius of a single malicious write —
+    // they cannot stop a determined client from making many small,
+    // legal-shaped writes over time. Real enforcement would require
+    // moving every award call site behind Cloud Functions.
+    function withinDelta(field, maxDelta) {
+      let before = resource.data.get(field, 0);
+      let after = request.resource.data.get(field, 0);
+      return after is number && before is number && (after - before) >= 0 && (after - before) <= maxDelta;
+    }
+    function withinMagnitude(field, maxDelta) {
+      let before = resource.data.get(field, 0);
+      let after = request.resource.data.get(field, 0);
+      return after is number && before is number && (after - before) <= maxDelta && (before - after) <= maxDelta;
+    }
+
     // Real server-side mirror of blockService.js's blockedUsers check —
     // a blocked party's own blockedUsers subcollection is unreadable to
     // anyone but its owner (see below), but exists() calls made FROM a
@@ -116,7 +136,24 @@ service cloud.firestore {
       // update restricted to the `read` flag only.
       match /notifications/{notificationId} {
         allow read: if isOwner(uid);
-        allow create: if isSignedIn() && request.resource.data.actorUid == request.auth.uid && request.resource.data.actorUid != uid;
+        // Bug fix found while wiring up gamification notifications:
+        // `actorUid != uid` unconditionally blocked every "system"
+        // notification (badge/level_up/streak use the documented
+        // actorUid == uid convention for a non-person sender) from ever
+        // being written — createBadgeNotification/createLevelUpNotification/
+        // createStreakNotification all silently failed permission-denied
+        // (swallowed by their own .catch(() => {})), regardless of who
+        // called them, including the legitimate case of one user's
+        // action (e.g. liking a post) triggering a badge for a
+        // DIFFERENT uid (the post owner) — so `request.auth.uid == uid`
+        // can't be required either. Narrowly allow actorUid == uid only
+        // for this small, disclosed set of cosmetic system types; a
+        // signed-in user could in principle spoof one of these three
+        // into another user's inbox, but it can't touch XP, reputation,
+        // badges, or the leaderboard (all separately hardened above) —
+        // a nuisance ceiling, not a data-integrity one.
+        allow create: if isSignedIn() && request.resource.data.actorUid == request.auth.uid &&
+          (request.resource.data.actorUid != uid || request.resource.data.type in ['badge', 'level_up', 'streak']);
         allow update: if isOwner(uid) && onlyChanged(['read']);
         allow delete: if isOwner(uid);
       }
@@ -877,20 +914,48 @@ service cloud.firestore {
     // xpLog/{uid}/entries/{id}. XP/badges are awarded to OTHER users as
     // a side effect of their actions (e.g. liking someone's post awards
     // THEM xp, not you), so these cannot be owner-only for write.
-    // Treated as coarse-grained, low-stakes data (consistent with how
-    // likesCount/followersCount/membersCount are already handled above)
-    // rather than gated field-by-field.
+    //
+    // Hardened from a previous fully-open allow write: if isSignedIn()
+    // with no field validation at all. Now: numeric fields can only
+    // move by a bounded amount per write and (other than reputation,
+    // which must be able to decrease for moderation penalties) can
+    // never decrease; xpLog entries and earned badges are immutable
+    // once created. verifiedCampus is deliberately left OUT of the
+    // client-writable field set — it's only ever set by the
+    // Admin-SDK-backed Cloud Functions in functions/functions/index.js
+    // (which bypass these rules entirely), so a client can never
+    // self-grant the Verified Campus badge's underlying flag.
     match /userProgress/{uid} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() &&
+        onlyChanged([
+          'xp', 'level', 'campusPoints', 'reputationScore', 'contributionsCount',
+          'currentStreak', 'longestStreak', 'lastActivityDate', 'badgeCount',
+          'collegeId', 'profileCompletionPct', 'updatedAt'
+        ]) &&
+        withinDelta('xp', 1000) &&
+        withinDelta('campusPoints', 1000) &&
+        withinDelta('contributionsCount', 5) &&
+        withinDelta('badgeCount', 5) &&
+        withinDelta('currentStreak', 1000) &&
+        withinDelta('longestStreak', 1000) &&
+        withinMagnitude('reputationScore', 200);
+      allow delete: if false;
     }
     match /userBadges/{uid}/earned/{badgeId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow create: if isSignedIn();
+      // Owner may flip seen:false -> true only (BadgeUnlockToast.jsx's
+      // one-time achievement toast) — nothing else on an earned badge
+      // is ever client-editable.
+      allow update: if isOwner(uid) && onlyChanged(['seen']);
+      allow delete: if false;
     }
     match /xpLog/{uid}/entries/{entryId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
     }
 
     // verificationRequests/{requestId} — created during onboarding's
@@ -901,6 +966,31 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
       allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
       allow update, delete: if false;
+    }
+
+    // Verified Campus Certificates — users/{uid}/achievementSubmissions
+    // (create-only, owner-only-readable, same "no listing beyond your
+    // own subcollection, no client update, reviewed by an admin process
+    // later" shape as verificationRequests above) and
+    // users/{uid}/verifiedAchievements (the OFFICIAL record — never
+    // client-writable at all; only the Admin-SDK Cloud Function
+    // adminReviewAchievementSubmission creates these, which bypasses
+    // these rules entirely, so a user can never self-award, edit, or
+    // delete a verified achievement). verifiedAchievements is
+    // deliberately readable by ANY signed-in user (not owner-only) —
+    // it's meant to show on a public profile, same visibility as
+    // userBadges — and deliberately holds no fileUrl/documentPath field
+    // at all, so there is no path by which reading it could leak the
+    // private uploaded certificate.
+    match /users/{uid}/achievementSubmissions/{submissionId} {
+      allow create: if isOwner(uid) && request.resource.data.userId == uid && request.resource.data.status == 'pending';
+      allow read: if isOwner(uid);
+      allow update, delete: if false;
+    }
+    match /users/{uid}/verifiedAchievements/{achievementId} {
+      allow read: if isSignedIn();
+      allow update: if isOwner(uid) && onlyChanged(['seen']);
+      allow create, delete: if false;
     }
 
     // emailVerificationTokens/{tokenHash} — custom email verification.

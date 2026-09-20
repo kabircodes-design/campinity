@@ -43,6 +43,8 @@ import {
 } from 'firebase/firestore'
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage'
 import { db } from './firebase.js'
+import { awardXP, getUserProgress } from '../gamification/xpService.js'
+import { checkAndAwardBadges } from '../gamification/badgeService.js'
 
 export const LOST_FOUND_CATEGORIES = [
   'Electronics',
@@ -181,12 +183,14 @@ export async function updateLostFoundItem(itemId, uid, updates) {
  * leaving a half-resolved state if a write partially failed.
  */
 export async function resolveLostFoundItem(itemId, uid) {
+  let justResolved = false
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(itemDoc(itemId))
     if (!snap.exists()) throw new Error('This listing no longer exists.')
     if (snap.data().createdBy !== uid) throw new Error('You can only resolve your own listing.')
     if (snap.data().status === 'resolved') return
 
+    justResolved = true
     transaction.update(itemDoc(itemId), {
       status: 'resolved',
       resolvedAt: serverTimestamp(),
@@ -194,6 +198,20 @@ export async function resolveLostFoundItem(itemId, uid) {
       updatedAt: serverTimestamp()
     })
   })
+
+  // Gamification — resolvedBy is the listing's OWN creator (only they
+  // can resolve it, enforced above), not a distinct "helper" uid. This
+  // rewards "closed the loop on your own lost/found post," not
+  // "helped a stranger" — no UI copy should imply the latter, since
+  // this schema has no field recording who actually helped return an
+  // item to its owner.
+  if (justResolved) {
+    const awarded = await awardXP(uid, 'lostfound_resolved', { dedupeKey: `lostfound_resolved_${itemId}` }).catch(() => null)
+    if (awarded) {
+      const progress = await getUserProgress(uid).catch(() => null)
+      if (progress) await checkAndAwardBadges(uid, progress).catch(() => {})
+    }
+  }
 }
 
 export async function deleteLostFoundItem(itemId, uid) {

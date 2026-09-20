@@ -3,6 +3,9 @@ import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage
 import { db, storage } from './firebase.js'
 import { getUserProfile, getCloseFriendsOfMe } from './profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { awardXP, getUserProgress, hasReachedDailyCap } from '../gamification/xpService.js'
+import { checkAndAwardBadges } from '../gamification/badgeService.js'
+import { DAILY_CAPS } from '../gamification/config.js'
 
 const COLLECTION = 'stories'
 const STORY_LIFETIME_MS = 24 * 60 * 60 * 1000
@@ -44,6 +47,21 @@ export async function createStory({ uid, mediaUrl, storagePath, mediaType, autho
     expiresAt: Timestamp.fromMillis(now + STORY_LIFETIME_MS)
   }
   const docRef = await addDoc(collection(db, COLLECTION), payload)
+
+  // Gamification — story_uploaded was already defined in XP_REWARDS
+  // but nothing ever called it, so stories gave zero XP despite the
+  // reward existing. Deduped by this story's own real id (impossible
+  // to double-award for the same story) and daily-capped since a user
+  // could otherwise post many stories in a row for easy XP.
+  const capped = await hasReachedDailyCap(uid, 'story_uploaded', DAILY_CAPS.story_uploaded).catch(() => true)
+  if (!capped) {
+    const awarded = await awardXP(uid, 'story_uploaded', { dedupeKey: `story_uploaded_${docRef.id}` }).catch(() => null)
+    if (awarded) {
+      const progress = await getUserProgress(uid).catch(() => null)
+      if (progress) await checkAndAwardBadges(uid, progress).catch(() => {})
+    }
+  }
+
   return docRef.id
 }
 

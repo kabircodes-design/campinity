@@ -46,7 +46,8 @@ import {
 } from 'firebase/firestore'
 import { deleteObject, getStorage, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { db } from './firebase.js'
-import { awardXP } from '../gamification/xpService.js'
+import { awardXP, hasReachedDailyCap } from '../gamification/xpService.js'
+import { DAILY_CAPS } from '../gamification/config.js'
 import { mapPostDoc, enrichMappedPosts } from './postService.js'
 
 export const COMMUNITY_TYPES = [
@@ -307,7 +308,13 @@ export async function joinCommunity(communityId, uid) {
   })
 
   if (joined) {
-    await awardXP(uid, 'club_joined', { dedupeKey: `club_joined_${communityId}_${uid}` }).catch(() => {})
+    // Per-community dedupe already blocks re-earning from rejoining
+    // the SAME community; the daily cap here limits joining many
+    // DIFFERENT communities in one day instead.
+    const capped = await hasReachedDailyCap(uid, 'club_joined', DAILY_CAPS.club_joined).catch(() => true)
+    if (!capped) {
+      await awardXP(uid, 'club_joined', { dedupeKey: `club_joined_${communityId}_${uid}` }).catch(() => {})
+    }
   }
 }
 

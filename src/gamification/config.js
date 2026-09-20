@@ -9,6 +9,7 @@ export const XP_REWARDS = {
   daily_login: 10,
   post_created: 25,
   story_uploaded: 10,
+  notes_uploaded: 15,
   comment_created: 5,
   comment_received: 6,
   like_given: 2,
@@ -19,10 +20,32 @@ export const XP_REWARDS = {
   followed: 5,
   message_sent: 1,
   club_joined: 20,
+  lostfound_resolved: 10,
   event_attended: 40,
   profile_completed: 50,
   campus_verified: 100,
   contest_winner: 300
+}
+
+/**
+ * Daily caps — one place for every "how many times a day can this
+ * activity earn XP" number, consolidating what used to be inline
+ * magic numbers at each awardXP call site (like_given/share/
+ * message_sent) plus new caps for previously-uncapped, high-volume
+ * activities (post_created/comment_created were the biggest real spam
+ * gap found in the pre-overhaul audit — a user could otherwise farm
+ * unlimited XP by creating and deleting posts/comments in a loop).
+ * Checked via hasReachedDailyCap in xpService.js before the award.
+ */
+export const DAILY_CAPS = {
+  like_given: 30,
+  share: 15,
+  message_sent: 20,
+  post_created: 10,
+  comment_created: 30,
+  notes_uploaded: 5,
+  story_uploaded: 5,
+  club_joined: 5
 }
 
 /**
@@ -120,28 +143,94 @@ export const WEEKLY_COMPLETION_BONUS = { xp: 500, campusPoints: 300, badgeId: 'w
  * that could itself need a rewrite to add a badge.
  */
 export const BADGES = {
-  early_bird: { label: 'Early Bird', emoji: '🐦', criteria: { type: 'joined_before', value: '2026-01-01' } },
-  campus_legend: { label: 'Campus Legend', emoji: '🏛️', criteria: { type: 'level_reached', value: 50 } },
-  academic_genius: { label: 'Academic Genius', emoji: '🎓', criteria: { type: 'manual' } },
-  knowledge_king: { label: 'Knowledge King', emoji: '📚', criteria: { type: 'manual' } },
-  conversation_starter: { label: 'Conversation Starter', emoji: '💬', criteria: { type: 'comments_received', value: 50 } },
-  event_lover: { label: 'Event Lover', emoji: '🎉', criteria: { type: 'events_attended', value: 10 } },
-  helpful_student: { label: 'Helpful Student', emoji: '🤝', criteria: { type: 'manual' } },
-  most_loved: { label: 'Most Loved', emoji: '❤️', criteria: { type: 'likes_received', value: 500 } },
-  top_writer: { label: 'Top Writer', emoji: '✍️', criteria: { type: 'posts_created', value: 100 } },
-  story_master: { label: 'Story Master', emoji: '📸', criteria: { type: 'stories_uploaded', value: 100 } },
-  streak_master: { label: 'Streak Master', emoji: '🔥', criteria: { type: 'streak_reached', value: 100 } },
-  rising_star: { label: 'Rising Star', emoji: '🌠', criteria: { type: 'level_reached', value: 10 } },
-  verified_campus: { label: 'Verified Campus', emoji: '✅', criteria: { type: 'campus_verified' } },
-  club_founder: { label: 'Club Founder', emoji: '🏗️', criteria: { type: 'manual' } },
-  event_organizer: { label: 'Event Organizer', emoji: '📅', criteria: { type: 'manual' } },
-  hackathon_winner: { label: 'Hackathon Winner', emoji: '💻', criteria: { type: 'manual' } },
-  placement_champion: { label: 'Placement Champion', emoji: '🎯', criteria: { type: 'manual' } },
+  early_bird: { label: 'Early Bird', emoji: '🐦', category: 'campus', description: 'One of the first students to join Campinity.', criteria: { type: 'joined_before', value: '2026-01-01' } },
+  campus_legend: { label: 'Campus Legend', emoji: '🏛️', category: 'special', description: 'Reached Level 50 — a true Campinity veteran.', criteria: { type: 'level_reached', value: 50 } },
+  academic_genius: { label: 'Academic Genius', emoji: '🎓', category: 'academic', description: 'Recognized by the Campinity team for outstanding academic contribution.', criteria: { type: 'manual' } },
+  knowledge_king: { label: 'Knowledge King', emoji: '📚', category: 'academic', description: 'Recognized by the Campinity team as a top knowledge contributor.', criteria: { type: 'manual' } },
+  conversation_starter: { label: 'Conversation Starter', emoji: '💬', category: 'community', description: 'Your posts sparked 50 replies from other students.', criteria: { type: 'comments_received', value: 50 } },
+  campus_helper: { label: 'Campus Helper', emoji: '🤝', category: 'community', description: 'Your replies helped other students 10 times.', criteria: { type: 'comments_received', value: 10 } },
+  event_lover: { label: 'Event Lover', emoji: '🎉', category: 'activity', description: 'Attended 10 campus events.', criteria: { type: 'events_attended', value: 10 } },
+  helpful_student: { label: 'Helpful Student', emoji: '🫶', category: 'community', description: 'Recognized by the Campinity team for consistently helping other students.', criteria: { type: 'manual' } },
+  most_loved: { label: 'Most Loved', emoji: '❤️', category: 'community', description: 'Your content has received 500 likes from the campus community.', criteria: { type: 'likes_received', value: 500 } },
+  top_writer: { label: 'Top Writer', emoji: '✍️', category: 'academic', description: 'Created 100 posts on Campinity.', criteria: { type: 'posts_created', value: 100 } },
+  notes_contributor: { label: 'Notes Contributor', emoji: '📝', category: 'academic', description: 'Shared 5 useful study notes with your campus.', criteria: { type: 'notes_uploaded', value: 5 } },
+  knowledge_sharer: { label: 'Knowledge Sharer', emoji: '🧠', category: 'academic', description: 'Recognized for consistently sharing useful study notes.', criteria: { type: 'notes_uploaded', value: 20 } },
+  community_builder: { label: 'Community Builder', emoji: '🌐', category: 'community', description: 'Joined 3 communities and got involved on campus.', criteria: { type: 'communities_joined', value: 3 } },
+  lostfound_hero: { label: 'Lost & Found Hero', emoji: '🔎', category: 'community', description: 'Successfully resolved 3 Lost & Found listings.', criteria: { type: 'lostfound_resolved', value: 3 } },
+  story_master: { label: 'Story Master', emoji: '📸', category: 'activity', description: 'Shared 100 stories with your campus.', criteria: { type: 'stories_uploaded', value: 100 } },
+  streak_master: { label: 'Streak Master', emoji: '🔥', category: 'activity', description: 'Maintained a 100-day activity streak.', criteria: { type: 'streak_reached', value: 100 } },
+  rising_star: { label: 'Rising Star', emoji: '🌠', category: 'special', description: 'Reached Level 10 — you\'re on your way up.', criteria: { type: 'level_reached', value: 10 } },
+  verified_campus: { label: 'Verified Campus', emoji: '✅', category: 'campus', description: 'Verified your campus identity on Campinity.', criteria: { type: 'campus_verified' } },
+  club_founder: { label: 'Club Founder', emoji: '🏗️', category: 'community', description: 'Recognized by the Campinity team for founding a club.', criteria: { type: 'manual' } },
+  event_organizer: { label: 'Event Organizer', emoji: '📅', category: 'community', description: 'Recognized by the Campinity team for organizing a campus event.', criteria: { type: 'manual' } },
+  hackathon_winner: { label: 'Hackathon Winner', emoji: '💻', category: 'special', description: 'Recognized by the Campinity team for winning a hackathon.', criteria: { type: 'manual' } },
+  placement_champion: { label: 'Placement Champion', emoji: '🎯', category: 'special', description: 'Recognized by the Campinity team for a placement achievement.', criteria: { type: 'manual' } },
   // Streak-reward badges referenced by STREAK_REWARDS above
-  week_streak: { label: '7-Day Streak', emoji: '🔥', criteria: { type: 'streak_reached', value: 7 } },
-  legend_streak: { label: 'Legend Streak', emoji: '🔥', criteria: { type: 'streak_reached', value: 100 } },
-  weekly_champion: { label: 'Weekly Champion', emoji: '🏅', criteria: { type: 'manual' } }
+  week_streak: { label: '7-Day Streak', emoji: '🔥', category: 'activity', description: 'Stayed active on Campinity for 7 days in a row.', criteria: { type: 'streak_reached', value: 7 } },
+  legend_streak: { label: 'Legend Streak', emoji: '🔥', category: 'activity', description: 'Stayed active on Campinity for 100 days in a row.', criteria: { type: 'streak_reached', value: 100 } },
+  weekly_champion: { label: 'Weekly Champion', emoji: '🏅', category: 'special', description: 'Recognized by the Campinity team for a standout week.', criteria: { type: 'manual' } }
 }
+
+export const BADGE_CATEGORY_LABELS = {
+  academic: 'Academic',
+  community: 'Community',
+  activity: 'Activity',
+  campus: 'Campus',
+  special: 'Special'
+}
+
+/** Real, countable activities that make up the "Contributions" leaderboard metric and the Profile's "Your Campus Impact" card — deliberately excludes passive/self actions (like_given, follow, message_sent) so it reflects things a user actually created or committed to, not incidental clicks. */
+export const CONTRIBUTION_ACTIVITY_TYPES = [
+  'post_created',
+  'comment_created',
+  'notes_uploaded',
+  'share',
+  'club_joined',
+  'story_uploaded',
+  'lostfound_resolved'
+]
+
+/** Human labels for xpLog activityType keys, used by XP History / Recent XP / Your Campus Impact — one place so new activity types don't need per-component label logic. */
+export const ACTIVITY_LABELS = {
+  daily_login: 'Daily activity',
+  post_created: 'Created a post',
+  story_uploaded: 'Shared a story',
+  notes_uploaded: 'Uploaded study notes',
+  comment_created: 'Left a comment',
+  comment_received: 'Received a helpful reply',
+  like_given: 'Liked a post',
+  like_received: 'Received a like',
+  share: 'Shared a post',
+  save: 'Saved a post',
+  follow: 'Followed a student',
+  followed: 'Gained a follower',
+  message_sent: 'Sent a message',
+  club_joined: 'Joined a community',
+  lostfound_resolved: 'Resolved a Lost & Found item',
+  event_attended: 'Attended an event',
+  profile_completed: 'Completed your profile',
+  campus_verified: 'Verified your campus',
+  campus_verified_bonus: 'Verified campus member bonus',
+  moderation_penalty: 'Moderation adjustment',
+  contest_winner: 'Won a contest'
+}
+
+/**
+ * Reputation-only signals — kept separate from XP_REWARDS since these
+ * don't award XP, only reputation, and one (moderation_penalty) is
+ * negative. See applyReputationAdjustment in xpService.js and the
+ * Cloud Functions in functions/functions/index.js that call the
+ * equivalent Admin-SDK logic (duplicated there since Cloud Functions
+ * can't import this client file — see that file's own comment).
+ */
+export const REPUTATION_CATEGORY_LABELS = {
+  comment_received: 'Helpful contributions',
+  like_received: 'Helpful contributions',
+  campus_verified_bonus: 'Verified campus member',
+  moderation_penalty: 'Moderation adjustment'
+}
+export const REPUTATION_VERIFIED_CAMPUS_BONUS = 50
+export const REPUTATION_MODERATION_PENALTY = { restricted: -30, suspended: -75 }
 
 export const SECRET_ACHIEVEMENTS = {
   night_owl: { label: 'Night Owl', description: 'Posted after 2AM', xp: 50, campusPoints: 25, criteria: { type: 'posted_after_hour', value: 2 } },

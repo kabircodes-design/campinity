@@ -5,6 +5,7 @@ import AdminSidebar from '../admin/components/AdminSidebar.jsx'
 import AdminOverviewPage from '../admin/pages/AdminOverviewPage.jsx'
 import AdminReportsPage from '../admin/pages/AdminReportsPage.jsx'
 import AdminPhotoVerificationPage from '../admin/pages/AdminPhotoVerificationPage.jsx'
+import AdminAchievementVerificationPage from '../admin/pages/AdminAchievementVerificationPage.jsx'
 import AdminCollegeRequestsPage from '../admin/pages/AdminCollegeRequestsPage.jsx'
 import AdminUserVerificationPage from '../admin/pages/AdminUserVerificationPage.jsx'
 import AdminCommunitiesPage from '../admin/pages/AdminCommunitiesPage.jsx'
@@ -18,6 +19,7 @@ const SECTION_COMPONENTS = {
   overview: AdminOverviewPage,
   reports: AdminReportsPage,
   'photo-verification': AdminPhotoVerificationPage,
+  'achievement-verification': AdminAchievementVerificationPage,
   'college-requests': AdminCollegeRequestsPage,
   'user-verification': AdminUserVerificationPage,
   communities: AdminCommunitiesPage,

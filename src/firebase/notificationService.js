@@ -297,6 +297,17 @@ export async function createLevelUpNotification({ targetUid, newLevel, levelTitl
   })
 }
 
+export async function createStreakNotification({ targetUid, streakDays, reward }) {
+  return createNotification(targetUid, {
+    actorUid: targetUid,
+    actorName: 'Campinity',
+    actorAvatar: '',
+    type: 'streak',
+    streakDays,
+    reward: reward || null
+  })
+}
+
 /**
  * Sharing System (Phase 1) — one new notification type, same pattern
  * as every creator above. `entityType`/`entityId` cover all share

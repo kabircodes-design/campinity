@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { AtSign, Award, CornerUpLeft, Heart, Mail, Megaphone, MessageCircle, PackageSearch, Pin, Share2, ShieldCheck, Star, Trash2, UserPlus, Users } from 'lucide-react'
+import { AtSign, Award, BadgeCheck, CornerUpLeft, FileWarning, Flame, Heart, Mail, Megaphone, MessageCircle, PackageSearch, Pin, Share2, ShieldCheck, Star, Trash2, UserPlus, Users } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { getNotificationText } from '../utils/notificationText.js'
 import { formatTimeAgo } from '../firebase/postService.js'
@@ -15,6 +15,9 @@ const ICON_STYLES = {
   share: { Icon: Share2, bg: 'bg-blue-600', fill: false },
   badge: { Icon: Award, bg: 'bg-amber-500', fill: true },
   level_up: { Icon: Star, bg: 'bg-violet-500', fill: true },
+  streak: { Icon: Flame, bg: 'bg-orange-500', fill: true },
+  achievement_verified: { Icon: BadgeCheck, bg: 'bg-blue-600', fill: false },
+  achievement_rejected: { Icon: FileWarning, bg: 'bg-gray-500', fill: false },
   invite: { Icon: Mail, bg: 'bg-amber-500', fill: false },
   announcement: { Icon: Megaphone, bg: 'bg-violet-500', fill: false },
   message_request: { Icon: Mail, bg: 'bg-blue-600', fill: false },
@@ -52,7 +55,11 @@ export default function NotificationCard({ notification, onRead, onDelete }) {
   const handleClick = () => {
     if (!notification.read) onRead(notification.id)
 
-    if (notification.type === 'message_request' && notification.chatId) {
+    if (notification.type === 'badge' || notification.type === 'achievement_verified' || notification.type === 'achievement_rejected') {
+      navigate('/badges')
+    } else if (notification.type === 'level_up' || notification.type === 'streak') {
+      navigate('/progress')
+    } else if (notification.type === 'message_request' && notification.chatId) {
       navigate('/messages/requests')
     } else if (notification.type === 'message_request_accepted' && notification.chatId) {
       navigate(`/messages/${notification.chatId}`)

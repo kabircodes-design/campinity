@@ -5,6 +5,8 @@ import ProfileHeader from '../components/ProfileHeader.jsx'
 import ProfileRightRail from '../components/ProfileRightRail.jsx'
 import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
 import ProgressCard from '../gamification/ProgressCard.jsx'
+import CampusImpactCard from '../gamification/CampusImpactCard.jsx'
+import CampusJourneyCard from '../gamification/CampusJourneyCard.jsx'
 import PostComposer from '../components/PostComposer.jsx'
 import PostCard from '../components/PostCard.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
@@ -337,6 +339,8 @@ export default function ProfilePage() {
             />
 
             <ProgressCard uid={currentUid} />
+            <CampusImpactCard uid={currentUid} />
+            <CampusJourneyCard uid={currentUid} />
 
             <nav className="sticky top-14 z-30 flex items-center bg-white dark:bg-[#11131a] border-b border-gray-100 dark:border-white/10 overflow-x-auto scroll-hidden">
               {tabs.map((tab) => (
