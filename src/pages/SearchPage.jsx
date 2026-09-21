@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Clock, Compass, Flame, PackageSearch, PenSquare, Search as SearchIcon, ShoppingBag, Sparkles, UserRound, Users, X, Zap } from 'lucide-react'
 import StudentCard from '../components/StudentCard.jsx'
@@ -73,7 +73,25 @@ const DEBOUNCE_MS = 300
  */
 export default function SearchPage() {
   const navigate = useNavigate()
+  // ROOT CAUSE of "search input loses focus after one character": this
+  // page renders THREE separate <input> DOM elements sharing the same
+  // `query` state — the mobile sticky-header input (always mounted),
+  // the "hero" input (mounted only while !isSearching), and the desktop
+  // tabs-bar input (mounted only while isSearching). Typing the first
+  // character flips `isSearching`, which UNMOUNTS whichever of the
+  // hero/tabs-bar inputs the user was actually typing into — the DOM
+  // node the browser had focused is destroyed, and focus falls back to
+  // <body>. Restructuring away from three input elements would touch a
+  // lot of carefully-tuned responsive layout; instead, `lastTypedElRef`
+  // remembers exactly which DOM node the user just typed into, and the
+  // useLayoutEffect below (synchronous, runs once per isSearching flip,
+  // BEFORE the browser paints — not a polling/interval hack) refocuses
+  // whichever input is now actually visible, so the user never
+  // perceives the swap.
   const inputRef = useRef(null)
+  const heroInputRef = useRef(null)
+  const desktopTabsInputRef = useRef(null)
+  const lastTypedElRef = useRef(null)
   const requestIdRef = useRef(0)
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -222,6 +240,34 @@ export default function SearchPage() {
   }, [query])
 
   const isSearching = query.trim().length > 0
+
+  // `offsetParent !== null` is the standard way to tell whether an
+  // element is genuinely visible (mounted AND not `display:none`'d by a
+  // responsive Tailwind class like `lg:hidden`) — both the mobile
+  // header input and the desktop tabs-bar input are simultaneously
+  // present in the DOM at every breakpoint; only one is ever actually
+  // visible at a time.
+  const focusVisibleSearchInput = (placeCaretAtEnd) => {
+    const candidate = [desktopTabsInputRef.current, inputRef.current, heroInputRef.current].find(
+      (el) => el && el.offsetParent !== null
+    )
+    if (!candidate) return
+    candidate.focus()
+    if (placeCaretAtEnd) {
+      const caret = candidate.value.length
+      candidate.setSelectionRange?.(caret, caret)
+    }
+  }
+
+  // Runs synchronously right after the DOM actually changes (before the
+  // browser paints), exactly once per isSearching flip — not a
+  // repeated/polling focus() call.
+  useLayoutEffect(() => {
+    const lastTyped = lastTypedElRef.current
+    if (!lastTyped || document.activeElement === lastTyped) return
+    focusVisibleSearchInput(true)
+  }, [isSearching])
+
   const hasResults =
     students.length > 0 ||
     colleges.length > 0 ||
@@ -239,7 +285,11 @@ export default function SearchPage() {
 
   const runSearch = (value) => {
     setQuery(value)
-    inputRef.current?.focus()
+    // Whichever input is actually visible for this breakpoint/state —
+    // previously always tried the mobile header input specifically,
+    // which is `display:none` on desktop and so silently did nothing
+    // there.
+    window.requestAnimationFrame(() => focusVisibleSearchInput(false))
   }
 
   const commitSearch = () => {
@@ -340,7 +390,10 @@ export default function SearchPage() {
                     ref={inputRef}
                     type="text"
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => {
+                      lastTypedElRef.current = event.target
+                      setQuery(event.target.value)
+                    }}
                     onBlur={commitSearch}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') commitSearch()
@@ -406,9 +459,13 @@ export default function SearchPage() {
                   <div className="relative mt-5 max-w-md">
                     <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
                     <input
+                      ref={heroInputRef}
                       type="text"
                       value={query}
-                      onChange={(event) => setQuery(event.target.value)}
+                      onChange={(event) => {
+                        lastTypedElRef.current = event.target
+                        setQuery(event.target.value)
+                      }}
                       onBlur={commitSearch}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') commitSearch()
@@ -447,9 +504,13 @@ export default function SearchPage() {
                 <div className="relative">
                   <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
                   <input
+                    ref={desktopTabsInputRef}
                     type="text"
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => {
+                      lastTypedElRef.current = event.target
+                      setQuery(event.target.value)
+                    }}
                     onBlur={commitSearch}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') commitSearch()

@@ -9,11 +9,20 @@ import { checkIsFollowing, followUser, unfollowUser } from '../firebase/profileS
 
 /**
  * Renders a user search result. searchAll() (searchService.js) returns
- * student objects — exact shape unverified since that file has never
- * been shown to me, but this component reads only { uid, displayName,
- * username, course, year, verifiedCampus } defensively, all optional,
- * matching the lightweight-snapshot pattern already used elsewhere in
- * this project's own search functions (searchUsersForShare, etc).
+ * student objects carrying { uid, displayName, username, course, year,
+ * division, rollNumber, collegeId, college, verifiedCampus }.
+ *
+ * ROOT-CAUSE FIX for every result previously showing the generic
+ * "Student" secondary label: searchService.js's mapUserDoc() computed
+ * the display name correctly but returned it under a `name` key this
+ * component never read (fixed there); this component's own
+ * `student.displayName || 'Student'` line — the actual NAME fallback
+ * for a genuinely unnamed profile — was never the bug and is kept
+ * as-is. What's new here is showing real profile context (college,
+ * course/division, roll number) instead of just course+year, so a
+ * result reads like an actual campus person, not a bare account
+ * record — using only whatever fields are actually present, never
+ * inventing a field that's empty.
  *
  * Follow button, new this pass — a real, confirmed gap (this component
  * previously had none at all). Reuses the existing followUser/
@@ -25,7 +34,14 @@ export default function StudentCard({ student }) {
   const navigate = useNavigate()
   const displayName = student.displayName || 'Student'
   const identityImage = getProfileIdentityImage(student)
-  const metaParts = [student.course, student.year].filter(Boolean)
+
+  // Class/division on one line (falls back to just the year level if
+  // course/division aren't set), roll number on its own when present —
+  // matches the brief's card mockup without forcing every field to
+  // render when the data is sparse.
+  const classLine = [student.course, student.division].filter(Boolean).join(' • ') || student.year || ''
+  const rollLine = student.rollNumber ? `Roll No. ${student.rollNumber}` : ''
+  const metaLine = [classLine, rollLine].filter(Boolean).join(' · ')
 
   const currentUid = auth.currentUser?.uid
   const isSelf = currentUid && currentUid === student.uid
@@ -75,7 +91,8 @@ export default function StudentCard({ student }) {
           <VerifiedBadge verified={student.verifiedCampus} size="sm" />
         </div>
         {student.username && <p className="text-[11px] text-gray-400 truncate">@{student.username}</p>}
-        {metaParts.length > 0 && <p className="text-[11px] text-gray-400 truncate">{metaParts.join(' · ')}</p>}
+        {student.college && <p className="text-[11px] text-gray-500 truncate">{student.college}</p>}
+        {metaLine && <p className="text-[11px] text-gray-400 truncate">{metaLine}</p>}
       </div>
       {currentUid && !isSelf && (
         <span

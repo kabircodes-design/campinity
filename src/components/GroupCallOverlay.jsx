@@ -1,12 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
-import { Mic, MicOff, PhoneOff, RefreshCw, Users, Video, VideoOff } from 'lucide-react'
+import { Mic, MicOff, PhoneOff, RefreshCw, Speaker, Users, Video, VideoOff } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { useAuth } from '../context/AuthContext.jsx'
+import { applySinkId, useAudioOutputDevices } from '../hooks/useAudioOutputDevices.js'
 
-function ParticipantTile({ uid, stream, participant, profile, isVideo, isLocal, facingMode }) {
+/**
+ * ROOT-CAUSE FIX — group VOICE calls had no remote audio at all, and a
+ * group VIDEO call lost a participant's audio the moment their camera
+ * went off. Cause: this tile only ever attached `stream` to a <video>
+ * element, and only rendered that <video> when `isVideo && !cameraOff`
+ * — for a voice call (isVideo=false) or a camera-off video participant,
+ * the branch fell through to a plain <Avatar> with nothing attaching
+ * the stream to any playable element. Fixed by separating concerns:
+ * a hidden <audio> element ALWAYS carries the remote stream (voice or
+ * video, camera on or off) — never rendered for the local tile, to
+ * avoid hearing yourself — while the VISIBLE video/avatar swap keeps
+ * its exact previous behavior.
+ */
+function ParticipantTile({ uid, stream, participant, profile, isVideo, isLocal, facingMode, onRemoteAudioElement }) {
   const videoRef = useRef(null)
+  const audioRef = useRef(null)
   const cameraOff = participant?.cameraOff
   const muted = participant?.muted
 
@@ -14,12 +30,29 @@ function ParticipantTile({ uid, stream, participant, profile, isVideo, isLocal, 
     if (videoRef.current) videoRef.current.srcObject = stream || null
   }, [stream])
 
-  const displayName = profile?.displayName || 'Student'
+  useEffect(() => {
+    if (isLocal || !audioRef.current) return
+    audioRef.current.srcObject = stream || null
+  }, [stream, isLocal])
+
+  // Hands the real <audio> DOM node up to the parent once, on mount —
+  // that's what the output-device switcher (handleCycleAudioOutput)
+  // calls setSinkId() on later.
+  useEffect(() => {
+    if (isLocal || !onRemoteAudioElement) return undefined
+    onRemoteAudioElement(uid, audioRef.current)
+    return () => onRemoteAudioElement(uid, null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLocal])
+
+  const displayName = profile?.displayName || (isLocal ? 'You' : 'Student')
   const mirrored = isLocal && facingMode === 'user'
+  const showVideo = isVideo && !cameraOff
 
   return (
     <div className="relative rounded-2xl overflow-hidden bg-gray-800 aspect-square sm:aspect-video flex items-center justify-center">
-      {isVideo && !cameraOff ? (
+      {!isLocal && <audio ref={audioRef} autoPlay />}
+      {showVideo ? (
         <video
           ref={videoRef}
           autoPlay
@@ -50,6 +83,21 @@ function ParticipantTile({ uid, stream, participant, profile, isVideo, isLocal, 
 }
 
 /**
+ * Real per-count grid, not one fixed column count for every call size —
+ * 2 tiles side by side, 3 in a balanced 2-up row (third spans below on
+ * narrow screens, 3-across on wider ones), 4 as a clean 2x2, 5+ as an
+ * adaptive 3-wide grid that scrolls rather than shrinking tiles into
+ * unusable slivers. Voice-call tiles (avatar-only, no video framing
+ * need) can comfortably fit one extra column at each size.
+ */
+function gridColsClass(tileCount, isVideo) {
+  if (tileCount <= 2) return isVideo ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'
+  if (tileCount === 3) return isVideo ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-3'
+  if (tileCount === 4) return 'grid-cols-2'
+  return isVideo ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-3 sm:grid-cols-4'
+}
+
+/**
  * Active group call — participant grid. Real media, real N peer
  * connections (useGroupCall.js) driving every tile; nothing here is
  * mock/placeholder data. Voice calls render as a compact avatar row
@@ -75,7 +123,29 @@ export default function GroupCallOverlay({ call }) {
     resetCall
   } = call
 
+  const { profile: myProfile } = useAuth()
   const [profiles, setProfiles] = useState({})
+  const remoteAudioRefs = useRef(new Map())
+
+  // Real, feature-detected audio-output switching — same honest
+  // approach as CallOverlay.jsx (no fake earpiece control; only ever
+  // rendered when the platform genuinely reports more than one real
+  // output device). Previously missing from this component entirely —
+  // a group call had zero way to move audio off whatever device the
+  // browser defaulted to.
+  const { supported: audioOutputSupported, devices: audioOutputDevices } = useAudioOutputDevices()
+  const [audioOutputIndex, setAudioOutputIndex] = useState(0)
+  const handleCycleAudioOutput = () => {
+    if (audioOutputDevices.length < 2) return
+    const nextIndex = (audioOutputIndex + 1) % audioOutputDevices.length
+    const device = audioOutputDevices[nextIndex]
+    applySinkId(Array.from(remoteAudioRefs.current.values()), device.deviceId)
+    setAudioOutputIndex(nextIndex)
+  }
+  const handleRemoteAudioElement = (uid, el) => {
+    if (el) remoteAudioRefs.current.set(uid, el)
+    else remoteAudioRefs.current.delete(uid)
+  }
 
   const isEndedState = groupCallState === 'ended' || groupCallState === 'failed'
   const isConnecting = groupCallState === 'connecting'
@@ -116,6 +186,7 @@ export default function GroupCallOverlay({ call }) {
   // entry (only ever populated once a real ontrack fires for that
   // peer). No placeholder tiles for someone who hasn't actually joined.
   const remoteUids = Object.keys(remoteStreams)
+  const totalTiles = 1 + remoteUids.length
 
   return (
     <div className="fixed inset-0 z-[10000] bg-gray-900 flex flex-col text-white">
@@ -139,12 +210,12 @@ export default function GroupCallOverlay({ call }) {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-3">
-          <div className={`grid gap-2 ${isVideo ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-3 sm:grid-cols-4'}`}>
+          <div className={`grid gap-2 ${gridColsClass(totalTiles, isVideo)}`}>
             <ParticipantTile
               uid="local"
               stream={localStream}
               participant={{ muted, cameraOff }}
-              profile={null}
+              profile={myProfile}
               isVideo={isVideo}
               isLocal
               facingMode={facingMode}
@@ -159,6 +230,7 @@ export default function GroupCallOverlay({ call }) {
                 isVideo={isVideo}
                 isLocal={false}
                 facingMode={facingMode}
+                onRemoteAudioElement={handleRemoteAudioElement}
               />
             ))}
           </div>
@@ -198,6 +270,17 @@ export default function GroupCallOverlay({ call }) {
               className="w-12 h-12 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-white active:scale-95 disabled:opacity-50 transition-all duration-200"
             >
               <RefreshCw className={`w-5 h-5 ${switchingCamera ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+          {audioOutputSupported && audioOutputDevices.length > 1 && (
+            <button
+              type="button"
+              onClick={handleCycleAudioOutput}
+              aria-label={`Audio output: ${audioOutputDevices[audioOutputIndex]?.label || 'switch'}`}
+              title={audioOutputDevices[audioOutputIndex]?.label || 'Switch audio output'}
+              className="w-12 h-12 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-white active:scale-95 transition-all duration-200"
+            >
+              <Speaker className="w-5 h-5" />
             </button>
           )}
           <button

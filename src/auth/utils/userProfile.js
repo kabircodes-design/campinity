@@ -1,5 +1,6 @@
 import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db } from '../../firebase/firebase'
+import { buildSearchIndexFields } from '../../firebase/profileService.js'
 
 /** Fetches the Firestore profile doc for a user. Returns null if it doesn't exist yet. */
 export async function getUserProfile(uid) {
@@ -30,9 +31,21 @@ export async function createInitialUserDoc(uid, email) {
   ) 
 }
 
-/** Merges new fields into an existing users/{uid} doc without touching the rest. */
+/**
+ * Merges new fields into an existing users/{uid} doc without touching
+ * the rest. ROOT-CAUSE FIX: this is CreateProfilePage.jsx's actual
+ * onboarding write path, and it never computed the lowercase
+ * search-mirror fields (displayNameLower/courseLower/yearLower/etc.)
+ * that searchStudents() (searchService.js) queries against — a brand
+ * new signup was invisible to search-by-course/year/etc. until they
+ * separately visited Edit Profile and its own write path
+ * (updateUserProfile) lazily produced them. Now uses the exact same
+ * shared helper updateUserProfile/createUserProfile already use, so
+ * onboarding and editing stay consistent instead of two divergent
+ * implementations of the same derived-field logic.
+ */
 export async function saveUserProfile(uid, data) {
-  await setDoc(doc(db, 'users', uid), data, { merge: true })
+  await setDoc(doc(db, 'users', uid), { ...data, ...buildSearchIndexFields(data) }, { merge: true })
 }
 
 /** Records the outcome of the campus verification step (email, ID card, or skip). */

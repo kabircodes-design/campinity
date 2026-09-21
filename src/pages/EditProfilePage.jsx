@@ -16,6 +16,7 @@ import { reserveUsername } from '../firebase/usernameService.js'
 import { useUsernameAvailability } from '../hooks/useUsernameAvailability.js'
 import { awardXP } from '../gamification/xpService.js'
 import { POINTS_REWARDS } from '../gamification/config.js'
+import { DIVISION_FORMAT_HINT, normalizeDivision, normalizeRollNumber } from '../utils/profileValidation.js'
 
 const years = ['FYJC', 'SYJC', 'FY', 'SY', 'TY', 'Final Year']
 
@@ -109,6 +110,8 @@ export default function EditProfilePage() {
   const [selectedCollege, setSelectedCollege] = useState(null)
   const [department, setDepartment] = useState('')
   const [year, setYear] = useState(years[0])
+  const [division, setDivision] = useState('')
+  const [rollNumber, setRollNumber] = useState('')
   const [skills, setSkills] = useState([])
   const [interests, setInterests] = useState([])
 
@@ -138,6 +141,12 @@ export default function EditProfilePage() {
           setSelectedCollege(await getCollegeById(profile.collegeId))
           setDepartment(profile.course || '')
           setYear(profile.year || years[0])
+          // Real, previously-absent fields — EditProfilePage had no
+          // Division/Roll Number inputs at all before this pass, so a
+          // division set once at onboarding could never be viewed or
+          // corrected here, and roll number didn't exist anywhere yet.
+          setDivision(profile.division || '')
+          setRollNumber(profile.rollNumber || '')
           setSkills(profile.skills || [])
           setInterests(profile.interests || [])
           setCampusAvatarUrl(profile.campusAvatarUrl || '')
@@ -175,8 +184,18 @@ export default function EditProfilePage() {
       next.username = 'Network error — try again'
     }
     if (!selectedCollege) next.college = 'Please select your college from the list'
+    const { error: divisionError } = normalizeDivision(division)
+    if (divisionError) next.division = divisionError
     setErrors(next)
     return Object.keys(next).length === 0
+  }
+
+  // Same casing-only auto-correct as CreateProfilePage's own division
+  // field (s-3 -> S-3, a -> A) — shared logic via normalizeDivision, not
+  // a second implementation.
+  const handleDivisionBlur = () => {
+    const { value, error } = normalizeDivision(division)
+    if (!error) setDivision(value)
   }
 
   const handleUseMode = async (mode) => {
@@ -238,8 +257,16 @@ export default function EditProfilePage() {
         displayName: name.trim(),
         bio: bio.trim(),
         collegeId: selectedCollege.id,
+        // Denormalized name alongside collegeId — real gap found during
+        // audit: this call never wrote a plain `college` string at all,
+        // so search results/other surfaces reading `profile.college`
+        // directly stayed stale (still the onboarding-time value, or
+        // blank) after a user changed their college here.
+        college: selectedCollege.name,
         course: department.trim(),
         year,
+        division: normalizeDivision(division).value,
+        rollNumber: normalizeRollNumber(rollNumber),
         skills,
         interests
       })
@@ -522,6 +549,41 @@ export default function EditProfilePage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label htmlFor="edit-division" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              Division
+            </label>
+            <input
+              id="edit-division"
+              type="text"
+              value={division}
+              onChange={(event) => setDivision(event.target.value)}
+              onBlur={handleDivisionBlur}
+              placeholder="A or S-3"
+              disabled={isSaving}
+              className={`w-full rounded-xl border bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
+                errors.division ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
+              }`}
+            />
+            <p className={`mt-1.5 text-xs ${errors.division ? 'text-red-500' : 'text-gray-400'}`}>
+              {errors.division || DIVISION_FORMAT_HINT}
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="edit-rollNumber" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              Roll Number
+            </label>
+            <input
+              id="edit-rollNumber"
+              type="text"
+              value={rollNumber}
+              onChange={(event) => setRollNumber(event.target.value)}
+              disabled={isSaving}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
+            />
           </div>
 
           <TagInput

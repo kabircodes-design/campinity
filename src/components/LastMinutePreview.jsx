@@ -4,6 +4,8 @@ import { useMyVerification } from '../access/useMyVerification.js'
 import { useOpenPostDocument } from '../hooks/useOpenPostDocument.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
+import { auth } from '../firebase/firebase.js'
+import { getDisplayFileName } from '../utils/postFile.js'
 
 const SUBJECT_META = {
   physics: { label: 'Physics', emoji: '⚡' },
@@ -28,7 +30,8 @@ const SUBJECT_META = {
 export default function LastMinutePreview({ notes, onViewAll }) {
   const verified = useMyVerification()
   const [gateOpen, setGateOpen] = useState(false)
-  const { openDocument, opening: openingDocument } = useOpenPostDocument()
+  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenPostDocument()
+  const currentUid = auth.currentUser?.uid
   const items = useMemo(() => {
     const now = Date.now()
     const twoDaysMs = 48 * 60 * 60 * 1000
@@ -54,16 +57,20 @@ export default function LastMinutePreview({ notes, onViewAll }) {
         {items.map((note) => {
           const subject = SUBJECT_META[note.subject]
           const isImportant = note.collection === 'important'
+          const isOwner = Boolean(note.userId) && note.userId === currentUid
           return (
             <button
               key={note.id}
               type="button"
               disabled={openingDocument}
               onClick={() => {
-                if (verified === false) {
+                // Same isOwner exemption as the other document-open sites —
+                // the uploader could otherwise never open their own note.
+                if (verified === false && !isOwner) {
                   setGateOpen(true)
                   return
                 }
+                clearDocumentError()
                 openDocument(note)
               }}
               className="w-full flex items-center gap-3 rounded-xl border border-amber-100 bg-gradient-to-r from-amber-50/60 to-white px-3.5 py-2.5 text-left hover:border-amber-200 disabled:opacity-60 transition-all duration-200"
@@ -76,14 +83,16 @@ export default function LastMinutePreview({ notes, onViewAll }) {
                   {subject && <span className="text-[10px] font-semibold text-amber-600 uppercase tracking-wide">{subject.label}</span>}
                   {isImportant && <span className="text-[9px] font-bold text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">Important</span>}
                 </div>
-                <p className="text-xs font-semibold text-gray-900 truncate">{note.file?.name || note.text || 'Note'}</p>
+                <p className="text-xs font-semibold text-gray-900 truncate">{note.file ? getDisplayFileName(note.file) : note.text || 'Note'}</p>
                 <p className="text-[10px] text-gray-400">Uploaded {note.time}</p>
               </div>
-              <span className="text-[10px] font-semibold text-blue-600 flex-shrink-0">Open →</span>
+              <span className="text-[10px] font-semibold text-blue-600 flex-shrink-0">{openingDocument ? 'Opening…' : 'Open →'}</span>
             </button>
           )
         })}
       </div>
+
+      {documentError && <p role="alert" className="mt-2 text-[11px] text-red-500">{documentError}</p>}
 
       <VerificationGate open={gateOpen} onClose={() => setGateOpen(false)} feature={FEATURES.VIEW_CAMPUS_PDF} />
     </div>

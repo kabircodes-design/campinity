@@ -38,7 +38,7 @@ import {
 const RING_TIMEOUT_MS = 45000
 
 export function useGroupCall() {
-  const [groupCallState, setGroupCallState] = useState('idle') // idle | incoming | connecting | active | ended
+  const [groupCallState, setGroupCallState] = useState('idle') // idle | incoming | connecting | active | ended | failed
   const [activeGroupCall, setActiveGroupCall] = useState(null) // { callId, chatId, type, groupName, groupAvatar }
   const [incomingGroupCall, setIncomingGroupCall] = useState(null)
   const [localStream, setLocalStream] = useState(null)
@@ -58,7 +58,11 @@ export function useGroupCall() {
   const localStreamRef = useRef(null)
   const ringTimeoutRef = useRef(null)
   const groupCallStateRef = useRef('idle')
+  const incomingGroupCallRef = useRef(null)
+  const participantsRef = useRef([])
   groupCallStateRef.current = groupCallState
+  incomingGroupCallRef.current = incomingGroupCall
+  participantsRef.current = participants
 
   const [authUid, setAuthUid] = useState(() => auth.currentUser?.uid || null)
   useEffect(() => {
@@ -454,6 +458,28 @@ export function useGroupCall() {
       Array.from(peerConnectionsRef.current.values()).forEach((pc) => pc.close())
       localStreamRef.current?.getTracks().forEach((t) => t.stop())
     }
+  }, [])
+
+  // Best-effort stale-call cleanup on refresh/tab-close/navigation-away
+  // — same reasoning and same real, previously-unaddressed gap as
+  // useCall.js's own `pagehide` handler (see its comment for the full
+  // explanation). Not a guarantee — a fire-and-forget write racing
+  // actual page teardown can still lose.
+  useEffect(() => {
+    const handlePageHide = () => {
+      const state = groupCallStateRef.current
+      const callId = callIdRef.current
+      const uid = auth.currentUser?.uid
+      if (state === 'incoming' && incomingGroupCallRef.current && uid) {
+        declineGroupCallParticipant(incomingGroupCallRef.current.id, uid).catch(() => {})
+      } else if (callId && uid && (state === 'connecting' || state === 'active')) {
+        const remainingOthers = participantsRef.current.filter((p) => p.state === 'joined' && p.uid !== uid)
+        leaveGroupCallParticipant(callId, uid).catch(() => {})
+        if (remainingOthers.length === 0) endGroupCall(callId).catch(() => {})
+      }
+    }
+    window.addEventListener('pagehide', handlePageHide)
+    return () => window.removeEventListener('pagehide', handlePageHide)
   }, [])
 
   return {

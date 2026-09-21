@@ -23,8 +23,51 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 const COLLECTION = 'users'
 
+/**
+ * The one place every lowercase search-mirror field gets computed —
+ * previously duplicated inline (with divergent field coverage) across
+ * healProfile/createUserProfile/updateUserProfile, and never computed
+ * at all by CreateProfilePage's actual write path (saveUserProfile in
+ * auth/utils/userProfile.js), which is the real reason a brand-new
+ * signup was invisible to searchStudents()'s course/year prefix
+ * queries until they separately visited Edit Profile. Extended here
+ * with divisionLower/rollNumberLower for the new search fields — same
+ * shape, same convention, not a new pattern. Only computes a mirror
+ * for a field that's actually present in `data` (a partial update,
+ * e.g. just `{avatarMode}`, correctly produces no mirrors at all).
+ */
+export function buildSearchIndexFields(data) {
+  const fields = {}
+  const nameSource = typeof data.displayName === 'string' ? data.displayName : typeof data.fullName === 'string' ? data.fullName : null
+  if (nameSource !== null) fields.displayNameLower = nameSource.trim().toLowerCase()
+  if (typeof data.course === 'string') fields.courseLower = data.course.trim().toLowerCase()
+  if (typeof data.year === 'string') fields.yearLower = data.year.trim().toLowerCase()
+  if (typeof data.division === 'string') fields.divisionLower = data.division.trim().toLowerCase()
+  if (typeof data.rollNumber === 'string') fields.rollNumberLower = data.rollNumber.trim().toLowerCase()
+  return fields
+}
+
+/**
+ * ROOT CAUSE of "existing users can't be found by division/roll number
+ * search": this used to gate its ENTIRE body behind
+ * `if (data?.searchIndexed) return` — a one-shot flag set the first
+ * time any user's profile was healed. Any user already healed BEFORE
+ * divisionLower/rollNumberLower existed in buildSearchIndexFields()
+ * (i.e. essentially every pre-existing user, since `searchIndexed` was
+ * introduced for the original displayNameLower/courseLower/yearLower
+ * mirrors) would have that flag already `true` — so this function
+ * returned immediately on every subsequent profile read, NEVER
+ * recomputing the two newer mirrors, permanently. Their raw `division`
+ * field could be perfectly valid ("S-3") while `divisionLower` simply
+ * never got created.
+ *
+ * Fixed by diffing the real computed mirrors against what's actually
+ * stored, every time, instead of gating on a single boolean — a user
+ * who's already fully up to date costs one cheap local comparison and
+ * no Firestore write at all; a user missing only the newer mirrors gets
+ * exactly those two fields backfilled, not a full rewrite.
+ */
 async function healProfile(uid, data) {
-  if (data?.searchIndexed) return
   if (auth.currentUser?.uid !== uid) return
 
   const updates = {}
@@ -34,12 +77,14 @@ async function healProfile(uid, data) {
     if (result?.ok) updates.usernameReserved = true
   }
 
-  const displayName = data?.displayName ?? data?.fullName ?? ''
-  updates.displayNameLower = displayName.trim().toLowerCase()
-  updates.courseLower = (data?.course || '').trim().toLowerCase()
-  updates.yearLower = (data?.year || '').trim().toLowerCase()
-  updates.searchIndexed = true
+  const computed = buildSearchIndexFields(data || {})
+  for (const [key, value] of Object.entries(computed)) {
+    if (data?.[key] !== value) updates[key] = value
+  }
 
+  if (Object.keys(updates).length === 0) return
+
+  updates.searchIndexed = true
   await setDoc(doc(db, COLLECTION, uid), updates, { merge: true }).catch(() => null)
 }
 
@@ -79,6 +124,7 @@ export function mapProfileDoc(data) {
     course: data.course ?? '',
     year: data.year ?? '',
     division: data.division ?? '',
+    rollNumber: data.rollNumber ?? '',
     avatar: data.avatar ?? data.photoURL ?? '',
     campusAvatarUrl: data.campusAvatarUrl ?? '',
     avatarMode: data.avatarMode ?? 'photo',
@@ -130,15 +176,15 @@ export async function createUserProfile(uid, data = {}) {
     ref,
     {
       displayName: data.displayName ?? '',
-      displayNameLower: (data.displayName ?? '').trim().toLowerCase(),
       username: data.username ?? '',
       bio: data.bio ?? '',
       collegeId: data.collegeId ?? null,
+      college: data.college ?? '',
       course: data.course ?? '',
-      courseLower: (data.course ?? '').trim().toLowerCase(),
       year: data.year ?? '',
-      yearLower: (data.year ?? '').trim().toLowerCase(),
       division: data.division ?? '',
+      rollNumber: data.rollNumber ?? '',
+      ...buildSearchIndexFields(data),
       avatar: data.avatar ?? '',
       campusAvatarUrl: data.campusAvatarUrl ?? '',
       avatarMode: data.avatarMode ?? 'photo',
@@ -158,18 +204,7 @@ export async function createUserProfile(uid, data = {}) {
 
 export async function updateUserProfile(uid, data) {
   const ref = doc(db, COLLECTION, uid)
-  const payload = { ...data, updatedAt: serverTimestamp() }
-
-  if (typeof data.displayName === 'string') {
-    payload.displayNameLower = data.displayName.trim().toLowerCase()
-  }
-  if (typeof data.course === 'string') {
-    payload.courseLower = data.course.trim().toLowerCase()
-  }
-  if (typeof data.year === 'string') {
-    payload.yearLower = data.year.trim().toLowerCase()
-  }
-
+  const payload = { ...data, ...buildSearchIndexFields(data), updatedAt: serverTimestamp() }
   await setDoc(ref, payload, { merge: true })
 }
 

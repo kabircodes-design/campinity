@@ -75,6 +75,24 @@ export async function setCallAnswer(callId, answer) {
   })
 }
 
+/**
+ * Real remote mute/camera-off signaling for 1:1 calls — mirrors the
+ * `muted`/`cameraOff` fields groupCallService.js's participant docs
+ * already carry for group calls, extended onto the SAME call doc
+ * (`callerMuted`/`callerCameraOff` vs `calleeMuted`/`calleeCameraOff`)
+ * rather than a new collection. Each side only ever writes its own two
+ * fields — enforced both here (isCaller picks which pair to write) and
+ * in firestore.rules. Fixes a real gap: previously neither side had any
+ * way to know the OTHER party's camera was off, so a remote camera-off
+ * video call showed a frozen/black frame instead of their avatar.
+ */
+export async function setCallMediaState(callId, isCaller, { muted, cameraOff }) {
+  const update = { updatedAt: serverTimestamp() }
+  if (typeof muted === 'boolean') update[isCaller ? 'callerMuted' : 'calleeMuted'] = muted
+  if (typeof cameraOff === 'boolean') update[isCaller ? 'callerCameraOff' : 'calleeCameraOff'] = cameraOff
+  await updateDoc(callDoc(callId), update).catch(() => {})
+}
+
 export async function setCallStatus(callId, status) {
   const terminal = status === 'ended' || status === 'declined' || status === 'missed' || status === 'failed' || status === 'busy'
   await updateDoc(callDoc(callId), {

@@ -5,6 +5,7 @@ import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { applySinkId, useAudioOutputDevices } from '../hooks/useAudioOutputDevices.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 function formatDuration(totalSeconds) {
   const m = Math.floor(totalSeconds / 60)
@@ -32,6 +33,8 @@ export default function CallOverlay({ call }) {
     remoteStream,
     muted,
     cameraOff,
+    remoteMuted,
+    remoteCameraOff,
     callError,
     durationSec,
     endCall,
@@ -43,6 +46,7 @@ export default function CallOverlay({ call }) {
     resetCall
   } = call
 
+  const { profile: myProfile } = useAuth()
   const [otherProfile, setOtherProfile] = useState(null)
   const [minimized, setMinimized] = useState(false)
   const localVideoRef = useRef(null)
@@ -89,8 +93,19 @@ export default function CallOverlay({ call }) {
   }, [localStream])
 
   useEffect(() => {
-    if (type === 'video' && remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream || null
-    if (type === 'voice' && remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream || null
+    const el = type === 'video' ? remoteVideoRef.current : remoteAudioRef.current
+    if (!el) return
+    el.srcObject = remoteStream || null
+    // Defensive reset, not a fake "earpiece" control (see
+    // useAudioOutputDevices.js's own header for why no such control
+    // genuinely exists on the web platform) — explicitly re-selects the
+    // system default output the moment a new remote stream attaches, so
+    // a call never silently inherits some OTHER page's or a PREVIOUS
+    // call's manually-picked output device. Best-effort only: throws on
+    // unsupported browsers (Safari/iOS), swallowed on purpose.
+    if (remoteStream && 'setSinkId' in HTMLMediaElement.prototype) {
+      el.setSinkId?.('default').catch(() => {})
+    }
   }, [remoteStream, type])
 
   const isEndedState = ['ended', 'declined', 'missed', 'failed'].includes(callState)
@@ -193,7 +208,14 @@ export default function CallOverlay({ call }) {
           ref={remoteVideoRef}
           autoPlay
           playsInline
-          className={`absolute inset-0 w-full h-full object-cover bg-gray-900 ${isActive ? '' : 'opacity-0'}`}
+          // ROOT-CAUSE FIX: previously only gated on `isActive` — if the
+          // REMOTE party turned their camera off mid-call, this element
+          // kept rendering their now-frozen/black last frame with
+          // nothing telling the viewer why. remoteCameraOff (see
+          // callService.js's setCallMediaState / the remote-state sync
+          // in useCall.js) now hides the video the same way and falls
+          // back to their avatar below instead of a blank frame.
+          className={`absolute inset-0 w-full h-full object-cover bg-gray-900 ${isActive && !remoteCameraOff ? '' : 'opacity-0'}`}
         />
       )}
       {/* Always mounted for the whole voice-call lifetime (not gated on
@@ -203,7 +225,7 @@ export default function CallOverlay({ call }) {
       {!isVideo && <audio ref={remoteAudioRef} autoPlay />}
 
       <div className="relative z-10 flex flex-col items-center px-6 text-center">
-        {(!isVideo || !isActive) && (
+        {(!isVideo || !isActive || remoteCameraOff) && (
           <Avatar
             initials={getInitials(displayName)}
             colorClass={getAvatarColor(otherUid)}
@@ -212,7 +234,10 @@ export default function CallOverlay({ call }) {
           />
         )}
         <p className="mt-4 text-xl font-bold">{displayName}</p>
-        <p className="mt-1 text-sm text-white/70">{statusLabel}</p>
+        <p className="mt-1 text-sm text-white/70 flex items-center justify-center gap-1.5">
+          {isActive && remoteMuted && <MicOff className="w-3.5 h-3.5 text-white/50" />}
+          {statusLabel}
+        </p>
       </div>
 
       {isVideo && (
@@ -249,8 +274,13 @@ export default function CallOverlay({ call }) {
             className={`w-full h-full object-cover ${facingMode === 'user' ? '-scale-x-100' : ''} ${cameraOff ? 'hidden' : ''}`}
           />
           {cameraOff && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <VideoOff className="w-5 h-5 text-white/50" />
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+              <Avatar
+                initials={getInitials(myProfile?.displayName || 'You')}
+                colorClass={getAvatarColor(myProfile?.uid || 'me')}
+                size="md"
+                src={getProfileIdentityImage(myProfile) || undefined}
+              />
             </div>
           )}
         </div>

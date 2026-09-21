@@ -9,7 +9,6 @@ import {
   Bookmark,
   CalendarDays,
   Clock,
-  Download,
   FileText,
   GraduationCap,
   Heart,
@@ -23,6 +22,7 @@ import {
   ShoppingBag,
   Users
 } from 'lucide-react'
+import { getDisplayFileName } from '../utils/postFile.js'
 import Avatar from './Avatar.jsx'
 import MentionText from './MentionText.jsx'
 import PostPoll from './PostPoll.jsx'
@@ -73,7 +73,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
   const expiryBadgeText = formatExpiryBadge(post.expiresAtMs)
   const verified = useMyVerification()
   const [verificationGateOpen, setVerificationGateOpen] = useState(false)
-  const { openDocument, opening: openingDocument } = useOpenPostDocument()
+  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenPostDocument()
   const navigate = useNavigate()
   const config = postTypeConfig[post.type]
   const TypeIcon = typeIcons[post.type]
@@ -422,28 +422,50 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
       )}
 
       {post.file && (
-        <button
-          type="button"
-          disabled={openingDocument}
-          onClick={() => {
-            if (verified === false) {
-              setVerificationGateOpen(true)
-              return
-            }
-            openDocument(post)
-          }}
-          className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-3 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left hover:border-blue-100 dark:hover:border-blue-500/30 hover:bg-gray-100/70 dark:hover:bg-white/10 disabled:opacity-60 transition-all duration-300"
-        >
-          <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
-            <FileText className="w-5 h-5 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-50 truncate">{post.file.name}</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">PDF{post.file.size ? ` · ${post.file.size}` : ''}</p>
-            {verified === false && <p className="text-[11px] text-blue-600 dark:text-blue-400 font-medium mt-0.5">🔒 Verified members · Verify to open →</p>}
-          </div>
-          <Download className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-        </button>
+        <>
+          <button
+            type="button"
+            disabled={openingDocument}
+            onClick={() => {
+              // ROOT-CAUSE FIX: this used to gate on `verified === false`
+              // with no ownership exemption — the post's OWN author
+              // couldn't open their own just-uploaded PDF unless THEY
+              // were separately campus-verified. Mirrors the same
+              // isOwner exemption added server-side in
+              // getVerifiedPostDocumentUrl.
+              if (verified === false && !isOwner) {
+                setVerificationGateOpen(true)
+                return
+              }
+              clearDocumentError()
+              openDocument(post)
+            }}
+            className="mx-4 lg:mx-6 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-3 w-[calc(100%-2rem)] lg:w-[calc(100%-3rem)] text-left hover:border-blue-100 dark:hover:border-blue-500/30 hover:bg-gray-100/70 dark:hover:bg-white/10 disabled:opacity-60 transition-all duration-300"
+          >
+            <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+              <FileText className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-50 truncate">{getDisplayFileName(post.file)}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                {openingDocument ? 'Opening…' : `PDF${post.file.size ? ` · ${post.file.size}` : ''}`}
+              </p>
+              {verified === false && !isOwner && (
+                <p className="text-[11px] text-blue-600 dark:text-blue-400 font-medium mt-0.5">🔒 Verified members · Verify to open →</p>
+              )}
+            </div>
+          </button>
+          {/* ROOT-CAUSE FIX for "clicking the PDF does nothing": openDocument's
+              async failure (Cloud Function error, permission-denied, network
+              blip) was computed correctly by useOpenPostDocument but never
+              rendered anywhere — the button just silently reverted to its
+              normal state. Now surfaced directly under the attachment. */}
+          {documentError && (
+            <p role="alert" className="mx-4 lg:mx-6 mt-1.5 text-xs text-red-500 dark:text-red-400">
+              {documentError}
+            </p>
+          )}
+        </>
       )}
 
       <VerificationGate

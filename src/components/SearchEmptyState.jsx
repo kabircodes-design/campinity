@@ -8,7 +8,7 @@ export default function SearchEmptyState({ query, suggestions = [], onSuggestion
         <SearchX className="w-5 h-5 text-gray-400" />
       </div>
       <p className="mt-3 text-sm font-semibold text-gray-900">No results for "{query}"</p>
-      <p className="mt-1 text-sm text-gray-400">Try a different name, username, or keyword.</p>
+      <p className="mt-1 text-sm text-gray-400">Try a username, roll number, college, class, or division.</p>
       {suggestions.length > 0 && (
         <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
           {suggestions.map((name) => (

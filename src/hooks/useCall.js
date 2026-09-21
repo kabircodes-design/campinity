@@ -8,6 +8,7 @@ import {
   addCallerCandidate,
   createCallDoc,
   setCallAnswer,
+  setCallMediaState,
   setCallOffer,
   setCallStatus,
   subscribeToCall,
@@ -54,6 +55,8 @@ export function useCall() {
   const [remoteStream, setRemoteStream] = useState(null)
   const [muted, setMuted] = useState(false)
   const [cameraOff, setCameraOff] = useState(false)
+  const [remoteMuted, setRemoteMuted] = useState(false)
+  const [remoteCameraOff, setRemoteCameraOff] = useState(false)
   const [callError, setCallError] = useState('')
   const [durationSec, setDurationSec] = useState(0)
 
@@ -139,6 +142,8 @@ export function useCall() {
     if (finalState === 'idle') setActiveCall(null)
     setMuted(false)
     setCameraOff(false)
+    setRemoteMuted(false)
+    setRemoteCameraOff(false)
     facingModeRef.current = 'user'
     setFacingMode('user')
     setCallState(finalState)
@@ -316,6 +321,11 @@ export function useCall() {
 
         const unsubscribeCall = subscribeToCall(callId, async (call) => {
           if (!call) return
+          // The callee's own reported state — real signaling, not a
+          // guess from a frozen video frame (see callService.js's
+          // setCallMediaState comment for why this field pair exists).
+          setRemoteMuted(Boolean(call.calleeMuted))
+          setRemoteCameraOff(Boolean(call.calleeCameraOff))
           if (call.status === 'declined') {
             setCallError('Call declined.')
             teardown('declined')
@@ -436,7 +446,12 @@ export function useCall() {
         await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {})
       })
       const unsubscribeCall = subscribeToCall(call.id, (data) => {
-        if (data?.status === 'ended') teardown('ended')
+        if (!data) return
+        // The caller's own reported state — same reasoning as the
+        // caller-side listener's symmetric read of callee* fields above.
+        setRemoteMuted(Boolean(data.callerMuted))
+        setRemoteCameraOff(Boolean(data.callerCameraOff))
+        if (data.status === 'ended') teardown('ended')
       })
       cleanupFnsRef.current.push(unsubscribeCandidates, unsubscribeCall)
 
@@ -485,6 +500,9 @@ export function useCall() {
       localStream?.getAudioTracks().forEach((track) => {
         track.enabled = !next
       })
+      if (callIdRef.current) {
+        setCallMediaState(callIdRef.current, Boolean(activeCallRef.current?.isCaller), { muted: next }).catch(() => {})
+      }
       return next
     })
   }, [localStream])
@@ -495,6 +513,9 @@ export function useCall() {
       localStream?.getVideoTracks().forEach((track) => {
         track.enabled = !next
       })
+      if (callIdRef.current) {
+        setCallMediaState(callIdRef.current, Boolean(activeCallRef.current?.isCaller), { cameraOff: next }).catch(() => {})
+      }
       return next
     })
   }, [localStream])
@@ -587,6 +608,34 @@ export function useCall() {
     }
   }, [])
 
+  // Best-effort stale-call cleanup on refresh/tab-close/navigation-away.
+  // Real gap this closes: neither this hook nor teardown() had ANY
+  // beforeunload/pagehide handling before — an ungraceful tab close
+  // during a ringing or active call left the Firestore call doc stuck
+  // at 'ringing'/'active' forever (nothing else in this app — no
+  // scheduled Cloud Function — sweeps stale call documents). `pagehide`
+  // is used rather than `beforeunload` (more reliable on mobile
+  // Safari/Chrome, doesn't block navigation with a confirmation
+  // dialog). This is explicitly a BEST-EFFORT mitigation, not a
+  // guarantee — a fire-and-forget Firestore write issued as the page is
+  // torn down can still lose the race against actual process
+  // termination, especially on an abrupt tab kill rather than a normal
+  // navigation/refresh. Not awaited, since a pagehide handler cannot
+  // reliably wait on an async operation.
+  useEffect(() => {
+    const handlePageHide = () => {
+      const state = callStateRef.current
+      const callId = callIdRef.current
+      if (state === 'incoming' && incomingCallRef.current) {
+        setCallStatus(incomingCallRef.current.id, 'declined').catch(() => {})
+      } else if (callId && (state === 'calling' || state === 'connecting' || state === 'active')) {
+        setCallStatus(callId, state === 'calling' ? 'missed' : 'ended').catch(() => {})
+      }
+    }
+    window.addEventListener('pagehide', handlePageHide)
+    return () => window.removeEventListener('pagehide', handlePageHide)
+  }, [])
+
   return {
     callState,
     activeCall,
@@ -595,6 +644,8 @@ export function useCall() {
     remoteStream,
     muted,
     cameraOff,
+    remoteMuted,
+    remoteCameraOff,
     callError,
     durationSec,
     startCall,

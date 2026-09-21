@@ -6,12 +6,14 @@ import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
 import Input from '../components/Input.jsx'
 import Icon from '../../components/Icon.jsx'
+import CollegeSearch from '../../components/CollegeSearch.jsx'
 import { auth } from '../../firebase/firebase.js'
 import { saveUserProfile } from '../utils/userProfile.js'
 import { uploadProfileImage } from '../utils/storage.js'
 import { reserveUsername } from '../../firebase/usernameService.js'
 import { useUsernameAvailability } from '../../hooks/useUsernameAvailability.js'
 import { markJustOnboarded } from '../../onboarding/campusIntroFlag.js'
+import { DIVISION_FORMAT_HINT, normalizeDivision, normalizeRollNumber } from '../../utils/profileValidation.js'
 
 const years = ['FYJC', 'SYJC', 'FY', 'SY', 'TY', 'Final Year']
 
@@ -74,10 +76,11 @@ export default function CreateProfilePage() {
   const [photoPreview, setPhotoPreview] = useState('')
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
-  const [college, setCollege] = useState('')
+  const [selectedCollege, setSelectedCollege] = useState(null)
   const [course, setCourse] = useState('')
   const [year, setYear] = useState(years[0])
   const [division, setDivision] = useState('')
+  const [rollNumber, setRollNumber] = useState('')
   const [bio, setBio] = useState('')
   const [interests, setInterests] = useState([])
 
@@ -117,9 +120,21 @@ export default function CreateProfilePage() {
     } else if (usernameCheck.status === 'error') {
       next.username = 'Network error — try again'
     }
-    if (!college.trim()) next.college = 'College is required'
+    if (!selectedCollege) next.college = 'Please select your college from the list'
+    const { error: divisionError } = normalizeDivision(division)
+    if (divisionError) next.division = divisionError
     setErrors(next)
     return Object.keys(next).length === 0
+  }
+
+  // Auto-corrects safe casing issues (s-3 -> S-3, a -> A) the moment the
+  // user leaves the field — per the brief's "normalize automatically"
+  // choice for a casing-only difference — without waiting for submit.
+  // A structurally invalid value (S3, S 3) is left as typed; validate()
+  // shows the real error on submit rather than guessing at intent.
+  const handleDivisionBlur = () => {
+    const { value, error } = normalizeDivision(division)
+    if (!error) setDivision(value)
   }
 
   const handleSubmit = async (event) => {
@@ -160,10 +175,19 @@ export default function CreateProfilePage() {
         uid,
         fullName: fullName.trim(),
         username: reservedUsername,
-        college: college.trim(),
+        // Real collegeId (the same Firestore colleges/{id} reference
+        // Edit Profile's CollegeSearch already writes) plus a
+        // denormalized name string, replacing the old free-text
+        // `college` input that never matched a real college record and
+        // never set collegeId at all — see CollegeSearch.jsx/
+        // searchService.js for what that gap broke (course-mate
+        // discovery, "search a college name -> find its students").
+        collegeId: selectedCollege.id,
+        college: selectedCollege.name,
         course: course.trim(),
         year,
-        division: division.trim(),
+        division: normalizeDivision(division).value,
+        rollNumber: normalizeRollNumber(rollNumber),
         bio: bio.trim(),
         interests,
         avatar: avatarUrl,
@@ -292,14 +316,10 @@ export default function CreateProfilePage() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
-          <Input
-            id="college"
-            label="College"
-            value={college}
-            onChange={(event) => setCollege(event.target.value)}
-            error={errors.college}
-            disabled={isSubmitting}
-          />
+          {/* Reuses the exact same college selector Edit Profile uses —
+              real Firestore colleges/{id} search-and-select, not a
+              second free-text implementation. See CollegeSearch.jsx. */}
+          <CollegeSearch id="college" label="College" value={selectedCollege} onChange={setSelectedCollege} error={errors.college} disabled={isSubmitting} />
           <Input id="course" label="Course" value={course} onChange={(event) => setCourse(event.target.value)} disabled={isSubmitting} />
         </div>
 
@@ -323,8 +343,26 @@ export default function CreateProfilePage() {
             </select>
           </div>
 
-          <Input id="division" label="Division" value={division} onChange={(event) => setDivision(event.target.value)} disabled={isSubmitting} />
+          <Input
+            id="division"
+            label="Division"
+            value={division}
+            onChange={(event) => setDivision(event.target.value)}
+            onBlur={handleDivisionBlur}
+            error={errors.division}
+            hint={DIVISION_FORMAT_HINT}
+            disabled={isSubmitting}
+            placeholder="A or S-3"
+          />
         </div>
+
+        <Input
+          id="rollNumber"
+          label="Roll Number (optional)"
+          value={rollNumber}
+          onChange={(event) => setRollNumber(event.target.value)}
+          disabled={isSubmitting}
+        />
 
         <div>
           <label htmlFor="bio" className={fieldLabelClass}>

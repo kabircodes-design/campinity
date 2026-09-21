@@ -314,7 +314,14 @@ export async function uploadPostImage(uid, file) {
 export async function uploadPostDocument(uid, file) {
   const path = `postDocuments/${uid}/${Date.now()}-${file.name}`
   const fileRef = ref(storage, path)
-  await uploadBytes(fileRef, file)
+  // Explicit contentType rather than relying on the browser's own
+  // File.type inference — normally correct for a file picked via
+  // accept="application/pdf", but setting it explicitly means the
+  // signed URL getVerifiedPostDocumentUrl later mints always serves
+  // the right Content-Type regardless of what the source browser/OS
+  // reported, so it opens inline as a PDF rather than downloading as
+  // an unrecognized binary.
+  await uploadBytes(fileRef, file, { contentType: 'application/pdf' })
   return path
 }
 

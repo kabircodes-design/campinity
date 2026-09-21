@@ -6,7 +6,7 @@ import {
   Bookmark,
   CalendarDays,
   Clock,
-  Download,
+  FileText,
   Flag,
   Heart,
   MapPin,
@@ -16,6 +16,7 @@ import {
   Share,
   ShoppingBag
 } from 'lucide-react'
+import { getDisplayFileName } from '../utils/postFile.js'
 import Avatar from '../components/Avatar.jsx'
 import MentionText from '../components/MentionText.jsx'
 import PostPoll from '../components/PostPoll.jsx'
@@ -80,7 +81,7 @@ export default function PostDetailPage() {
   const navigate = useNavigate()
   const verified = useMyVerification()
   const [documentGateOpen, setDocumentGateOpen] = useState(false)
-  const { openDocument, opening: openingDocument } = useOpenPostDocument()
+  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenPostDocument()
 
   const [post, setPost] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
@@ -451,27 +452,40 @@ export default function PostDetailPage() {
           {post.poll && <PostPoll postId={post.id} poll={post.poll} />}
 
           {post.file && (
-            <button
-              type="button"
-              disabled={openingDocument}
-              onClick={() => {
-                if (verified === false) {
-                  setDocumentGateOpen(true)
-                  return
-                }
-                openDocument(post)
-              }}
-              className="mx-4 mt-3 w-[calc(100%-2rem)] flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-left hover:border-blue-100 disabled:opacity-60 transition-all duration-300"
-            >
-              <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
-                <Download className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{post.file.name}</p>
-                <p className="text-xs text-gray-400">PDF{post.file.size ? ` · ${post.file.size}` : ''}</p>
-                {verified === false && <p className="text-[11px] text-blue-600 font-medium mt-0.5">🔒 Verified members · Verify to open →</p>}
-              </div>
-            </button>
+            <>
+              <button
+                type="button"
+                disabled={openingDocument}
+                onClick={() => {
+                  // Same isOwner exemption as PostCard.jsx / the server-side
+                  // getVerifiedPostDocumentUrl check — an unverified author
+                  // could never open their own uploaded PDF before this.
+                  if (verified === false && !isOwner) {
+                    setDocumentGateOpen(true)
+                    return
+                  }
+                  clearDocumentError()
+                  openDocument(post)
+                }}
+                className="mx-4 mt-3 w-[calc(100%-2rem)] flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-left hover:border-blue-100 disabled:opacity-60 transition-all duration-300"
+              >
+                <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{getDisplayFileName(post.file)}</p>
+                  <p className="text-xs text-gray-400">{openingDocument ? 'Opening…' : `PDF${post.file.size ? ` · ${post.file.size}` : ''}`}</p>
+                  {verified === false && !isOwner && (
+                    <p className="text-[11px] text-blue-600 font-medium mt-0.5">🔒 Verified members · Verify to open →</p>
+                  )}
+                </div>
+              </button>
+              {documentError && (
+                <p role="alert" className="mx-4 mt-1.5 text-xs text-red-500">
+                  {documentError}
+                </p>
+              )}
+            </>
           )}
 
           <VerificationGate open={documentGateOpen} onClose={() => setDocumentGateOpen(false)} feature={FEATURES.VIEW_CAMPUS_PDF} />

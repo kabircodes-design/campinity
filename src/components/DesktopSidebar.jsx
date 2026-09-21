@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Bell, Compass, Home, MessageCircle, PackageSearch, Settings, ShoppingBag, User, Users } from 'lucide-react'
+import { Bell, Compass, Home, MessageCircle, Orbit, PackageSearch, Settings, ShoppingBag, User } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import Logo from './Logo.jsx'
 import VerifiedBadge from './VerifiedBadge.jsx'
@@ -10,7 +10,7 @@ import { prefetchRoute } from '../routePrefetch.js'
 const NAV_ITEMS = [
   { to: '/home', label: 'Home', icon: Home },
   { to: '/search', label: 'Explore', icon: Compass },
-  { to: '/communities', label: 'Communities', icon: Users },
+  { to: '/communities', label: 'Communities', icon: Orbit },
   { to: '/marketplace', label: 'Marketplace', icon: ShoppingBag },
   { to: '/lost-found', label: 'Lost & Found', icon: PackageSearch },
   { to: '/messages', label: 'Messages', icon: MessageCircle },

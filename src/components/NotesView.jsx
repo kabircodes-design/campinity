@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Bookmark, Download, Lock, Search, ShieldCheck, Upload } from 'lucide-react'
+import { ArrowLeft, Bookmark, ExternalLink, Lock, Search, ShieldCheck, Upload } from 'lucide-react'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getNotesPosts } from '../firebase/postService.js'
@@ -10,6 +10,7 @@ import { useOpenPostDocument } from '../hooks/useOpenPostDocument.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
+import { getDisplayFileName } from '../utils/postFile.js'
 
 const SUBJECTS = [
   { key: 'physics', label: 'Physics', emoji: '⚡', keywords: ['physics', 'electrostatics', 'mechanics', 'thermodynamics', 'optics', 'kinematics'] },
@@ -49,7 +50,7 @@ function resolveCollection(post) {
 /** Section 16 — filename becomes the display title fallback only; the real uploaded file/text field is never touched. */
 function displayTitle(post) {
   if (post.text?.trim()) return post.text
-  if (post.file?.name) return post.file.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ')
+  if (post.file) return getDisplayFileName(post.file).replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ')
   return 'Untitled note'
 }
 
@@ -57,8 +58,10 @@ function NoteCard({ note, verified }) {
   const [isSaved, setIsSaved] = useState(false)
   const [saveSheetOpen, setSaveSheetOpen] = useState(false)
   const [gateFeature, setGateFeature] = useState(null)
-  const { openDocument, opening: openingDocument } = useOpenPostDocument()
+  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenPostDocument()
   const subjectMeta = SUBJECTS.find((s) => s.key === resolveSubject(note))
+  const currentUid = auth.currentUser?.uid
+  const isOwner = Boolean(note.userId) && note.userId === currentUid
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
@@ -67,11 +70,15 @@ function NoteCard({ note, verified }) {
   }, [note.id])
 
   const handleOpen = () => {
-    if (verified === false) {
+    // Same isOwner exemption as PostCard.jsx/PostDetailPage.jsx — the
+    // note's own uploader could previously never open their own PDF
+    // here unless separately campus-verified.
+    if (verified === false && !isOwner) {
       setGateFeature(FEATURES.VIEW_CAMPUS_PDF)
       return
     }
     if (openingDocument) return
+    clearDocumentError()
     openDocument(note)
   }
 
@@ -104,9 +111,14 @@ function NoteCard({ note, verified }) {
           {note.file?.size && <span>· {note.file.size}</span>}
           <span>· Posted {note.time}</span>
         </div>
-        {verified === false ? (
+        {verified === false && !isOwner ? (
           <p className="mt-2 text-[11px] text-blue-600 font-medium">🔒 Verified members</p>
         ) : null}
+        {documentError && (
+          <p role="alert" className="mt-2 text-[11px] text-red-500">
+            {documentError}
+          </p>
+        )}
         <div className="mt-3 flex items-center justify-between">
           <button
             type="button"
@@ -124,13 +136,15 @@ function NoteCard({ note, verified }) {
             {isSaved ? 'Saved' : 'Save'}
           </button>
           <span className="flex items-center gap-1 text-xs font-semibold text-indigo-600 group-hover:text-indigo-700">
-            {verified === false ? (
+            {verified === false && !isOwner ? (
               <>
                 <Lock className="w-3.5 h-3.5" /> Verify to open
               </>
+            ) : openingDocument ? (
+              'Opening…'
             ) : (
               <>
-                <Download className="w-3.5 h-3.5" /> Download
+                <ExternalLink className="w-3.5 h-3.5" /> Open
               </>
             )}
           </span>

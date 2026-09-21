@@ -30,6 +30,19 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
 
+    // calls/{callId}'s real status state machine, enforced server-side
+    // (mirrors groupCalls/{callId}'s own forward-only transition check
+    // directly below it) — ringing can resolve to active/declined/busy/
+    // missed/failed, active can only end in ended/failed, and every
+    // terminal status is immutable. Also true (a no-op status "change")
+    // when this write isn't touching status at all, e.g. the caller
+    // writing their own offer or media-state fields while still ringing.
+    function isValidCallStatusTransition() {
+      return request.resource.data.status == resource.data.status ||
+        (resource.data.status == 'ringing' && request.resource.data.status in ['active', 'declined', 'busy', 'missed', 'failed']) ||
+        (resource.data.status == 'active' && request.resource.data.status in ['ended', 'failed']);
+    }
+
     // Gamification anti-abuse helpers — a circuit breaker, not
     // server-authoritative enforcement. There is no isAdmin()
     // distinction anywhere in this ruleset (the gamification block
@@ -596,7 +609,26 @@ service cloud.firestore {
     match /calls/{callId} {
       allow read: if isSignedIn() && (request.auth.uid == resource.data.callerUid || request.auth.uid == resource.data.calleeUid);
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.callerUid;
-      allow update: if isSignedIn() && (request.auth.uid == resource.data.callerUid || request.auth.uid == resource.data.calleeUid);
+
+      // Hardened from a previous unconditional "either participant may
+      // change ANY field" rule — that let either side rewrite the
+      // other's SDP fields, forge callerUid/calleeUid/chatId/type/
+      // createdAt, or move status backward (e.g. reopen an already-
+      // 'ended' call). Now field- and role-scoped: the caller may only
+      // ever touch their own offer/media-state fields, the callee only
+      // their own answer/media-state fields, both may advance status/
+      // timestamps but only through isValidCallStatusTransition()'s
+      // real forward-only state machine (mirrors groupCalls' own rule
+      // below). callerMuted/callerCameraOff/calleeMuted/calleeCameraOff
+      // are the real remote mute/camera-off signal (callService.js's
+      // setCallMediaState) — each side can only ever publish their OWN
+      // state, never the other's.
+      allow update: if isSignedIn() && isValidCallStatusTransition() && (
+        (request.auth.uid == resource.data.callerUid &&
+          onlyChanged(['offer', 'callerMuted', 'callerCameraOff', 'status', 'updatedAt', 'endedAt'])) ||
+        (request.auth.uid == resource.data.calleeUid &&
+          onlyChanged(['answer', 'calleeMuted', 'calleeCameraOff', 'status', 'updatedAt', 'endedAt']))
+      );
       allow delete: if false;
 
       match /callerCandidates/{candidateId} {

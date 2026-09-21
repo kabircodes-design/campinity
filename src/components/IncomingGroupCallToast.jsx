@@ -30,6 +30,11 @@ export default function IncomingGroupCallToast({ call }) {
               {isVideo ? <Video className="w-3 h-3" /> : <Phone className="w-3 h-3" />}
               Incoming group {isVideo ? 'video' : 'voice'} call
             </p>
+            {Array.isArray(incomingGroupCall.participantUids) && incomingGroupCall.participantUids.length > 0 && (
+              <p className="text-[11px] text-gray-400">
+                {incomingGroupCall.participantUids.length} {incomingGroupCall.participantUids.length === 1 ? 'member' : 'members'}
+              </p>
+            )}
           </div>
         </div>
 

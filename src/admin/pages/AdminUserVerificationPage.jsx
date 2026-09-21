@@ -55,7 +55,7 @@ export default function AdminUserVerificationPage() {
     try {
       await callAdmin('adminSetUserVerification', { sessionToken, uid: student.uid, verified })
       setResults((prev) => prev.map((s) => (s.uid === student.uid ? { ...s, verifiedCampus: verified } : s)))
-      setToast({ tone: 'success', message: verified ? `${student.name} is now verified.` : `${student.name} is no longer verified.` })
+      setToast({ tone: 'success', message: verified ? `${student.displayName} is now verified.` : `${student.displayName} is no longer verified.` })
     } catch (err) {
       setToast({ tone: 'error', message: err?.message || 'Could not update this user.' })
     } finally {
@@ -76,7 +76,7 @@ export default function AdminUserVerificationPage() {
       setResults((prev) => prev.map((s) => (s.uid === student.uid ? { ...s, moderationStatus: status === 'active' ? null : status } : s)))
       setToast({
         tone: 'success',
-        message: status === 'active' ? `${student.name} restored to good standing.` : `${student.name} is now ${status}.`
+        message: status === 'active' ? `${student.displayName} restored to good standing.` : `${student.displayName} is now ${status}.`
       })
     } catch (err) {
       setToast({ tone: 'error', message: err?.message || 'Could not update this user.' })
@@ -126,7 +126,7 @@ export default function AdminUserVerificationPage() {
                 <div key={student.uid} className="rounded-xl border border-gray-100 bg-white p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{student.name}</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">{student.displayName}</p>
                       <p className="text-xs text-gray-400 truncate">
                         @{student.username}
                         {student.course && ` · ${student.course}`}
@@ -208,7 +208,7 @@ export default function AdminUserVerificationPage() {
           <button type="button" aria-label="Cancel" onClick={() => setConfirmTarget(null)} className="absolute inset-0 bg-black/40" />
           <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5">
             <p className="text-sm font-semibold text-gray-900">
-              {confirmTarget.verified ? `Verify ${confirmTarget.student.name}?` : `Revoke ${confirmTarget.student.name}'s verification?`}
+              {confirmTarget.verified ? `Verify ${confirmTarget.student.displayName}?` : `Revoke ${confirmTarget.student.displayName}'s verification?`}
             </p>
             <p className="mt-1.5 text-sm text-gray-400">This directly updates their campus verification status.</p>
             <div className="mt-4 flex items-center gap-2">
@@ -233,8 +233,8 @@ export default function AdminUserVerificationPage() {
           <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5">
             <p className="text-sm font-semibold text-gray-900">
               {confirmTarget.status === 'active'
-                ? `Restore ${confirmTarget.student.name} to good standing?`
-                : `${confirmTarget.status === 'suspended' ? 'Suspend' : 'Restrict'} ${confirmTarget.student.name}?`}
+                ? `Restore ${confirmTarget.student.displayName} to good standing?`
+                : `${confirmTarget.status === 'suspended' ? 'Suspend' : 'Restrict'} ${confirmTarget.student.displayName}?`}
             </p>
             <p className="mt-1.5 text-sm text-gray-400">
               {confirmTarget.status === 'active'

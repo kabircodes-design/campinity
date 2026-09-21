@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { FileText, Heart, ImageOff } from 'lucide-react'
 import { getPostById } from '../firebase/postService.js'
 import { getCanonicalUrl } from '../sharing/shareTypes.js'
+import { getDisplayFileName } from '../utils/postFile.js'
 
 /**
  * Registry-driven, same principle as SharedCard.jsx (Sharing System) —
@@ -44,7 +45,7 @@ const ENTITY_REGISTRY = {
         {post.file ? (
           <div className="w-full h-full bg-indigo-50 flex flex-col items-center justify-center gap-1.5 p-2 text-center">
             <FileText className="w-6 h-6 text-indigo-500 flex-shrink-0" />
-            <p className="text-[10px] font-medium text-gray-700 line-clamp-2">{post.file.name}</p>
+            <p className="text-[10px] font-medium text-gray-700 line-clamp-2">{getDisplayFileName(post.file)}</p>
             {(post.subject || post.chapter) && (
               <p className="text-[9px] text-gray-400 line-clamp-1">{[post.subject, post.chapter].filter(Boolean).join(' · ')}</p>
             )}
