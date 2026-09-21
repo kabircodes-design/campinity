@@ -589,3 +589,29 @@ html.dark {
     animation: none !important;
   }
 }
+
+/* ANDROID STATUS-BAR SAFE AREA — shared rule, not a per-page patch.
+   This app's Android build (targetSdkVersion 36) has edge-to-edge
+   enforced by the OS, so the WebView draws behind the status bar/
+   camera cutout instead of Android reserving that space like it used
+   to. Nearly every page's top bar in this codebase follows the exact
+   same convention — a real <header> element with Tailwind's
+   `sticky top-0` utilities (confirmed: 50+ files, one consistent
+   pattern) — so one rule here covers all of them instead of editing
+   each file individually.
+   This overrides the STICKY ANCHOR itself (not just inner padding):
+   changing `top: 0` to `top: env(safe-area-inset-top)` means the
+   header stays correctly positioned below the status bar even after
+   the page is scrolled, not just on initial paint — padding alone
+   would still let it re-stick flush to the true viewport top (under
+   the status bar) once scrolled, since sticky's `top` offset is what
+   anchors it, not any ancestor's padding.
+   Resolves to 0px (identical to the original `top: 0`) on desktop,
+   Vercel/web, and any browser without a real inset — so this has no
+   visible effect outside the Android app. Scoped to `header` tags
+   specifically (not the bare `.top-0` utility) so it can't affect
+   unrelated absolutely-positioned elements like badges or dropdowns
+   that happen to also use `top-0`. */
+header.sticky.top-0 {
+  top: env(safe-area-inset-top);
+}

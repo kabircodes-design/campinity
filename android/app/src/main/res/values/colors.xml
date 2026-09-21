@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- colorPrimary/colorPrimaryDark/colorAccent were referenced by
+         styles.xml's AppTheme but had no color definitions anywhere in
+         this project (no colors.xml existed) — filled in here using
+         the web app's own theme accent color (CSS token theme-accent,
+         #1677ff) so native AppCompat chrome (status bar tint on
+         pre-splash-API devices, default ripple color) matches the
+         brand instead of being an undefined resource. -->
+    <color name="colorPrimary">#1677FF</color>
+    <color name="colorPrimaryDark">#0E5FCB</color>
+    <color name="colorAccent">#1677FF</color>
+
+    <!-- Native splash screen background — matches the web app's own
+         background color (CSS token theme-background, light) exactly,
+         so there is no color mismatch between the native splash and
+         the WebView's first paint. -->
+    <color name="splash_background">#F7F8FC</color>
+</resources>

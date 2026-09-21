@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark-mode override, matching the web app's own background color
+         (CSS token theme-background, dark) exactly. Only
+         splash_background differs by theme; colorPrimary/
+         colorPrimaryDark/colorAccent are intentionally not redefined
+         here — out of scope for this change. -->
+    <color name="splash_background">#09090F</color>
+</resources>

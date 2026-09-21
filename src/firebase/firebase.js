@@ -15,6 +15,22 @@ const firebaseConfig = {
   
 const app = initializeApp(firebaseConfig);
 
+// CAPACITOR ANDROID NOTE — auth/requests-from-referer-https://localhost-are-blocked
+// Capacitor's Android WebView serves this app from the origin
+// https://localhost by default (see capacitor.config.json — no
+// `server.hostname` override, so Capacitor's own default applies).
+// Every Firebase Auth SDK call (including plain email/password
+// sign-in, not just Google) goes out as a REST request to
+// identitytoolkit.googleapis.com carrying that Referer header. If this
+// error appears, it is NOT Firebase Console's Authentication →
+// Settings → Authorized domains list (that only gates OAuth
+// popup/redirect flows and already includes "localhost" by default) —
+// it is the Web API key's own HTTP referrer restriction in Google
+// Cloud Console: APIs & Services → Credentials → the key matching
+// VITE_FIREBASE_API_KEY → Application restrictions → HTTP referrers.
+// Add "https://localhost/*" there to allow this app's Android build.
+// This is a Console-only fix; no code change unblocks it.
+
 // TEMPORARY DIAGNOSTIC — remove once the auth/unauthorized-domain
 // issue is confirmed fixed. Logs only projectId/authDomain (never
 // apiKey or any other secret), read from the actual firebaseConfig

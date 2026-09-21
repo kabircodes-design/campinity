@@ -1,3 +1,6 @@
+import { useEffect } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { SplashScreen } from '@capacitor/splash-screen'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useIsAdmin } from '../../hooks/useIsAdmin.js'
@@ -99,6 +102,70 @@ export function resolveOnboardingRoute(profile) {
 
 export function isCampusVerified(profile) {
   return profile?.verifiedCampus === true
+}
+
+/**
+ * Root ("/") route guard — used ONLY to fix Android app startup showing
+ * Landing, or a wrong intermediate onboarding page, before the real
+ * destination, without touching Landing/web at all.
+ *
+ * Root cause #1: <Route path="/" element={<LandingPage />} /> in
+ * App.jsx has never been auth-aware — it renders unconditionally, with
+ * no ProtectedRoute/PublicRoute wrapper, regardless of Firebase auth
+ * state. That's correct for the web/Vercel marketing site (visitors,
+ * including already-signed-in ones, should land on Landing at the root
+ * URL there). But it means an already-authenticated user cold-launching
+ * the Android app also briefly saw Landing, since nothing gated it.
+ *
+ * Root cause #2 (found via real-device logcat, not guessed — see
+ * useAuthUser.js's own comment for the full evidence): even after
+ * fixing #1, a fully-onboarded account could still briefly redirect to
+ * Campus Verification/Create Profile before correcting itself to Home,
+ * because Firestore's onSnapshot delivers a first, empty, from-cache
+ * callback on every cold start before the real server data arrives a
+ * few hundred ms later. `profileSettled` (from the shared AuthContext,
+ * not a new listener) is specifically what fixes this: it only becomes
+ * true once that real, server-confirmed snapshot has landed, so this
+ * component keeps waiting instead of computing a redirect from
+ * incomplete data.
+ *
+ * This component reuses the exact same decision rules PublicRoute and
+ * ProtectedRoute stage="home" already apply elsewhere (not new rules):
+ * once resolved, send an authenticated+onboarded user straight to
+ * /home, an unverified-email user to /verify-email, a not-yet-onboarded
+ * user through resolveOnboardingRoute, and anyone else to /login — the
+ * existing authentication flow, not a bypass of it. Web/Vercel is
+ * completely unaffected: Capacitor.isNativePlatform() is false in any
+ * browser, so this renders <LandingPage/> exactly as before, and none
+ * of the below (including the SplashScreen call) ever runs there.
+ *
+ * The native splash (`launchAutoHide: false` in capacitor.config.json)
+ * stays on screen covering the WebView the entire time this component
+ * is still resolving — SplashScreen.hide() below is called at the
+ * exact moment (and not one render earlier) a concrete destination is
+ * about to be revealed, so the handoff is splash → final page directly,
+ * with no spinner/blank frame ever visible in between.
+ */
+export function RootRoute({ landing }) {
+  const isNative = Capacitor.isNativePlatform()
+  const { user, profile, loading, profileSettled } = useAuth()
+
+  const stillResolving = loading || (!!user && !profileSettled)
+
+  useEffect(() => {
+    if (!isNative || stillResolving) return
+    SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {})
+  }, [isNative, stillResolving])
+
+  if (!isNative) return landing
+
+  if (stillResolving) return <FullScreenLoader />
+
+  if (!user) return <Navigate to="/login" replace />
+  if (!user.emailVerified) return <Navigate to="/verify-email" replace />
+  if (!profile?.profileCompleted) return <Navigate to={resolveOnboardingRoute(profile)} replace />
+
+  return <Navigate to="/home" replace />
 }
 
 export default function ProtectedRoute({ stage, children }) {

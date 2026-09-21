@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ (API 31+) override of the launch theme, using the
+         platform's own native Splash Screen API instead of the plain
+         full-bleed background image used pre-31 (values/styles.xml).
+         This is what gives the OS's own brief, subtle icon-reveal
+         motion for free — no JS, no extra Capacitor plugin, no risk of
+         a hide-timing race with the WebView. ic_splash_icon has a
+         transparent background (see drawable/ and drawable-night/) so
+         splash_background shows through; splash_background itself has
+         a values-night override so this single style works correctly
+         in both system themes without duplicating it per-theme. -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
+        <item name="android:windowSplashScreenAnimationDuration">600</item>
+    </style>
+</resources>

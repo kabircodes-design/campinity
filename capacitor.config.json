@@ -1,0 +1,10 @@
+{
+  "appId": "com.campinity.app",
+  "appName": "Campinity",
+  "webDir": "dist",
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false
+    }
+  }
+}
