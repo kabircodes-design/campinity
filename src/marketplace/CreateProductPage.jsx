@@ -85,7 +85,7 @@ export default function CreateProductPage() {
   // firestore.rules, not this check.
   if (verified === false) {
     return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden" style={{ backgroundColor: '#f8fafc' }}>
+      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f8fafc]">
         <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-[0_1px_3px_rgba(15,23,42,0.04)] lg:border-x lg:border-gray-100">
           <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
             <div className="h-14 flex items-center px-3">
@@ -101,7 +101,13 @@ export default function CreateProductPage() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden" style={{ backgroundColor: '#f8fafc' }}>
+    // ROOT-CAUSE FIX (dark-mode consistency sweep): this used to set the
+    // page background via a raw inline style={{backgroundColor:'#f8fafc'}}
+    // — invisible to the theme system entirely, since it isn't even a
+    // dark: class. bg-[#f8fafc] resolves to var(--theme-background) in
+    // every mode (see theme-tokens.css), same fix as AppShell.jsx/
+    // ChatPage.jsx's own equivalent wrapper.
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f8fafc]">
       <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-[0_1px_3px_rgba(15,23,42,0.04)] lg:border-x lg:border-gray-100">
         <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
           <div className="h-14 flex items-center justify-between px-3">

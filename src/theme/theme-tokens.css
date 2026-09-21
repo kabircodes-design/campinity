@@ -147,6 +147,68 @@ html.dark .bg-white\/95 { background-color: color-mix(in srgb, var(--theme-surfa
 html.dark [class*="border-white/"] { border-color: rgba(255, 255, 255, 0.14); }
 html.dark [class*="hover\:bg-white/"]:hover { filter: brightness(1.15); }
 
+/*
+ * Theme-pack redesign — dark:-variant bypass mitigation.
+ *
+ * Many existing components hardcode Tailwind's `dark:` variant with a
+ * literal value (dark:bg-[#11131a], dark:text-gray-400, dark:bg-white/10,
+ * etc.) instead of a theme token. These values were originally chosen
+ * to MATCH the old 'default' pack's own dark palette exactly
+ * (#09090f/#11131a/#15171f are the literal values still set for
+ * html.dark above) — back when only one dark palette existed, that was
+ * a reasonable shortcut. Now that every pack (Romantic/Dark/Vintage/
+ * Greenish) is expected to look like itself in dark MODE too, those
+ * hardcoded classes would otherwise keep showing the old navy/black
+ * values regardless of which pack is active, since they only ever
+ * respond to the light/dark mode toggle, never to the active pack.
+ *
+ * This redirects the exact hardcoded values actually used across the
+ * app onto the active pack's own tokens, extending this file's
+ * existing token-remapping approach instead of editing each of the
+ * 40+ components individually. Selector specificity (html.dark X —
+ * one type selector plus two classes) beats Tailwind's own compiled
+ * rule for the same variant (.dark X — two classes) without needing
+ * !important.
+ */
+html.dark .dark\:bg-\[\#09090f\] { background-color: var(--theme-background); }
+html.dark .dark\:bg-\[\#11131a\] { background-color: var(--theme-surface); }
+html.dark .dark\:border-\[\#11131a\] { border-color: var(--theme-border); }
+html.dark .dark\:bg-\[\#151721\],
+html.dark .dark\:bg-\[\#15171f\],
+html.dark .dark\:bg-\[\#181b24\] { background-color: var(--theme-surfaceElevated); }
+
+html.dark .dark\:text-gray-50 { color: var(--theme-textPrimary); }
+html.dark .dark\:text-gray-300,
+html.dark .dark\:text-gray-400,
+html.dark .dark\:text-gray-500,
+html.dark .dark\:text-gray-600 { color: var(--theme-textSecondary); }
+html.dark .dark\:hover\:text-gray-50:hover { color: var(--theme-textPrimary); }
+html.dark .dark\:hover\:text-gray-300:hover { color: var(--theme-textPrimary); }
+
+html.dark .dark\:bg-white\/5 { background-color: color-mix(in srgb, var(--theme-textPrimary) 4%, var(--theme-surface)); }
+html.dark .dark\:bg-white\/10 { background-color: color-mix(in srgb, var(--theme-textPrimary) 8%, var(--theme-surface)); }
+html.dark .dark\:hover\:bg-white\/5:hover { background-color: color-mix(in srgb, var(--theme-textPrimary) 4%, var(--theme-surface)); }
+html.dark .dark\:hover\:bg-white\/10:hover { background-color: color-mix(in srgb, var(--theme-textPrimary) 8%, var(--theme-surface)); }
+html.dark .dark\:hover\:bg-white\/15:hover { background-color: color-mix(in srgb, var(--theme-textPrimary) 12%, var(--theme-surface)); }
+html.dark .dark\:hover\:bg-white\/20:hover { background-color: color-mix(in srgb, var(--theme-textPrimary) 16%, var(--theme-surface)); }
+
+html.dark .dark\:border-white\/10,
+html.dark .dark\:border-white\/15 { border-color: var(--theme-border); }
+html.dark .dark\:hover\:border-white\/20:hover,
+html.dark .dark\:hover\:border-white\/25:hover { border-color: var(--theme-border); }
+
+/* Extended pass — found via a second, exhaustive whole-app grep (the
+   first pass only scanned the auth flow). Same reasoning as the block
+   above: redirect hardcoded dark: escape hatches onto the active
+   pack's tokens instead of the old fixed navy/black values. */
+html.dark .dark\:ring-\[\#09090f\],
+html.dark .dark\:ring-\[\#11131a\] { --tw-ring-color: var(--theme-border); }
+html.dark .dark\:text-gray-200 { color: var(--theme-textSecondary); }
+html.dark .dark\:hover\:text-gray-400:hover { color: var(--theme-textPrimary); }
+html.dark .dark\:bg-\[\#11131a\]\/95 { background-color: color-mix(in srgb, var(--theme-surface) 95%, transparent); }
+html.dark .dark\:placeholder\:text-gray-500::placeholder { color: var(--theme-textSecondary); }
+html.dark .dark\:divide-white\/10 > :not([hidden]) ~ :not([hidden]) { border-color: var(--theme-divider); }
+
 html.dark body,
 html:not(.dark) body {
   background-color: var(--theme-background);
@@ -252,6 +314,14 @@ html:not(.dark) body {
 
 .bg-white,
 .bg-gray-50 { background-color: var(--theme-surface); }
+/* AppShell.jsx's page-level wrapper (and CommunityDetailPage.jsx) use
+   this literal hex directly for the shell's own background — a page-
+   level role, not a card/surface, so it maps to --theme-background
+   (matching AppShell's own dark:bg-[#09090f] sibling, already mapped
+   to the same token above). One unconditional rule, not split by
+   .dark — every pack sets one flat background value used in every
+   mode alike, same as .bg-white/.bg-gray-50 already do. */
+.bg-\[\#f8fafc\] { background-color: var(--theme-background); }
 .bg-gray-100 { background-color: color-mix(in srgb, var(--theme-textPrimary) 6%, var(--theme-surface)); }
 .bg-gray-50\/50 { background-color: color-mix(in srgb, var(--theme-textPrimary) 3%, var(--theme-surface)); }
 .hover\:bg-gray-50:hover,
@@ -295,6 +365,21 @@ html:not(.dark) body {
 .text-emerald-600 { color: var(--theme-success); }
 .bg-amber-50 { background-color: color-mix(in srgb, var(--theme-warning) 12%, var(--theme-surface)); }
 .bg-pink-50 { background-color: color-mix(in srgb, #ec4899 12%, var(--theme-surface)); }
+/* Right-rail "Quick Stats"/category tint badges (Marketplace/
+   Communities/Lost & Found — DiscoverCommunitiesPage.jsx,
+   MarketplacePage.jsx, LostFoundPage.jsx) use several more Tailwind
+   tint colors than Home's CampusPulse.jsx does, none of which had any
+   remap at all — they rendered as Tailwind's own literal pale colors
+   in every mode, unrelated to the active theme. Same color-mix
+   pattern as bg-pink-50 above (no dedicated semantic token for these,
+   so each uses its own standard Tailwind-600 hex as the mix
+   ingredient) — additive, not a redesign. */
+.bg-cyan-50 { background-color: color-mix(in srgb, #0891b2 12%, var(--theme-surface)); }
+.bg-indigo-50 { background-color: color-mix(in srgb, #4f46e5 12%, var(--theme-surface)); }
+.bg-orange-50 { background-color: color-mix(in srgb, #ea580c 12%, var(--theme-surface)); }
+.bg-purple-50 { background-color: color-mix(in srgb, #9333ea 12%, var(--theme-surface)); }
+.bg-rose-50 { background-color: color-mix(in srgb, #e11d48 12%, var(--theme-surface)); }
+.bg-teal-50 { background-color: color-mix(in srgb, #0d9488 12%, var(--theme-surface)); }
 
 .ring-white { --tw-ring-color: var(--theme-surface); }
 

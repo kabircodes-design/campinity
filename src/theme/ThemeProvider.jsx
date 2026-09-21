@@ -35,7 +35,10 @@ function getInitialPack() {
   const stored = readLocal(PACK_KEY)
   const theme = stored ? getThemeById(stored) : null
   if (theme && !theme.locked) return theme.id
-  return 'default'
+  // Safe fallback for a never-set, locked, or now-removed stored id
+  // (e.g. an old 'default'/'traditional' value from before the theme
+  // redesign) — the first entry in THEMES, never undefined/crashing.
+  return THEMES[0].id
 }
 
 function getSystemPrefersDark() {

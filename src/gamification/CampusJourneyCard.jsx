@@ -3,7 +3,7 @@ import { getCampusJourney } from './campusJourney.js'
 import { formatTimeAgo } from '../firebase/postService.js'
 
 /** Renders nothing if there are fewer than 2 real milestones — a brand-new account with just a join date isn't a "journey" yet, and this section shouldn't compete for space until there's something real to show. */
-export default function CampusJourneyCard({ uid }) {
+export default function CampusJourneyCard({ uid, className = '' }) {
   const [events, setEvents] = useState(null)
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export default function CampusJourneyCard({ uid }) {
   if (!events || events.length < 2) return null
 
   return (
-    <div className="mx-4 mt-3 rounded-2xl border border-gray-100 p-4">
+    <div className={`rounded-2xl border border-gray-100 p-4 ${className}`}>
       <p className="text-sm font-bold text-gray-900">Your Campus Journey</p>
       <div className="mt-3 space-y-0">
         {events.map((event, i) => (

@@ -276,29 +276,34 @@ export default function LostFoundPage() {
           <div className="mx-auto max-w-[560px] lg:max-w-[820px] px-4 lg:px-6 pt-5 pb-24">
             {/* Hero */}
             <div
-              className="relative overflow-hidden rounded-2xl lg:rounded-3xl px-5 py-5 lg:px-7 lg:py-6 mb-4"
-              style={{ background: 'linear-gradient(120deg, #eaf3ff 0%, #dcecff 45%, #e7f7f7 100%)' }}
+              // ROOT-CAUSE FIX (dark-mode consistency): same fix as
+              // DiscoverCommunitiesPage.jsx's hero — was a raw inline
+              // gradient style with zero dark: classes, always light
+              // regardless of mode. Brought in line with SearchPage.jsx's
+              // "Explore Campinity" hero (the reference): same gradient
+              // utility + dark stops, same dark: color/opacity pairs.
+              className="relative overflow-hidden rounded-2xl lg:rounded-3xl px-5 py-5 lg:px-7 lg:py-6 mb-4 bg-gradient-to-br from-[#eaf3ff] via-[#dcecff] to-[#e7f7f7] dark:from-[#141a2e] dark:via-[#121629] dark:to-[#101f21]"
             >
               <div
-                className="absolute -top-10 -right-6 w-40 h-40 rounded-full opacity-60 pointer-events-none"
+                className="absolute -top-10 -right-6 w-40 h-40 rounded-full opacity-60 dark:opacity-25 pointer-events-none"
                 style={{ background: 'radial-gradient(circle, rgba(59,155,255,0.35), transparent 70%)' }}
                 aria-hidden="true"
               />
               <div
-                className="absolute -bottom-12 right-10 w-32 h-32 rounded-full opacity-50 pointer-events-none"
+                className="absolute -bottom-12 right-10 w-32 h-32 rounded-full opacity-50 dark:opacity-20 pointer-events-none"
                 style={{ background: 'radial-gradient(circle, rgba(45,212,191,0.30), transparent 70%)' }}
                 aria-hidden="true"
               />
 
               <div className="relative flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-blue-700/70 uppercase">
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-blue-700/70 dark:text-blue-300/80 uppercase">
                     <PackageSearch className="w-3.5 h-3.5" /> Lost &amp; Found
                   </p>
-                  <h1 className="mt-1.5 text-2xl lg:text-[28px] font-bold text-gray-900 tracking-tight leading-tight max-w-sm">
+                  <h1 className="mt-1.5 text-2xl lg:text-[28px] font-bold text-gray-900 dark:text-gray-50 tracking-tight leading-tight max-w-sm">
                     Lost something? Let's get it back.
                   </h1>
-                  <p className="mt-2 text-[13px] lg:text-sm text-gray-500 max-w-sm leading-relaxed">
+                  <p className="mt-2 text-[13px] lg:text-sm text-gray-500 dark:text-gray-400 max-w-sm leading-relaxed">
                     Report a lost or found item and let your campus community help reunite it with its owner.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2.5">
@@ -318,7 +323,7 @@ export default function LostFoundPage() {
                         setCreateType('found')
                         setCreateOpen(true)
                       }}
-                      className="rounded-full bg-white border border-gray-200 text-gray-900 text-sm font-semibold px-5 py-2.5 hover:border-gray-300 active:scale-[0.98] transition-all duration-200"
+                      className="rounded-full bg-white dark:bg-white/10 border border-gray-200 dark:border-white/15 text-gray-900 dark:text-gray-100 text-sm font-semibold px-5 py-2.5 hover:border-gray-300 dark:hover:border-white/25 active:scale-[0.98] transition-all duration-200"
                     >
                       Report Found Item
                     </button>
@@ -328,13 +333,13 @@ export default function LostFoundPage() {
                 {/* Decorative composition — real lucide icons, not a
                     fabricated illustration asset (see file comment). */}
                 <div className="relative hidden sm:flex flex-shrink-0 items-end gap-2 pb-1">
-                  <span className="w-11 h-11 rounded-2xl bg-white/70 border border-white flex items-center justify-center text-blue-600 shadow-sm -rotate-6">
+                  <span className="w-11 h-11 rounded-2xl bg-white/70 dark:bg-white/10 border border-white dark:border-white/10 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm dark:shadow-none -rotate-6">
                     <Backpack className="w-5 h-5" />
                   </span>
-                  <span className="w-14 h-14 rounded-2xl bg-white/80 border border-white flex items-center justify-center text-blue-700 shadow-md">
+                  <span className="w-14 h-14 rounded-2xl bg-white/80 dark:bg-white/10 border border-white dark:border-white/10 flex items-center justify-center text-blue-700 dark:text-blue-300 shadow-md dark:shadow-none">
                     <Key className="w-6 h-6" />
                   </span>
-                  <span className="w-11 h-11 rounded-2xl bg-white/70 border border-white flex items-center justify-center text-teal-600 shadow-sm rotate-6">
+                  <span className="w-11 h-11 rounded-2xl bg-white/70 dark:bg-white/10 border border-white dark:border-white/10 flex items-center justify-center text-teal-600 dark:text-teal-400 shadow-sm dark:shadow-none rotate-6">
                     <BookOpen className="w-5 h-5" />
                   </span>
                 </div>
@@ -458,13 +463,16 @@ export default function LostFoundPage() {
               <BarChart3 className="w-4 h-4 text-blue-500" /> Quick Stats
             </p>
             <div className="grid grid-cols-3 gap-2">
+              {/* ROOT-CAUSE FIXES (dark-mode consistency + overflow),
+                  matching Home's CampusPulse.jsx (the reference) exactly
+                  — see that file's own comment for the full reasoning. */}
               {quickStats.map(({ key, icon: Icon, value, label, tint }) => (
-                <div key={key} className="rounded-xl bg-gray-50/70 px-2 py-3 text-center">
+                <div key={key} className="min-w-0 rounded-xl bg-gray-50/70 dark:bg-white/5 px-2 py-3 text-center">
                   <span className={`inline-flex w-7 h-7 rounded-lg items-center justify-center ${tint}`}>
                     <Icon className="w-3.5 h-3.5" />
                   </span>
                   <p className="mt-1.5 text-base font-bold text-gray-900 leading-none">{value}</p>
-                  <p className="mt-1 text-[10px] text-gray-400 leading-tight">{label}</p>
+                  <p className="mt-1 text-[10px] text-gray-400 leading-tight break-words">{label}</p>
                 </div>
               ))}
             </div>

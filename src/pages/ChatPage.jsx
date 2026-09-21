@@ -438,10 +438,21 @@ export default function ChatPage() {
 
   return (
     <>
-      <div
-        className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_1fr]"
-        style={{ backgroundColor: '#f8fafc' }}
-      >
+      {/* ROOT-CAUSE FIX for "left navbar goes white when opening a chat":
+          /messages/:chatId is a standalone route, not nested inside
+          AppShell (see App.jsx) — this page keeps its own copy of this
+          exact wrapper + DesktopSidebar instead. It used to set the
+          background via a raw inline style={{backgroundColor:'#f8fafc'}}
+          — completely invisible to the theme system (not even a `dark:`
+          class, so none of theme-tokens.css's overrides could ever
+          reach it), always #f8fafc regardless of mode. Now the same
+          theme-aware class AppShell.jsx's own equivalent wrapper uses —
+          .bg-[#f8fafc] resolves to var(--theme-background) in every
+          mode (see theme-tokens.css), so this one class is already
+          correct in both light and dark without a separate dark:
+          variant. DesktopSidebar itself has no background of its own by
+          design — it inherits from this wrapper, same as in AppShell. */}
+      <div className="relative overflow-x-hidden lg:grid lg:h-screen lg:overflow-hidden lg:[grid-template-columns:minmax(240px,280px)_1fr] bg-[#f8fafc]">
         <DesktopSidebar unreadNotifications={unreadNotifCount} unreadMessages={desktopUnreadChatsCount} profile={profile} />
 
         {/* h-dvh (not h-screen) on mobile — 100vh on real mobile browsers

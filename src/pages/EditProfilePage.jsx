@@ -380,7 +380,7 @@ export default function EditProfilePage() {
                           Use this avatar
                         </button>
                       )}
-                      {avatarMode === 'avatar' && photoPreview && (
+                      {avatarMode === 'avatar' && avatarUrl && (
                         <button
                           type="button"
                           onClick={() => handleUseMode('photo')}

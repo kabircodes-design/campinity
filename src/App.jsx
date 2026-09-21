@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import LandingPage from './pages/LandingPage.jsx'
-import ProtectedRoute, { FullScreenLoader, PublicRoute } from './auth/components/ProtectedRoute.jsx'
+import ProtectedRoute, { AppNavigationLoader, PublicRoute } from './auth/components/ProtectedRoute.jsx'
 import AppShell from './components/AppShell.jsx'
 
 const LoginPage = lazy(() => import('./auth/pages/LoginPage.jsx'))
@@ -75,7 +75,7 @@ const AddAchievementPage = lazy(() => import('./pages/AddAchievementPage.jsx'))
 
 export default function App() {
   return (
-    <Suspense fallback={<FullScreenLoader />}>
+    <Suspense fallback={<AppNavigationLoader />}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
 

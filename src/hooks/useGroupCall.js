@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '../firebase/firebase.js'
+import { getMediaConstraints, applyBitrateLimits } from './callMedia.js'
 import {
   RTC_CONFIG,
   createGroupCallDoc,
@@ -36,6 +37,11 @@ import {
  * re-render the whole routed app.
  */
 const RING_TIMEOUT_MS = 45000
+// Same reasoning as useCall.js's own RECONNECT_GRACE_MS, applied per
+// PEER instead of to the whole call — one participant's connection
+// blipping shouldn't instantly drop their tile while the ICE agent is
+// still actively trying to recover it on its own.
+const RECONNECT_GRACE_MS = 12000
 
 export function useGroupCall() {
   const [groupCallState, setGroupCallState] = useState('idle') // idle | incoming | connecting | active | ended | failed
@@ -54,6 +60,7 @@ export function useGroupCall() {
   const peerConnectionsRef = useRef(new Map()) // uid -> RTCPeerConnection
   const peerRemoteDescSetRef = useRef(new Map()) // uid -> boolean
   const peerPendingCandidatesRef = useRef(new Map()) // uid -> candidate[]
+  const peerReconnectTimeoutsRef = useRef(new Map()) // uid -> timeoutId, see connectToPeer's onconnectionstatechange
   const cleanupFnsRef = useRef([])
   const localStreamRef = useRef(null)
   const ringTimeoutRef = useRef(null)
@@ -78,6 +85,11 @@ export function useGroupCall() {
   }
 
   const closePeerConnection = useCallback((uid) => {
+    const pendingTimeout = peerReconnectTimeoutsRef.current.get(uid)
+    if (pendingTimeout) {
+      window.clearTimeout(pendingTimeout)
+      peerReconnectTimeoutsRef.current.delete(uid)
+    }
     const pc = peerConnectionsRef.current.get(uid)
     if (pc) {
       pc.getSenders().forEach((s) => s.track?.stop())
@@ -130,6 +142,11 @@ export function useGroupCall() {
       peerRemoteDescSetRef.current.set(otherUid, false)
       peerPendingCandidatesRef.current.set(otherUid, [])
       stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      // Other-participant count for THIS one connection scales the
+      // bitrate ceiling down as the call grows — see callMedia.js's own
+      // reasoning (mesh upload cost is per-connection x participant
+      // count, so each connection asks for less as more join).
+      applyBitrateLimits(pc, { isGroup: true, otherParticipantCount: peerConnectionsRef.current.size })
 
       const fromUid = amInitiator ? myUid : otherUid
       const toUid = amInitiator ? otherUid : myUid
@@ -143,7 +160,30 @@ export function useGroupCall() {
         add(callId, fromUid, toUid, event.candidate).catch(() => {})
       }
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        if (pc.connectionState === 'connected') {
+          // Recovered — cancel any pending "give up on this peer" timer.
+          const pendingTimeout = peerReconnectTimeoutsRef.current.get(otherUid)
+          if (pendingTimeout) {
+            window.clearTimeout(pendingTimeout)
+            peerReconnectTimeoutsRef.current.delete(otherUid)
+          }
+        } else if (pc.connectionState === 'failed') {
+          closePeerConnection(otherUid)
+        } else if (pc.connectionState === 'disconnected') {
+          // Same reasoning as useCall.js's 1:1 RECONNECT_GRACE_MS handling
+          // — 'disconnected' is not terminal, the ICE agent keeps probing
+          // on its own. Only drop this ONE participant's tile/connection
+          // if it's still not back to 'connected' after the grace period
+          // — the rest of the call (and every other peer connection)
+          // keeps running untouched regardless.
+          if (!peerReconnectTimeoutsRef.current.has(otherUid)) {
+            const timeoutId = window.setTimeout(() => {
+              peerReconnectTimeoutsRef.current.delete(otherUid)
+              if (pc.connectionState !== 'connected') closePeerConnection(otherUid)
+            }, RECONNECT_GRACE_MS)
+            peerReconnectTimeoutsRef.current.set(otherUid, timeoutId)
+          }
+        } else if (pc.connectionState === 'closed') {
           closePeerConnection(otherUid)
         }
       }
@@ -207,7 +247,7 @@ export function useGroupCall() {
   // answers to offers I sent).
   const beginParticipating = useCallback(
     async (callId, chatId, type, myUid) => {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' })
+      const stream = await navigator.mediaDevices.getUserMedia(getMediaConstraints({ isVideo: type === 'video', isGroup: true }))
       setLocalStream(stream)
       localStreamRef.current = stream
 
@@ -225,6 +265,15 @@ export function useGroupCall() {
         const activeUids = new Set(list.filter((p) => p.state === 'joined').map((p) => p.uid))
         Array.from(peerConnectionsRef.current.keys()).forEach((uid) => {
           if (!activeUids.has(uid)) closePeerConnection(uid)
+        })
+        // Re-balance every remaining connection's bitrate ceiling
+        // whenever the call's size changes (someone joins or leaves) —
+        // this is what actually makes the "scales down as the call
+        // grows" behavior dynamic rather than a one-time value fixed at
+        // connect time.
+        const otherParticipantCount = peerConnectionsRef.current.size
+        peerConnectionsRef.current.forEach((pc) => {
+          applyBitrateLimits(pc, { isGroup: true, otherParticipantCount })
         })
       })
       const unsubIncomingLinks = subscribeToIncomingPeerLinks(callId, myUid, (link) => {
@@ -455,6 +504,8 @@ export function useGroupCall() {
     return () => {
       clearRingTimeout()
       cleanupFnsRef.current.forEach((fn) => fn())
+      peerReconnectTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
+      peerReconnectTimeoutsRef.current.clear()
       Array.from(peerConnectionsRef.current.values()).forEach((pc) => pc.close())
       localStreamRef.current?.getTracks().forEach((t) => t.stop())
     }

@@ -132,10 +132,18 @@ export default function CallOverlay({ call }) {
   const isOutgoing = callState === 'calling'
   const isConnecting = callState === 'connecting'
   const isActive = callState === 'active'
+  const isReconnecting = callState === 'reconnecting'
+  // Treated the same as isActive for what's ON SCREEN (video/controls
+  // stay visible — a network blip shouldn't suddenly hide the call UI)
+  // — only the status label differs, so the user has an honest
+  // "something's wrong, hang on" signal instead of a frozen "Connected"
+  // that quietly stops updating.
+  const isActiveish = isActive || isReconnecting
 
   let statusLabel = ''
   if (isOutgoing) statusLabel = 'Calling…'
   else if (isConnecting) statusLabel = 'Connecting…'
+  else if (isReconnecting) statusLabel = 'Reconnecting…'
   else if (isActive) statusLabel = formatDuration(durationSec)
   else if (callState === 'declined') statusLabel = callError || 'Call declined'
   else if (callState === 'missed') statusLabel = 'No answer'
@@ -215,7 +223,7 @@ export default function CallOverlay({ call }) {
           // callService.js's setCallMediaState / the remote-state sync
           // in useCall.js) now hides the video the same way and falls
           // back to their avatar below instead of a blank frame.
-          className={`absolute inset-0 w-full h-full object-cover bg-gray-900 ${isActive && !remoteCameraOff ? '' : 'opacity-0'}`}
+          className={`absolute inset-0 w-full h-full object-cover bg-gray-900 ${isActiveish && !remoteCameraOff ? '' : 'opacity-0'}`}
         />
       )}
       {/* Always mounted for the whole voice-call lifetime (not gated on
@@ -225,7 +233,7 @@ export default function CallOverlay({ call }) {
       {!isVideo && <audio ref={remoteAudioRef} autoPlay />}
 
       <div className="relative z-10 flex flex-col items-center px-6 text-center">
-        {(!isVideo || !isActive || remoteCameraOff) && (
+        {(!isVideo || !isActiveish || remoteCameraOff) && (
           <Avatar
             initials={getInitials(displayName)}
             colorClass={getAvatarColor(otherUid)}
@@ -311,7 +319,7 @@ export default function CallOverlay({ call }) {
                 {cameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
               </button>
             )}
-            {isVideo && isActive && !cameraOff && (
+            {isVideo && isActiveish && !cameraOff && (
               <button
                 type="button"
                 onClick={switchCamera}

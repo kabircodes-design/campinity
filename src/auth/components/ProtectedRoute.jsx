@@ -2,11 +2,80 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useIsAdmin } from '../../hooks/useIsAdmin.js'
 import Loader from './Loader.jsx'
+import Logo from '../../components/Logo.jsx'
 
 export function FullScreenLoader() {
   return (
     <div className="min-h-screen bg-bg dark:bg-[#09090f] flex items-center justify-center">
       <Loader size="lg" tone="dark" />
+    </div>
+  )
+}
+
+/**
+ * ROOT-CAUSE FIX for "white screen flash + left navbar disappears" on
+ * navigation — specifically App.jsx's single top-level
+ * <Suspense fallback={...}>, which wraps the ENTIRE <Routes> tree.
+ * Pages NESTED inside AppShell (Home, Communities, Marketplace, etc.)
+ * never actually hit this: AppShell itself is imported eagerly (never
+ * lazy), and it has its OWN internal <Suspense> around just its
+ * <Outlet/>, so switching between AppShell pages only ever shows a
+ * small in-shell loader with the sidebar staying mounted throughout.
+ * But a handful of pages are standalone top-level routes, not nested
+ * inside AppShell's route group (ChatPage at /messages/:chatId is the
+ * one the user hits constantly; GroupInfoPage is another) — each is
+ * itself lazy-loaded, so the FIRST time one is visited in a session,
+ * THIS root Suspense boundary is what actually fires, unmounting
+ * AppShell (sidebar included) and replacing the entire screen with
+ * whatever the fallback renders until that page's chunk finishes
+ * loading. FullScreenLoader (above) was that fallback — a bare
+ * centered spinner with no sidebar shape at all, which is the literal
+ * "app shell disappears, blank screen, then the page pops in" effect
+ * being reported.
+ *
+ * This is a deliberately separate component from FullScreenLoader,
+ * not a shared edit to it — FullScreenLoader is ALSO used by
+ * ProtectedRoute's own initial-auth-resolution check below, which
+ * fires before we even know whether this visitor has a session at
+ * all (so before we know whether they'll ever see AppShell's sidebar
+ * — showing a sidebar-shaped skeleton there would be actively
+ * misleading, e.g. for a signed-out visitor about to land on
+ * /login). AppNavigationLoader is used ONLY for App.jsx's root
+ * Suspense fallback, where we're already past auth/onboarding and
+ * simply waiting on a lazy chunk mid-navigation — a fully different
+ * situation that legitimately calls for a shell-shaped placeholder.
+ *
+ * No routing was restructured to fix this — ChatPage/GroupInfoPage
+ * stay exactly where they are; this only changes what's shown WHILE
+ * their chunk loads. The sidebar column here is a static, non-
+ * interactive approximation (logo + pulsing bars, no real nav
+ * items/unread counts — this component has no access to that data
+ * and doesn't need it for a moment-long placeholder) using the exact
+ * same dimensions/colors as the real DesktopSidebar/AppShell wrapper,
+ * so the transition reads as "the app is still there, one part of it
+ * is loading" rather than "the app disappeared." Desktop-only
+ * (hidden lg:flex, matching DesktopSidebar itself) — on mobile there
+ * is no sidebar to preserve the illusion of, and BottomNav is
+ * deliberately absent on some of these exact pages (ChatPage), so a
+ * mobile skeleton nav bar would flicker in and back out rather than
+ * help.
+ */
+export function AppNavigationLoader() {
+  return (
+    <div className="min-h-screen w-full flex bg-[#f8fafc] dark:bg-[#09090f]">
+      <div className="hidden lg:flex lg:flex-col w-64 flex-shrink-0 h-screen px-4 py-5 border-r border-gray-100 dark:border-white/10" aria-hidden="true">
+        <div className="flex items-center px-1 mb-8">
+          <Logo className="w-8 h-8" withWordmark />
+        </div>
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-9 rounded-lg bg-gray-100 dark:bg-white/5 animate-pulse" style={{ animationDelay: `${i * 60}ms` }} />
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 flex items-center justify-center">
+        <Loader size="lg" tone="dark" />
+      </div>
     </div>
   )
 }

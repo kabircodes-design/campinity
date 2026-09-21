@@ -37,17 +37,38 @@ export default function CampusPulse({ posts, communities, notesCount }) {
       </p>
       <div className="grid grid-cols-3 gap-2">
         {stats.map(({ key, icon: Icon, value, label, tint }) => (
-          <div key={key} className="rounded-xl bg-gray-50/70 px-2 py-3 text-center">
+          // ROOT-CAUSE FIX (dark-mode consistency): bg-gray-50/70 is a
+          // Tailwind opacity variant theme-tokens.css's global remap
+          // doesn't cover (it only maps the base bg-gray-50 and the
+          // specific /50 variant) — it rendered as Tailwind's own literal
+          // light grey in every mode, so dark mode showed near-white
+          // TEXT (correctly remapped) on a still-light TILE (not
+          // remapped) — unreadable. dark:bg-white/5 matches the same
+          // "subtle raised tile on a dark surface" pattern already used
+          // throughout the app.
+          //
+          // ROOT-CAUSE FIX (overflow): min-w-0 lets the tile shrink to its
+          // actual grid track width instead of the CSS Grid default
+          // (min-width:auto), which stops the tile itself from forcing the
+          // track wider. But the real trigger is the label text: single
+          // unbreakable words like "Communities" have no natural space to
+          // wrap at, so at this tile's ~70px width the word overflows its
+          // own box horizontally instead of wrapping — verified via a
+          // headless-browser measurement (scrollWidth > clientWidth on the
+          // label). break-words (overflow-wrap: break-word) lets the
+          // browser break mid-word when needed, which is what actually
+          // keeps the text inside the tile.
+          <div key={key} className="min-w-0 rounded-xl bg-gray-50/70 dark:bg-white/5 px-2 py-3 text-center">
             <span className={`inline-flex w-7 h-7 rounded-lg items-center justify-center ${tint}`}>
               <Icon className="w-3.5 h-3.5" />
             </span>
             <p className="mt-1.5 text-base font-bold text-gray-900 leading-none">{value}</p>
-            <p className="mt-1 text-[10px] text-gray-400 leading-tight">{label}</p>
+            <p className="mt-1 text-[10px] text-gray-400 leading-tight break-words">{label}</p>
           </div>
         ))}
       </div>
       {typeof notesCount === 'number' && notesCount > 0 && (
-        <p className="mt-3 text-xs font-medium text-blue-600">📚 {notesCount} notes shared on campus</p>
+        <p className="mt-3 text-xs font-medium text-blue-600 dark:text-blue-400">📚 {notesCount} notes shared on campus</p>
       )}
     </div>
   )

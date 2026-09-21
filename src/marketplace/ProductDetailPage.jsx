@@ -105,8 +105,11 @@ export default function ProductDetailPage() {
     }
   }
 
+  // ROOT-CAUSE FIX (dark-mode consistency sweep): raw inline
+  // backgroundColor style was invisible to the theme system — see
+  // CreateProductPage.jsx's identical fix for the full reasoning.
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden" style={{ backgroundColor: '#f8fafc' }}>
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f8fafc]">
       <div className="mx-auto max-w-[480px] lg:max-w-[560px] bg-white min-h-screen lg:shadow-[0_1px_3px_rgba(15,23,42,0.04)] lg:border-x lg:border-gray-100">
         <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
           <div className="h-14 flex items-center justify-between px-3">

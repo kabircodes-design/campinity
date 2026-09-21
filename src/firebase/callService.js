@@ -21,19 +21,42 @@ import { db } from './firebase.js'
  * the small SDP offer/answer text and ICE candidates, never audio/video
  * data itself.
  *
- * STUN-only (Google's public STUN servers) — there is no TURN server
- * configured, because a production TURN server is a real external
- * service/cost (e.g. Twilio, Xirsys, or self-hosted coturn) that can't
- * be provisioned from inside this repository. STUN alone successfully
- * connects most calls (home Wi-Fi, most campus networks, mobile data),
- * but will fail to connect two peers both behind restrictive/symmetric
- * NATs (common on some corporate or heavily-firewalled networks) —
- * stated here plainly, not hidden behind a generic "call failed."
+ * TURN-ready, STUN always included. A production TURN server is a real
+ * external service/cost (e.g. Twilio Network Traversal, Xirsys,
+ * Metered, or self-hosted coturn) that cannot be provisioned from
+ * inside this repository — this reads one from Vite env vars if the
+ * deployment has configured one (VITE_TURN_URL, plus
+ * VITE_TURN_USERNAME/VITE_TURN_CREDENTIAL if it requires auth, which
+ * every real TURN provider does), and simply omits it if unset —
+ * STUN-only still works exactly as before, so nothing breaks for a
+ * deployment that hasn't set these. WITHOUT a configured TURN server,
+ * two peers who are BOTH behind restrictive/symmetric NAT (common on
+ * mobile data and some campus/corporate Wi-Fi) will still fail to
+ * connect — that is a real, stated limitation, not hidden behind a
+ * generic "call failed," and the only fix is actually configuring a
+ * TURN server via these env vars (see this feature's final report for
+ * exactly what's required).
  */
+function buildIceServers() {
+  const servers = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
+  const turnUrl = import.meta.env.VITE_TURN_URL
+  if (turnUrl) {
+    servers.push({
+      urls: turnUrl.split(',').map((u) => u.trim()),
+      username: import.meta.env.VITE_TURN_USERNAME || undefined,
+      credential: import.meta.env.VITE_TURN_CREDENTIAL || undefined
+    })
+  }
+  return servers
+}
+
 export const RTC_CONFIG = {
-  iceServers: [
-    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
-  ]
+  iceServers: buildIceServers(),
+  // Starts gathering candidates immediately on RTCPeerConnection
+  // creation rather than waiting for the first addTrack/negotiation —
+  // shaves real time off connection setup, no behavior change beyond
+  // that.
+  iceCandidatePoolSize: 10
 }
 
 function callDoc(callId) {

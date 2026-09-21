@@ -16,7 +16,7 @@ import { BADGES } from './config.js'
  * real progress ratio, or the next level if that's closer. Never picks
  * a manual-only badge (no real progress exists for those).
  */
-export default function CampusImpactCard({ uid }) {
+export default function CampusImpactCard({ uid, className = '' }) {
   const navigate = useNavigate()
   const { progress, loading: progressLoading } = useProgress(uid)
   const [impact, setImpact] = useState(null)
@@ -86,7 +86,7 @@ export default function CampusImpactCard({ uid }) {
     : []
 
   return (
-    <div className="mx-4 mt-3 space-y-3">
+    <div className={`space-y-3 ${className}`}>
       {impact && impactItems.length > 0 && (
         <div className="rounded-2xl border border-gray-100 p-4">
           <p className="text-sm font-bold text-gray-900">Your Campus Impact</p>

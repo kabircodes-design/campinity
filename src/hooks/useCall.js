@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '../firebase/firebase.js'
 import { sendCallSummaryMessage } from '../firebase/chatService.js'
+import { getMediaConstraints, applyBitrateLimits } from './callMedia.js'
 import {
   RTC_CONFIG,
   addCalleeCandidate,
@@ -19,6 +20,11 @@ import {
 
 const RING_TIMEOUT_MS = 45000
 const CONNECT_TIMEOUT_MS = 20000
+// How long a 'disconnected' peer connection is given to self-recover
+// (the ICE agent keeps probing on its own during this state — this is
+// not idle waiting, see attachPeerConnectionHandlers' own comment)
+// before this is treated as a genuine, permanent drop.
+const RECONNECT_GRACE_MS = 12000
 
 /**
  * Real WebRTC 1:1 calling, signaled entirely over Firestore
@@ -48,7 +54,7 @@ const CONNECT_TIMEOUT_MS = 20000
  * logout" by hard-resetting on sign-out.
  */
 export function useCall() {
-  const [callState, setCallState] = useState('idle') // idle | calling | incoming | connecting | active | ended | declined | missed | failed
+  const [callState, setCallState] = useState('idle') // idle | calling | incoming | connecting | active | reconnecting | ended | declined | missed | failed
   const [activeCall, setActiveCall] = useState(null) // { callId, chatId, type, otherUid, isCaller }
   const [incomingCall, setIncomingCall] = useState(null)
   const [localStream, setLocalStream] = useState(null)
@@ -68,6 +74,7 @@ export function useCall() {
   const durationTimerRef = useRef(null)
   const ringTimeoutRef = useRef(null)
   const connectTimeoutRef = useRef(null)
+  const reconnectTimeoutRef = useRef(null)
   const callStateRef = useRef('idle')
   const activeCallRef = useRef(null)
   const durationSecRef = useRef(0)
@@ -89,10 +96,17 @@ export function useCall() {
       connectTimeoutRef.current = null
     }
   }
+  const clearReconnectTimeout = () => {
+    if (reconnectTimeoutRef.current) {
+      window.clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }
+  }
 
   const teardown = useCallback((finalState = 'idle') => {
     clearRingTimeout()
     clearConnectTimeout()
+    clearReconnectTimeout()
     cleanupFnsRef.current.forEach((fn) => fn())
     cleanupFnsRef.current = []
 
@@ -239,18 +253,50 @@ export function useCall() {
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') {
         clearConnectTimeout()
+        // Recovered from a network blip — cancel the pending "give up"
+        // timer and go back to a normal active call instead of tearing
+        // down. If this is the FIRST time reaching 'connected', this is
+        // just the normal connect path (reconnectTimeoutRef was never
+        // armed, clearReconnectTimeout is a harmless no-op).
+        clearReconnectTimeout()
         setCallState('active')
         if (!durationTimerRef.current) {
           durationTimerRef.current = window.setInterval(() => setDurationSec((s) => s + 1), 1000)
         }
       } else if (pc.connectionState === 'failed') {
+        clearReconnectTimeout()
         setCallError('Call failed to connect — this can happen on some networks.')
         setCallStatus(callId, 'failed').catch(() => {})
         teardown('failed')
-      } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
-        // A clean hangup already runs its own teardown via endCall(); this
-        // only fires for an unexpected drop (network loss, peer closed tab).
-        if (callStateRef.current === 'active' || callStateRef.current === 'connecting') {
+      } else if (pc.connectionState === 'disconnected') {
+        // ROOT-CAUSE FIX for "any network blip instantly kills the call":
+        // 'disconnected' is not terminal — the ICE agent keeps probing
+        // existing candidate pairs on its own during this state and very
+        // often recovers within a few seconds on a real network hiccup
+        // (brief Wi-Fi drop, switching between Wi-Fi and mobile data,
+        // etc.), moving back to 'connected' without any app intervention.
+        // This used to treat 'disconnected' exactly like 'closed' —
+        // immediate teardown — killing perfectly recoverable calls. Now
+        // it only starts a grace-period timer and shows "Reconnecting…"
+        // (see CallOverlay.jsx); only if the connection is STILL not
+        // back to 'connected' after RECONNECT_GRACE_MS is this treated
+        // as a real, permanent drop.
+        if (callStateRef.current === 'active' || callStateRef.current === 'reconnecting') {
+          setCallState('reconnecting')
+          clearReconnectTimeout()
+          reconnectTimeoutRef.current = window.setTimeout(() => {
+            if (pc.connectionState === 'connected') return
+            setCallError('Connection lost.')
+            setCallStatus(callId, 'ended').catch(() => {})
+            teardown('ended')
+          }, RECONNECT_GRACE_MS)
+        }
+      } else if (pc.connectionState === 'closed') {
+        // A clean hangup already runs its own teardown via endCall() —
+        // this only fires for a connection the app itself didn't already
+        // tear down (e.g. the remote peer closed abruptly).
+        clearReconnectTimeout()
+        if (callStateRef.current === 'active' || callStateRef.current === 'connecting' || callStateRef.current === 'reconnecting') {
           setCallStatus(callId, 'ended').catch(() => {})
           teardown('ended')
         }
@@ -298,12 +344,13 @@ export function useCall() {
       setActiveCall({ callId: null, chatId, type, otherUid, isCaller: true })
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' })
+        const stream = await navigator.mediaDevices.getUserMedia(getMediaConstraints({ isVideo: type === 'video' }))
         setLocalStream(stream)
 
         const pc = new RTCPeerConnection(RTC_CONFIG)
         pcRef.current = pc
         stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+        applyBitrateLimits(pc)
 
         const callId = await createCallDoc({ callerUid: uid, calleeUid: otherUid, chatId, type })
         callIdRef.current = callId
@@ -415,12 +462,13 @@ export function useCall() {
     callIdRef.current = call.id
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.type === 'video' })
+      const stream = await navigator.mediaDevices.getUserMedia(getMediaConstraints({ isVideo: call.type === 'video' }))
       setLocalStream(stream)
 
       const pc = new RTCPeerConnection(RTC_CONFIG)
       pcRef.current = pc
       stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      applyBitrateLimits(pc)
 
       attachPeerConnectionHandlers(pc, call.id, false)
       armConnectTimeout(call.id)
@@ -603,6 +651,7 @@ export function useCall() {
     return () => {
       clearRingTimeout()
       clearConnectTimeout()
+      clearReconnectTimeout()
       cleanupFnsRef.current.forEach((fn) => fn())
       if (pcRef.current) pcRef.current.close()
     }
@@ -628,7 +677,7 @@ export function useCall() {
       const callId = callIdRef.current
       if (state === 'incoming' && incomingCallRef.current) {
         setCallStatus(incomingCallRef.current.id, 'declined').catch(() => {})
-      } else if (callId && (state === 'calling' || state === 'connecting' || state === 'active')) {
+      } else if (callId && (state === 'calling' || state === 'connecting' || state === 'active' || state === 'reconnecting')) {
         setCallStatus(callId, state === 'calling' ? 'missed' : 'ended').catch(() => {})
       }
     }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Calendar, Grid3x3, LinkIcon, List, Settings } from 'lucide-react'
+import { Grid3x3, List, Settings } from 'lucide-react'
 import ProfileHeader from '../components/ProfileHeader.jsx'
 import ProfileRightRail from '../components/ProfileRightRail.jsx'
 import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
@@ -13,7 +13,7 @@ import CommunityCard from '../components/CommunityCard.jsx'
 import Loader from '../auth/components/Loader.jsx'
 import { getCollegeById } from '../data/dummyColleges.js'
 import { auth } from '../firebase/firebase.js'
-import { getAvatarColor, getInitials, getUserPosts, getUserPostCount, getPostById } from '../firebase/postService.js'
+import { getAvatarColor, getInitials, getUserPosts, getUserPostCount } from '../firebase/postService.js'
 import { getUserCommunityMemberships, getCommunityById, getOwnedCommunities } from '../firebase/communityService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -22,11 +22,8 @@ const GRID_LAYOUT_KEY = 'campinity:profileGridLayout'
 
 const tabs = [
   { key: 'posts', label: 'Posts' },
-  { key: 'about', label: 'About' },
   { key: 'communities', label: 'Communities' },
-  { key: 'photos', label: 'Photos' },
-  { key: 'pinned', label: 'Pinned' },
-  { key: 'activity', label: 'Activity' }
+  { key: 'photos', label: 'Photos' }
 ]
 
 /**
@@ -79,13 +76,10 @@ export default function ProfilePage() {
   const [error, setError] = useState('')
   const [shareOpen, setShareOpen] = useState(false)
 
-  const [pinnedPosts, setPinnedPosts] = useState([])
-  const [pinnedLoading, setPinnedLoading] = useState(false)
   const [communities, setCommunities] = useState([])
   const [communitiesLoading, setCommunitiesLoading] = useState(true)
   const [communitiesLoadedOnce, setCommunitiesLoadedOnce] = useState(false)
   const [communitiesError, setCommunitiesError] = useState(false)
-  const [pinnedLoadedOnce, setPinnedLoadedOnce] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -134,32 +128,6 @@ export default function ProfilePage() {
       cancelled = true
     }
   }, [currentUid])
-
-  useEffect(() => {
-    if (activeTab !== 'pinned' || pinnedLoadedOnce || !profile) return
-    let cancelled = false
-    setPinnedLoading(true)
-    Promise.all(profile.pinnedPostIds.map((id) => getPostById(id, currentUid).catch(() => null)))
-      .then((results) => {
-        if (!cancelled) {
-          // Same fix as myPosts above, same reasoning: every pinned
-          // post on this page belongs to the current user (you can
-          // only pin your own posts to your own profile) — guarantee
-          // userId regardless of what getPostById's own mapping
-          // includes, so PostCard.jsx's isOwner check works correctly
-          // here too.
-          const pinnedWithOwner = results.filter(Boolean).map((post) => ({ ...post, userId: post.userId || currentUid }))
-          setPinnedPosts(pinnedWithOwner)
-          setPinnedLoadedOnce(true)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setPinnedLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [activeTab, profile, currentUid, pinnedLoadedOnce])
 
   useEffect(() => {
     if (communitiesLoadedOnce || !currentUid) return
@@ -285,12 +253,8 @@ export default function ProfilePage() {
     communitiesCount: communitiesLoadedOnce ? communities.length : undefined
   }
 
-  // One handler for both delete call sites (Posts grid, Pinned tab) so
-  // postCount can never drift out of sync with one of them by only
-  // being wired into the other.
   const handlePostDeleted = (deletedId) => {
     setMyPosts((prev) => prev.filter((p) => p.id !== deletedId))
-    setPinnedPosts((prev) => prev.filter((p) => p.id !== deletedId))
     setPostCount((prev) => (typeof prev === 'number' ? Math.max(0, prev - 1) : prev))
   }
 
@@ -339,30 +303,43 @@ export default function ProfilePage() {
             />
 
             <ProgressCard uid={currentUid} />
-            <CampusImpactCard uid={currentUid} />
-            <CampusJourneyCard uid={currentUid} />
 
-            <nav className="sticky top-14 z-30 flex items-center bg-white dark:bg-[#11131a] border-b border-gray-100 dark:border-white/10 overflow-x-auto scroll-hidden">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`flex-shrink-0 px-4 py-3 text-[13px] font-semibold text-center border-b-2 transition-all duration-200 ${
-                    activeTab === tab.key
-                      ? 'text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400'
-                      : 'text-gray-400 border-transparent hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            {/* Campus Impact/Next Unlock/Journey stay inline here only on
+                mobile, where there is no separate right column to move
+                them into — this matches the requested hierarchy (identity
+                → reputation → impact → next unlock → journey → posts/
+                communities/photos) exactly. On desktop (lg:) they render
+                once, inside ProfileRightRail instead (see below) — never
+                both, so there's no duplicate mount or double Firestore
+                read. */}
+            <div className="lg:hidden">
+              <CampusImpactCard uid={currentUid} className="mx-4 mt-3" />
+              <CampusJourneyCard uid={currentUid} className="mx-4 mt-3" />
+            </div>
+
+            <nav className="sticky top-14 z-30 flex items-center gap-2 bg-white dark:bg-[#11131a] border-b border-gray-100 dark:border-white/10 px-4 lg:px-6 py-2.5">
+              <div className="flex-1 grid grid-cols-3 gap-1">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`rounded-xl py-2 text-[13px] font-semibold text-center transition-all duration-200 ${
+                      activeTab === tab.key
+                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400'
+                        : 'text-gray-500 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
               {activeTab === 'posts' && (
                 <button
                   type="button"
                   onClick={toggleGridLayout}
                   aria-label={gridLayout === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
-                  className="ml-auto mr-3 flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:text-gray-500 dark:hover:bg-white/10 transition-all duration-300"
+                  className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:text-gray-500 dark:hover:bg-white/10 transition-all duration-300"
                 >
                   {gridLayout === 'grid' ? <List className="w-4 h-4" /> : <Grid3x3 className="w-4 h-4" />}
                 </button>
@@ -413,52 +390,6 @@ export default function ProfilePage() {
                 </>
               )}
 
-              {activeTab === 'about' && (
-                <div className="px-4 lg:px-6 py-5 space-y-4">
-                  {profile.bio && (
-                    <div>
-                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">Bio</p>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{profile.bio}</p>
-                    </div>
-                  )}
-                  {(displayProfile.college || profile.course || profile.year) && (
-                    <div>
-                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">Campus</p>
-                      {displayProfile.college && <p className="text-sm text-gray-700 dark:text-gray-300">{displayProfile.college}</p>}
-                      {(profile.course || profile.year) && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{[profile.course, profile.year].filter(Boolean).join(' · ')}</p>
-                      )}
-                    </div>
-                  )}
-                  {profile.website && (
-                    <div>
-                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">Website</p>
-                      <a
-                        href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline w-fit"
-                      >
-                        <LinkIcon className="w-3.5 h-3.5" />
-                        {profile.website.replace(/^https?:\/\//, '')}
-                      </a>
-                    </div>
-                  )}
-                  {profile.createdAt?.toDate && (
-                    <div>
-                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">Joined</p>
-                      <p className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
-                        <Calendar className="w-3.5 h-3.5" />
-                        {profile.createdAt.toDate().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-                      </p>
-                    </div>
-                  )}
-                  {!profile.bio && !displayProfile.college && !profile.course && !profile.website && (
-                    <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">Nothing added yet — head to Edit Profile to fill this in.</p>
-                  )}
-                </div>
-              )}
-
               {activeTab === 'photos' &&
                 (photoPosts.length === 0 ? (
                   <div className="px-6 py-16 text-center">
@@ -476,24 +407,6 @@ export default function ProfilePage() {
                       >
                         <img src={post.imagePreviewUrl} alt="" className="w-full h-full object-cover" />
                       </button>
-                    ))}
-                  </div>
-                ))}
-
-              {activeTab === 'pinned' &&
-                (pinnedLoading ? (
-                  <div className="py-16 flex justify-center">
-                    <Loader size="md" tone="dark" />
-                  </div>
-                ) : pinnedPosts.length === 0 ? (
-                  <div className="px-6 py-16 text-center">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">No pinned posts</p>
-                    <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Pin up to 3 posts to feature them here.</p>
-                  </div>
-                ) : (
-                  <div>
-                    {pinnedPosts.map((post) => (
-                      <PostCard key={post.id} post={post} onDeleted={handlePostDeleted} />
                     ))}
                   </div>
                 ))}
@@ -550,26 +463,10 @@ export default function ProfilePage() {
                   </div>
                 ))}
 
-              {activeTab === 'activity' && (
-                <div className="px-6 py-16 text-center">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-50">Activity history coming soon</p>
-                  <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">This needs a bit more backend work — not faked here.</p>
-                </div>
-              )}
             </main>
           </div>
 
-          <ProfileRightRail
-            profile={displayProfile}
-            postsCount={displayProfile.postsCount}
-            followers={displayProfile.followers}
-            following={displayProfile.following}
-            communities={communities}
-            communitiesLoading={communitiesLoading}
-            photos={photoPosts}
-            isOwnProfile
-            onEditAbout={() => navigate('/profile/edit')}
-          />
+          <ProfileRightRail uid={currentUid} />
         </div>
 
         <ShareBottomSheet

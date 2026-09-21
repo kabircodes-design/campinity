@@ -46,10 +46,10 @@ export default function LastMinutePreview({ notes, onViewAll }) {
   return (
     <div className="px-4 lg:px-0 mt-4">
       <div className="flex items-center justify-between mb-2">
-        <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900">
-          <Zap className="w-4 h-4 text-amber-500" fill="currentColor" /> Last Minute
+        <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 dark:text-gray-50">
+          <Zap className="w-4 h-4 text-amber-500 dark:text-amber-400" fill="currentColor" /> Last Minute
         </p>
-        <button type="button" onClick={onViewAll} className="text-xs font-semibold text-blue-600">
+        <button type="button" onClick={onViewAll} className="text-xs font-semibold text-blue-600 dark:text-blue-400">
           View all →
         </button>
       </div>
@@ -73,20 +73,25 @@ export default function LastMinutePreview({ notes, onViewAll }) {
                 clearDocumentError()
                 openDocument(note)
               }}
-              className="w-full flex items-center gap-3 rounded-xl border border-amber-100 bg-gradient-to-r from-amber-50/60 to-white px-3.5 py-2.5 text-left hover:border-amber-200 disabled:opacity-60 transition-all duration-200"
+              // ROOT-CAUSE FIX (dark-mode consistency): this card's amber
+              // urgency treatment had zero dark: classes anywhere — the
+              // gradient strip in particular (from-amber-50/60 to-white)
+              // was a hardcoded light gradient with no dark equivalent,
+              // so it stayed a pale peach/white strip regardless of mode.
+              className="w-full flex items-center gap-3 rounded-xl border border-amber-100 dark:border-amber-500/20 bg-gradient-to-r from-amber-50/60 to-white dark:from-amber-500/10 dark:to-[#11131a] px-3.5 py-2.5 text-left hover:border-amber-200 dark:hover:border-amber-500/30 disabled:opacity-60 transition-all duration-200"
             >
-              <div className="w-9 h-9 rounded-lg bg-white border border-amber-100 flex items-center justify-center flex-shrink-0 text-base">
+              <div className="w-9 h-9 rounded-lg bg-white dark:bg-white/5 border border-amber-100 dark:border-amber-500/20 flex items-center justify-center flex-shrink-0 text-base">
                 {subject?.emoji || '📄'}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  {subject && <span className="text-[10px] font-semibold text-amber-600 uppercase tracking-wide">{subject.label}</span>}
-                  {isImportant && <span className="text-[9px] font-bold text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">Important</span>}
+                  {subject && <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">{subject.label}</span>}
+                  {isImportant && <span className="text-[9px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/20 rounded-full px-1.5 py-0.5">Important</span>}
                 </div>
                 <p className="text-xs font-semibold text-gray-900 truncate">{note.file ? getDisplayFileName(note.file) : note.text || 'Note'}</p>
                 <p className="text-[10px] text-gray-400">Uploaded {note.time}</p>
               </div>
-              <span className="text-[10px] font-semibold text-blue-600 flex-shrink-0">{openingDocument ? 'Opening…' : 'Open →'}</span>
+              <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 flex-shrink-0">{openingDocument ? 'Opening…' : 'Open →'}</span>
             </button>
           )
         })}
