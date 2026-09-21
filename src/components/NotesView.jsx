@@ -6,7 +6,7 @@ import { getNotesPosts } from '../firebase/postService.js'
 import { subscribeToIsItemSaved } from '../saved/savedService.js'
 import SaveBottomSheet from '../saved/SaveBottomSheet.jsx'
 import { useMyVerification } from '../access/useMyVerification.js'
-import { useOpenPostDocument } from '../hooks/useOpenPostDocument.js'
+import { useOpenDocument } from '../hooks/useOpenDocument.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
@@ -58,7 +58,7 @@ function NoteCard({ note, verified }) {
   const [isSaved, setIsSaved] = useState(false)
   const [saveSheetOpen, setSaveSheetOpen] = useState(false)
   const [gateFeature, setGateFeature] = useState(null)
-  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenPostDocument()
+  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenDocument()
   const subjectMeta = SUBJECTS.find((s) => s.key === resolveSubject(note))
   const currentUid = auth.currentUser?.uid
   const isOwner = Boolean(note.userId) && note.userId === currentUid

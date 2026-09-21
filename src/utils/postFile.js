@@ -36,7 +36,9 @@ function cleanPathLikeString(raw) {
 export function getDisplayFileName(file) {
   if (!file) return ''
 
-  const raw = file.name || file.path || file.url || ''
+  // `storagePath` covers new campusDocuments/ uploads (documentService.js);
+  // `path`/`url` cover every historical shape this app has ever written.
+  const raw = file.name || file.storagePath || file.path || file.url || ''
   if (!raw) return ''
 
   if (!looksLikeInternalPath(raw)) return raw

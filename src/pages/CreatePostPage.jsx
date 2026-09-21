@@ -6,7 +6,8 @@ import Switch from '../components/Switch.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { computeExpiresAt, createPost, getAvatarColor, getInitials, uploadPostDocument, uploadPostImage } from '../firebase/postService.js'
+import { computeExpiresAt, createPost, getAvatarColor, getInitials, uploadPostImage } from '../firebase/postService.js'
+import { uploadDocument } from '../firebase/documentService.js'
 import { getUserCommunityMemberships, getCommunityById, getCommunityChannels } from '../firebase/communityService.js'
 import { createMentionNotification } from '../firebase/notificationService.js'
 import { useMentionAutocomplete } from '../hooks/useMentionAutocomplete.js'
@@ -381,20 +382,14 @@ export default function CreatePostPage() {
 
       let fileData = null
       if (publishData.pdfFile) {
-        // Storage PATH only — never a usable URL. See
-        // uploadPostDocument's own comment in postService.js for why:
-        // a getDownloadURL() result is a permanent bearer token, so
-        // storing it here would have been the same bypass this whole
-        // pass exists to close. getVerifiedPostDocumentUrl (Cloud
-        // Function) resolves this path into a real, short-lived URL
-        // on demand, only for verified users.
-        const filePath = await uploadPostDocument(publishData.uid, publishData.pdfFile)
-        fileData = {
-          name: publishData.pdfFile.name,
-          size: formatFileSize(publishData.pdfFile.size),
-          path: filePath,
-          mimeType: 'application/pdf'
-        }
+        // documentService.uploadDocument already returns clean,
+        // display-ready metadata (name, storagePath, contentType, size,
+        // uploadedBy, uploadedAt) — stored on the post as-is. Only the
+        // Storage path is ever stored, never a usable URL: see
+        // documentService.js's header for why (a getDownloadURL()
+        // result is a permanent bearer token that would bypass
+        // verification if persisted).
+        fileData = await uploadDocument(publishData.uid, publishData.pdfFile)
       }
 
       const author = publishData.isAnonymous

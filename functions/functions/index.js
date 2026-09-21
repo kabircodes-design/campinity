@@ -191,151 +191,22 @@ async function handleModerateProfilePhoto(request) {
 }
 
 /**
- * =====================================================================
- * getVerifiedPostDocumentUrl — verification-access-control pass, Phase 2
- * (the PDF/document security gap).
- *
- * postService.js's uploadPostDocument used to call getDownloadURL() and
- * that permanent, bearer-token-bearing URL got stored directly on the
- * posts/{postId} document — readable by any signed-in user regardless
- * of verification status, since Storage rules only ever gated the ACT
- * of calling getDownloadURL(), never the token it hands back once
- * extracted. This function is the real fix: the post document now
- * stores only a Storage PATH (see uploadPostDocument's own comment),
- * and this is the ONLY way that path ever turns into something openable
- * — server-verifies auth, verifiedCampus (with an owner exemption — see
- * below), and that the requested path genuinely belongs to a post the
- * caller identified by ID (never a client-supplied arbitrary path).
- *
- * ACTUAL ROOT CAUSE, found after a real deployed test still failed with
- * "Could not open this document" for BRAND NEW PDFs too (not just
- * legacy ones): this used to call
- * bucket().file(filePath).getSignedUrl({ action: 'read', ... }) — the
- * EXACT SAME failure adminGetVerificationDocumentUrl's own comment
- * above already documents in this file: Cloud Functions v2 runs under
- * the project's default compute service account, which has no private
- * key to sign a URL with locally. Signing requires calling the IAM
- * Credentials API's signBlob on itself, which needs the "Service
- * Account Token Creator" role bound to that account — not granted by
- * default. getSignedUrl() threw on EVERY call regardless of ownership/
- * verification (those checks all passed correctly and were never the
- * problem), the catch block converted that into a generic 'internal'
- * error, and every frontend caller's catch turned that into "Could not
- * open this document. Please try again." — an infrastructure/IAM gap,
- * not a data or logic bug, which is exactly why the earlier
- * owner-exemption fix (still correct, still kept below) did not
- * resolve it: that fix addressed a real but EARLIER stage of this same
- * function; the failure was happening at the getSignedUrl() call after
- * that check already passed.
- *
- * Fixed the same way adminGetVerificationDocumentUrl already fixed the
- * identical problem for ID documents: never generate a URL at all — the
- * Admin SDK downloads the file's bytes directly (a plain object read,
- * which needs no signing/extra IAM role) and returns them as a base64
- * data URI inside the callable's own already-authenticated response.
- * Same 6MB source-size cap as that function, for the same reason
- * (callable responses have a real payload ceiling; base64 inflates size
- * ~4/3). Works identically for legacy and newly-uploaded documents —
- * this only cares that `file.path` on the post resolves to a real
- * object in the bucket, not when it was uploaded.
- * =====================================================================
+ * getVerifiedPostDocumentUrl was removed as part of the ground-up
+ * document-system rebuild (see src/firebase/documentService.js's
+ * header). It went through three rounds of live-deployed failures —
+ * getSignedUrl() throwing due to this project's Cloud Functions v2
+ * default-service-account IAM limitation (no signBlob permission),
+ * then an unopenable data: URI once switched to a base64 response,
+ * then a blank render from a stale stored contentType even after that
+ * was fixed with a client-side blob: URL conversion. Rather than patch
+ * this delivery mechanism a fourth time, post PDFs now use Storage's
+ * own getDownloadURL() directly from the client, gated by Storage
+ * rules (storage.rules' campusDocuments/ block) instead of a Cloud
+ * Function — the same authorization model (owner always allowed,
+ * everyone else needs verifiedCampus), just enforced at the point of
+ * access instead of pre-computed here. Nothing else in this file calls
+ * or depends on this function.
  */
-exports.getVerifiedPostDocumentUrl = onCall({ region: 'us-central1' }, async (request) => {
-  const uid = request.auth?.uid
-  if (!uid) throw new HttpsError('unauthenticated', 'You need to be signed in.')
-
-  const { postId } = request.data || {}
-  if (!postId || typeof postId !== 'string') {
-    throw new HttpsError('invalid-argument', 'Missing postId.')
-  }
-
-  try {
-    const postSnap = await db().collection('posts').doc(postId).get()
-    if (!postSnap.exists) {
-      console.error('[getVerifiedPostDocumentUrl] post not found', { postId, uid })
-      throw new HttpsError('not-found', 'This post no longer exists.')
-    }
-
-    // Post's own author is always exempt — an unverified user must
-    // still be able to open the document THEY just uploaded. Ownership
-    // never weakens protection for anyone else; a non-owner still
-    // requires verifiedCampus exactly as before.
-    const isOwner = postSnap.data().userId === uid
-    if (!isOwner) {
-      const userSnap = await db().collection('users').doc(uid).get()
-      if (!userSnap.exists || userSnap.data().verifiedCampus !== true) {
-        console.error('[getVerifiedPostDocumentUrl] permission denied', { postId, uid, isOwner, verifiedCampus: userSnap.data()?.verifiedCampus })
-        throw new HttpsError('permission-denied', 'Verify your campus to open this document.')
-      }
-    }
-
-    const filePath = postSnap.data().file?.path
-    if (!filePath || typeof filePath !== 'string') {
-      console.error('[getVerifiedPostDocumentUrl] post has no file.path', { postId, fileField: postSnap.data().file })
-      throw new HttpsError('not-found', 'This post has no document attached.')
-    }
-
-    const file = bucket().file(filePath)
-    const [exists] = await file.exists()
-    if (!exists) {
-      console.error('[getVerifiedPostDocumentUrl] storage object missing', { postId, filePath })
-      throw new HttpsError('not-found', 'This document could not be found in storage.')
-    }
-
-    const [metadata] = await file.getMetadata()
-    // Callable responses top out around 10MB; base64 inflates size by
-    // ~4/3, so this caps the SOURCE file well under that with real
-    // margin for JSON overhead — same limit adminGetVerificationDocumentUrl
-    // already uses for the identical reason.
-    const MAX_SOURCE_BYTES = 6 * 1024 * 1024
-    if (Number(metadata.size) > MAX_SOURCE_BYTES) {
-      console.error('[getVerifiedPostDocumentUrl] file too large to inline', { postId, filePath, size: metadata.size })
-      throw new HttpsError('resource-exhausted', 'This document is too large to open here.')
-    }
-
-    const [buffer] = await file.download()
-    // ROOT-CAUSE FIX for "tab opens but shows a blank white page": this
-    // used to trust `metadata.contentType || 'application/pdf'` — but
-    // that fallback only ever fires when contentType is FALSY. A file
-    // uploaded before uploadPostDocument started explicitly setting
-    // `contentType: 'application/pdf'` (or any upload where the
-    // browser/OS reported an empty/generic File.type) can have Storage
-    // metadata of `application/octet-stream` or similar — a real,
-    // TRUTHY value the `||` fallback never overrides. The resulting
-    // Blob was then created with the WRONG mime type, so navigating a
-    // tab to its blob: URL showed nothing recognizable instead of a
-    // PDF. This endpoint only ever serves post PDF documents (the
-    // upload input is `accept="application/pdf"`; nothing else calls
-    // this function) — there's no legitimate case where the correct
-    // type is anything other than application/pdf, so it's hardcoded
-    // rather than trusted from potentially-stale stored metadata.
-    const contentType = 'application/pdf'
-    const base64 = buffer.toString('base64')
-    console.log('[getVerifiedPostDocumentUrl] serving document', {
-      postId,
-      filePath,
-      storedContentType: metadata.contentType || null,
-      byteLength: buffer.length,
-      base64Length: base64.length
-    })
-    return { url: `data:${contentType};base64,${base64}` }
-  } catch (err) {
-    if (err instanceof HttpsError) throw err
-    // Rich server-side diagnostics (Cloud Functions logs), never sent
-    // to the client — the client only ever sees the generic message
-    // below, but `firebase functions:log` (or the console) now shows
-    // exactly which stage failed and why, instead of only "unexpected
-    // error" with no detail.
-    console.error('[getVerifiedPostDocumentUrl] unexpected error', {
-      postId,
-      uid,
-      message: err?.message,
-      code: err?.code,
-      stack: err?.stack
-    })
-    throw new HttpsError('internal', 'Could not open this document. Please try again.')
-  }
-})
 
 /**
  * checkAdminStatus — new this pass, added on top of the original

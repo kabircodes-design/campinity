@@ -32,7 +32,7 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { addComment, getComments, likePost, unlikePost, deletePost, editPost } from '../firebase/engagementService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
 import { useMyVerification } from '../access/useMyVerification.js'
-import { useOpenPostDocument } from '../hooks/useOpenPostDocument.js'
+import { useOpenDocument } from '../hooks/useOpenDocument.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
 
@@ -81,7 +81,7 @@ export default function PostDetailPage() {
   const navigate = useNavigate()
   const verified = useMyVerification()
   const [documentGateOpen, setDocumentGateOpen] = useState(false)
-  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenPostDocument()
+  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenDocument()
 
   const [post, setPost] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
@@ -457,9 +457,10 @@ export default function PostDetailPage() {
                 type="button"
                 disabled={openingDocument}
                 onClick={() => {
-                  // Same isOwner exemption as PostCard.jsx / the server-side
-                  // getVerifiedPostDocumentUrl check — an unverified author
-                  // could never open their own uploaded PDF before this.
+                  // UX-level pre-check only, same as PostCard.jsx — the
+                  // real authorization boundary is storage.rules' owner-
+                  // or-verified read rule, enforced on every
+                  // getDownloadURL() call inside useOpenDocument.
                   if (verified === false && !isOwner) {
                     setDocumentGateOpen(true)
                     return

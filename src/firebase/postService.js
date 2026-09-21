@@ -1,6 +1,5 @@
 import { addDoc, collection, doc, getCountFromServer, getDoc, getDocs, limit, orderBy, query, serverTimestamp, Timestamp, where } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { getFunctions, httpsCallable } from 'firebase/functions'
 import { db, storage } from './firebase.js'
 import { normalizeHashtag } from '../utils/hashtags.js'
 import { enrichWithAuthors } from '../hooks/useAuthorEnrichment.js'
@@ -282,61 +281,17 @@ export async function uploadPostImage(uid, file) {
 }
 
 /**
- * REBUILT for the verification-access-control PDF security fix — this
- * used to call getDownloadURL() and hand that back to be stored
- * directly on the post document, same as uploadPostImage. That is a
- * real, confirmed bypass: a Firebase Storage download URL carries its
- * own bearer token in the query string, so once it's sitting in a
- * posts/{postId} document (readable by any signed-in user), ANYONE can
- * open it forever — Storage rules only ever gated the act of calling
- * getDownloadURL() itself, never the token it hands back. Post PHOTOS
- * are deliberately NOT changed (they're meant to render inline in the
- * feed for any signed-in browser, not a protected "campus resource" —
- * only documents/PDFs are the access-controlled content type here).
- * This now returns only the Storage PATH; the post document stores
- * that path, never a usable URL. Resolving a path into an actual,
- * short-lived, verification-checked URL happens through
- * getVerifiedPostDocumentUrl (Cloud Function, Admin SDK), the same
- * signed-URL pattern adminGetVerificationDocumentUrl already
- * established for ID documents in functions/index.js — not a new
- * pattern invented for this.
- *
- * Deliberately a SEPARATE path prefix from uploadPostImage
- * (postDocuments/ vs postImages/), not the same folder — the Storage
- * rule for postImages/ allows any signed-in user to call
- * getDownloadURL() directly (that's correct for freely-viewable feed
- * photos), so a document sharing that prefix would let anyone who
- * reads the path off the Firestore post doc fetch it straight through
- * the client SDK, completely bypassing the Cloud Function above. A
- * distinct prefix lets storage.rules gate this one behind isVerified()
- * as real defense-in-depth, not just a fresh token each time.
+ * Post document (PDF) upload and opening now live in
+ * documentService.js / useOpenDocument.js — the ground-up rebuild that
+ * replaced this file's old uploadPostDocument + the Cloud-Function-based
+ * getVerifiedPostDocumentUrl after three rounds of live-deployed
+ * delivery failures (getSignedUrl() IAM failure, then an unopenable
+ * data: URI, then a blank render from a stale contentType). See
+ * documentService.js's header for the full reasoning. Existing posts
+ * created through the old postDocuments/ path still open correctly —
+ * documentService.js's getDocumentStoragePath() reads their `file.path`
+ * exactly as before; storage.rules' postDocuments/ rule is unchanged.
  */
-export async function uploadPostDocument(uid, file) {
-  const path = `postDocuments/${uid}/${Date.now()}-${file.name}`
-  const fileRef = ref(storage, path)
-  // Explicit contentType rather than relying on the browser's own
-  // File.type inference — normally correct for a file picked via
-  // accept="application/pdf", but setting it explicitly means the
-  // signed URL getVerifiedPostDocumentUrl later mints always serves
-  // the right Content-Type regardless of what the source browser/OS
-  // reported, so it opens inline as a PDF rather than downloading as
-  // an unrecognized binary.
-  await uploadBytes(fileRef, file, { contentType: 'application/pdf' })
-  return path
-}
-
-/**
- * Resolves a posts/{postId} document into a real, short-lived signed
- * URL — server-verifies auth + verifiedCampus + that the document
- * actually belongs to that post before minting anything. The client
- * never supplies a Storage path directly (that would let anyone probe
- * arbitrary paths); it only ever supplies a postId it can already read.
- */
-export async function getVerifiedPostDocumentUrl(postId) {
-  const fn = httpsCallable(getFunctions(), 'getVerifiedPostDocumentUrl')
-  const result = await fn({ postId })
-  return result.data?.url
-}
 
 /**
  * Creates a new posts/{id} document.

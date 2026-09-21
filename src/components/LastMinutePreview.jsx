@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Zap } from 'lucide-react'
 import { useMyVerification } from '../access/useMyVerification.js'
-import { useOpenPostDocument } from '../hooks/useOpenPostDocument.js'
+import { useOpenDocument } from '../hooks/useOpenDocument.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
 import { auth } from '../firebase/firebase.js'
@@ -30,7 +30,7 @@ const SUBJECT_META = {
 export default function LastMinutePreview({ notes, onViewAll }) {
   const verified = useMyVerification()
   const [gateOpen, setGateOpen] = useState(false)
-  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenPostDocument()
+  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenDocument()
   const currentUid = auth.currentUser?.uid
   const items = useMemo(() => {
     const now = Date.now()

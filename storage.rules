@@ -110,6 +110,27 @@ service firebase.storage {
       allow delete: if isOwner(uid);
     }
 
+    // campusDocuments/{uid}/{documentId}/{file} — documentService.js's
+    // uploadDocument, the sole upload path for NEW post PDFs going
+    // forward (the ground-up rebuild of the document system: see that
+    // file's own header for why the old postDocuments/ + Cloud Function
+    // signed-URL/base64 delivery chain was abandoned rather than patched
+    // again). The read rule is the entire access-control mechanism now —
+    // there is no Cloud Function in front of this at all, so this rule
+    // IS the authorization check, evaluated fresh on every
+    // getDownloadURL() call: the post's own author can always open it;
+    // anyone else needs verifiedCampus, exactly the same authorization
+    // model postDocuments/ already enforced (just previously duplicated,
+    // less reliably, inside a Cloud Function on top of it). A downloaded
+    // URL is never written back to Firestore, so this doesn't reopen the
+    // permanent-bearer-token bypass the original postDocuments/ design
+    // was created to close.
+    match /campusDocuments/{uid}/{documentId}/{fileName} {
+      allow read: if isOwner(uid) || isVerified();
+      allow write: if isOwner(uid) && isVerified();
+      allow delete: if isOwner(uid);
+    }
+
     // products/{uid}/{file} — marketplaceService.js. Verification-gated,
     // mirrors products/{productId}'s create rule.
     match /products/{uid}/{fileName} {

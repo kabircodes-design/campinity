@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useMyVerification } from '../access/useMyVerification.js'
-import { useOpenPostDocument } from '../hooks/useOpenPostDocument.js'
+import { useOpenDocument } from '../hooks/useOpenDocument.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
 import {
@@ -73,7 +73,7 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
   const expiryBadgeText = formatExpiryBadge(post.expiresAtMs)
   const verified = useMyVerification()
   const [verificationGateOpen, setVerificationGateOpen] = useState(false)
-  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenPostDocument()
+  const { openDocument, opening: openingDocument, error: documentError, clearError: clearDocumentError } = useOpenDocument()
   const navigate = useNavigate()
   const config = postTypeConfig[post.type]
   const TypeIcon = typeIcons[post.type]
@@ -427,12 +427,14 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
             type="button"
             disabled={openingDocument}
             onClick={() => {
-              // ROOT-CAUSE FIX: this used to gate on `verified === false`
-              // with no ownership exemption — the post's OWN author
-              // couldn't open their own just-uploaded PDF unless THEY
-              // were separately campus-verified. Mirrors the same
-              // isOwner exemption added server-side in
-              // getVerifiedPostDocumentUrl.
+              // UX-level pre-check only — the real authorization
+              // boundary is storage.rules' campusDocuments()/
+              // postDocuments() read rule (owner OR verified), enforced
+              // fresh on every getDownloadURL() call inside
+              // useOpenDocument. This just avoids sending an unverified
+              // non-owner into a request that Storage would reject
+              // anyway, showing the verification prompt immediately
+              // instead.
               if (verified === false && !isOwner) {
                 setVerificationGateOpen(true)
                 return
@@ -455,11 +457,9 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
               )}
             </div>
           </button>
-          {/* ROOT-CAUSE FIX for "clicking the PDF does nothing": openDocument's
-              async failure (Cloud Function error, permission-denied, network
-              blip) was computed correctly by useOpenPostDocument but never
-              rendered anywhere — the button just silently reverted to its
-              normal state. Now surfaced directly under the attachment. */}
+          {/* Surfaces openDocument's async failure (Storage permission
+              denied, missing object, network blip) directly under the
+              attachment instead of silently reverting to normal state. */}
           {documentError && (
             <p role="alert" className="mx-4 lg:mx-6 mt-1.5 text-xs text-red-500 dark:text-red-400">
               {documentError}
