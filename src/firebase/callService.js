@@ -83,6 +83,14 @@ export async function createCallDoc({ callerUid, calleeUid, chatId, type }) {
     updatedAt: serverTimestamp(),
     endedAt: null
   })
+  // Phase 4 — the callee's push notification is created server-side by
+  // a Cloud Function triggered on THIS document's creation
+  // (createCallPushNotification in functions/functions/index.js), not
+  // here. A client-side fire-and-forget write proved unreliable in
+  // real browser testing (subject to auth-session/tab/network state
+  // this file has no control over); a Firestore trigger fires
+  // reliably from the moment this write itself succeeds, which is the
+  // one thing already proven to always happen.
   return ref.id
 }
 

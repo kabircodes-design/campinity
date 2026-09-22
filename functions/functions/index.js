@@ -46,6 +46,7 @@
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
+const { onDocumentCreated } = require('firebase-functions/v2/firestore')
 const { setGlobalOptions } = require('firebase-functions/v2')
 const admin = require('firebase-admin')
 const { moderateImage } = require('./moderation/openaiProvider.js')
@@ -2373,3 +2374,408 @@ exports.verifyEmailVerificationToken = onCall({ region: 'us-central1' }, async (
     throw new HttpsError('internal', 'Something went wrong. Please try again.', { reason: 'server-error' })
   }
 })
+
+// =====================================================================
+// PHASE 2 — Centralized FCM push-notification send trigger
+// =====================================================================
+/**
+ * The first Firestore-TRIGGERED function in this file — every export
+ * above is an onCall (HTTPS callable), invoked explicitly by the
+ * client. This one instead reacts automatically whenever a document is
+ * created at users/{uid}/notifications/{notificationId} — the exact
+ * existing in-app notification collection every createXNotification()
+ * function in src/firebase/notificationService.js already writes to
+ * (confirmed by reading that file directly before writing this; no
+ * client code changed anywhere to make this work). This is purely an
+ * ADDITIONAL consumer of a write path that already existed — the
+ * in-app notification (read/unread, badge count, NotificationsPage)
+ * behaves exactly as before regardless of what this function does.
+ *
+ * NOTIFICATION_CATEGORY / NOTIFICATION_PREFERENCE_DEFAULTS below are a
+ * deliberate, exact duplicate of the same-named values in
+ * src/firebase/notificationService.js. Cloud Functions (CommonJS) and
+ * the Vite-bundled client (ESM) are separate module systems with no
+ * shared package today, so this project's own established pattern
+ * (see REPUTATION_VERIFIED_CAMPUS_BONUS/REPUTATION_MODERATION_PENALTY
+ * above, duplicated from the client's gamification config the same
+ * way) is to duplicate and clearly flag the source of truth rather
+ * than invent a build-time code-sharing mechanism as part of this
+ * change. If notificationService.js's mapping ever changes, this must
+ * be updated to match by hand — there is no automatic sync.
+ *
+ * Preference fallback semantics mirror the client exactly, not a new
+ * rule: badge/level_up/streak/share/lostFoundClaim/
+ * community_join_approved/community_role_changed have no category
+ * entry, so they always send — this is the same fallback
+ * notificationService.js's own createNotification() already applies
+ * for the in-app write today (`if (category) { check prefs }` — no
+ * category means the preference check is skipped entirely, not that
+ * the notification is blocked).
+ */
+const NOTIFICATION_CATEGORY = {
+  like: 'likes',
+  comment_like: 'likes',
+  story_like: 'likes',
+  comment: 'comments',
+  reply: 'comments',
+  mention: 'comments',
+  pin: 'comments',
+  story_comment: 'comments',
+  follow: 'follows',
+  message_request: 'messages',
+  message_request_accepted: 'messages',
+  announcement: 'communities',
+  call: 'calls',
+  group_call: 'calls'
+}
+
+const NOTIFICATION_PREFERENCE_DEFAULTS = {
+  likes: true,
+  comments: true,
+  follows: true,
+  messages: true,
+  communities: true,
+  calls: true
+}
+
+// FCM `data` payloads require every value to be a plain string (the
+// Admin SDK throws otherwise) — this drops undefined/null fields
+// rather than stringifying them into the literal text "undefined"/
+// "null", so callers can pass a normal JS object without thinking
+// about FCM's own type constraint.
+function toFcmDataPayload(fields) {
+  const out = {}
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined || value === null) continue
+    out[key] = String(value)
+  }
+  return out
+}
+
+/**
+ * Deliberately generic — no commentPreview/message body text is ever
+ * included, even though some notification docs carry it (comment/
+ * mention/reply/announcement/story_comment), per the explicit
+ * requirement that private content not be put into a push payload
+ * unnecessarily. The real content is fetched by the app after opening
+ * (the same protected Firestore read NotificationsPage.jsx already
+ * does), not echoed here. Mirrors src/utils/notificationText.js's
+ * `lead`/`action` phrasing (never its `preview` field) for the same
+ * actor-name-plus-action text users already see in-app, without
+ * duplicating that whole file's logic here.
+ */
+function buildPushText(notif) {
+  const name = notif.actorName || 'Someone'
+  switch (notif.type) {
+    case 'like': return { title: name, body: 'liked your post' }
+    case 'comment': return { title: name, body: 'commented on your post' }
+    case 'follow': return { title: name, body: 'started following you' }
+    case 'mention': return { title: name, body: 'mentioned you' }
+    case 'reply': return { title: name, body: 'replied to your comment' }
+    case 'comment_like': return { title: name, body: 'liked your comment' }
+    case 'pin': return { title: name, body: 'pinned your comment' }
+    case 'share': return { title: name, body: 'shared your content' }
+    case 'badge': return { title: 'Badge Unlocked', body: notif.badgeLabel || 'You earned a new badge' }
+    case 'level_up': return { title: notif.newLevel ? `Level ${notif.newLevel}` : 'Level up!', body: notif.levelTitle ? `You're now ${notif.levelTitle}` : 'Level up!' }
+    case 'streak': return { title: notif.streakDays ? `${notif.streakDays}-Day Streak` : 'Streak', body: "You're on a roll — keep it going" }
+    case 'lostFoundClaim': return { title: name, body: 'thinks they found your lost item' }
+    case 'community_join_approved': return { title: notif.communityName || 'A community', body: 'approved your request to join' }
+    case 'community_role_changed': return { title: notif.communityName || 'A community', body: notif.newRole ? `made you a ${notif.newRole}` : 'updated your role' }
+    case 'message_request': return { title: name, body: 'sent you a message request' }
+    case 'message_request_accepted': return { title: name, body: 'accepted your message request' }
+    case 'announcement': return { title: notif.communityName || 'A community', body: 'posted an update' }
+    case 'story_like': return { title: name, body: 'liked your story' }
+    case 'story_comment': return { title: name, body: 'replied to your story' }
+    case 'call': return { title: name, body: notif.callType === 'video' ? 'Video calling you' : 'Calling you' }
+    case 'group_call': return { title: name, body: `Started a group ${notif.callType === 'video' ? 'video' : 'voice'} call` }
+    default: return { title: name, body: 'sent you a notification' }
+  }
+}
+
+exports.sendPushForNotification = onDocumentCreated(
+  { document: 'users/{uid}/notifications/{notificationId}', region: 'us-central1' },
+  async (event) => {
+    const { uid, notificationId } = event.params
+    const notifRef = db().collection('users').doc(uid).collection('notifications').doc(notificationId)
+
+    // Idempotency, step 1: a FRESH read, deliberately NOT event.data —
+    // event.data is a snapshot frozen at the moment this document was
+    // CREATED, so it would never reflect a pushSent flag written by an
+    // earlier invocation of this same function. Cloud Functions v2
+    // Firestore triggers are documented as "at least once" delivery,
+    // not "exactly once" — this function must not assume it can only
+    // ever run a single time for a given document.
+    let notif
+    try {
+      const freshSnap = await notifRef.get()
+      if (!freshSnap.exists) return // deleted before we got to it
+      notif = freshSnap.data()
+      if (notif.pushSent) {
+        console.log('[sendPushForNotification] already sent, skipping redelivered event', { uid, notificationId })
+        return
+      }
+    } catch (err) {
+      console.error('[sendPushForNotification] initial read failed', { uid, notificationId, message: err?.message })
+      throw err // nothing marked yet — safe for Cloud Functions to retry
+    }
+
+    try {
+      // Preferences — the same rule notificationService.js's
+      // createNotification() already applies client-side for the
+      // in-app write, re-checked here independently rather than
+      // trusting the client already did it: e.g.
+      // createCommunityAnnouncementNotifications's batch writes bypass
+      // createNotification() entirely and go straight to writeBatch
+      // (confirmed by reading that function directly), so a
+      // server-side re-check is the only way every notification type
+      // is guaranteed to respect preferences before a push is sent.
+      const category = NOTIFICATION_CATEGORY[notif.type]
+      if (category) {
+        const userSnap = await db().collection('users').doc(uid).get()
+        const prefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...(userSnap.data()?.notificationPreferences || {}) }
+        if (prefs[category] === false) {
+          await notifRef.update({ pushSent: true, pushSkipReason: 'preference_disabled' })
+          return
+        }
+      }
+
+      // Device fan-out — Phase 1's exact schema, enabled devices only.
+      const devicesSnap = await db().collection('users').doc(uid).collection('devices').where('enabled', '==', true).get()
+      if (devicesSnap.empty) {
+        await notifRef.update({ pushSent: true, pushSkipReason: 'no_enabled_devices' })
+        return
+      }
+
+      const deviceDocs = devicesSnap.docs.filter((d) => typeof d.data().fcmToken === 'string' && d.data().fcmToken)
+      if (deviceDocs.length === 0) {
+        await notifRef.update({ pushSent: true, pushSkipReason: 'no_valid_tokens' })
+        return
+      }
+
+      // Payload — data-only (no `notification` block), so the app
+      // controls presentation once a later phase adds foreground/
+      // background handling and tap/deep-link logic; this phase only
+      // delivers the data. Entity fields are passed through verbatim
+      // from whatever the notification document already has — no
+      // route is synthesized here (explicitly deferred, since route
+      // correctness hasn't been verified against the real React Router
+      // routes as part of this phase).
+      const { title, body } = buildPushText(notif)
+      const dataPayload = toFcmDataPayload({
+        notificationId,
+        type: notif.type,
+        actorUid: notif.actorUid,
+        actorName: notif.actorName,
+        title,
+        body,
+        postId: notif.postId,
+        commentId: notif.commentId,
+        communityId: notif.communityId,
+        communityName: notif.communityName,
+        chatId: notif.chatId,
+        itemId: notif.itemId,
+        storyId: notif.storyId,
+        badgeId: notif.badgeId,
+        entityType: notif.entityType,
+        entityId: notif.entityId,
+        actorUsername: notif.actorUsername,
+        newRole: notif.newRole,
+        timestamp: Date.now()
+      })
+
+      // Phase 3 addition: a `notification` block alongside the
+      // existing `data` payload — not a redesign, an addition. Every
+      // existing `data` field above is unchanged. This is what lets
+      // Android's OS auto-display the notification when the app is
+      // backgrounded/closed (confirmed necessary by reading
+      // @capacitor/push-notifications' own Android source: its
+      // MessagingService never constructs a visible notification from
+      // a data-only payload — only Android's own default handling of
+      // a `notification` block does that). Reuses the exact same
+      // title/body already computed above — no new text logic.
+      // Foreground is unaffected: capacitor.config.json's
+      // PushNotifications.presentationOptions is explicitly left `[]`,
+      // so the plugin never uses this block to pop a second, redundant
+      // notification while the app is open.
+      const response = await admin.messaging().sendEachForMulticast({
+        tokens: deviceDocs.map((d) => d.data().fcmToken),
+        data: dataPayload,
+        notification: { title, body }
+      })
+
+      // Invalid/unregistered tokens — disabled, not deleted (mirrors
+      // Phase 1's own disableDevice() choice: reversible, keeps
+      // history). sendEachForMulticast already isolates per-token
+      // failures from each other; this only reacts to the specific
+      // ones that mean the token itself is permanently dead, so one
+      // bad token can never fail the whole send for a user's other
+      // devices.
+      const staleDeviceIds = []
+      response.responses.forEach((r, i) => {
+        if (r.success) return
+        const code = r.error?.code
+        if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token') {
+          staleDeviceIds.push(deviceDocs[i].id)
+        }
+      })
+      if (staleDeviceIds.length > 0) {
+        const batch = db().batch()
+        staleDeviceIds.forEach((id) => {
+          batch.update(db().collection('users').doc(uid).collection('devices').doc(id), {
+            enabled: false,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          })
+        })
+        await batch.commit().catch((err) => {
+          console.error('[sendPushForNotification] failed to disable stale devices', { uid, message: err?.message })
+        })
+      }
+
+      // Idempotency, step 2: mark done LAST, only once a real decision
+      // has been reached (sent, or a token turned out to be invalid —
+      // never for a genuinely transient failure, see the catch below).
+      await notifRef.update({
+        pushSent: true,
+        pushSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        pushSuccessCount: response.successCount,
+        pushFailureCount: response.failureCount
+      })
+
+      // Never logs token contents — device count and outcome counts
+      // only.
+      console.log('[sendPushForNotification] sent', {
+        uid,
+        notificationId,
+        type: notif.type,
+        deviceCount: deviceDocs.length,
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+        staleDevicesDisabled: staleDeviceIds.length
+      })
+    } catch (err) {
+      // pushSent is deliberately NOT set here — a genuinely transient
+      // failure (e.g. admin.messaging() itself unreachable) should be
+      // allowed to actually retry, unlike the "a real decision was
+      // reached" cases above (preference off / no devices / no valid
+      // tokens / sent) which set pushSent specifically so a retry
+      // can't re-send. Known, accepted limitation of this two-step
+      // pattern (see this phase's own report): if the process crashes
+      // between a successful send and this field committing, a retry
+      // could re-send once — an accepted, documented tradeoff, not an
+      // oversight.
+      console.error('[sendPushForNotification] failed', { uid, notificationId, message: err?.message, code: err?.code })
+      throw err
+    }
+  }
+)
+
+/**
+ * Creates the callee's 'call' notification doc server-side, triggered
+ * on calls/{callId}'s OWN creation — not a client write inside
+ * callService.js's createCallDoc. This replaces an earlier client-side
+ * fire-and-forget write that proved unreliable in real browser
+ * testing (subject to whatever auth-session/tab/network state the
+ * browser happened to be in at that moment); a Firestore trigger fires
+ * reliably from the server the moment the calls/{callId} document
+ * itself is written, which is the one step already proven to always
+ * succeed (the call signaling itself depends on it). Writing via the
+ * Admin SDK here also means this never depends on — or is blocked
+ * by — the client-side security rules that create() on
+ * users/{uid}/notifications enforces for the CLIENT write path; this
+ * function enforces the equivalent business rules itself (self-
+ * notification guard, block check, preference check) below, matching
+ * notificationService.js's createNotification() exactly, so the same
+ * user-facing behavior holds regardless of which path created it.
+ * Writing this doc still feeds the exact same sendPushForNotification
+ * trigger above — no second push pathway, the existing pipeline is
+ * reused as-is.
+ */
+exports.createCallPushNotification = onDocumentCreated(
+  { document: 'calls/{callId}', region: 'us-central1' },
+  async (event) => {
+    const call = event.data?.data()
+    if (!call) return
+    const { callerUid, calleeUid, chatId, type } = call
+    if (!callerUid || !calleeUid || callerUid === calleeUid) return
+
+    try {
+      const blockedSnap = await db().collection('users').doc(calleeUid).collection('blockedUsers').doc(callerUid).get()
+      if (blockedSnap.exists) return
+
+      const prefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...((await db().collection('users').doc(calleeUid).get()).data()?.notificationPreferences || {}) }
+      if (prefs.calls === false) return
+
+      const callerSnap = await db().collection('users').doc(callerUid).get()
+      const callerData = callerSnap.data() || {}
+
+      await db().collection('users').doc(calleeUid).collection('notifications').add({
+        actorUid: callerUid,
+        actorName: callerData.displayName || 'Someone',
+        actorAvatar: callerData.avatar || '',
+        chatId: chatId || '',
+        callType: type || 'voice',
+        type: 'call',
+        read: false,
+        // A plain Date, not FieldValue.serverTimestamp() — this write
+        // already originates from a trusted Cloud Function process (a
+        // real, NTP-synced server clock), not a client device whose
+        // clock could be wrong, which is the actual reason
+        // serverTimestamp() exists for client writes elsewhere in this
+        // codebase. Firestore's Admin SDK accepts a native Date
+        // directly.
+        createdAt: new Date()
+      })
+    } catch (err) {
+      console.error('[createCallPushNotification] failed', { calleeUid, callerUid, message: err?.message })
+      throw err
+    }
+  }
+)
+
+/**
+ * Group-call sibling of createCallPushNotification, triggered on
+ * groupCalls/{callId}'s creation — one notification per invited
+ * participant, skipping the host. Same reasoning throughout: server-
+ * side via Admin SDK, not a client write inside groupCallService.js's
+ * createGroupCallDoc.
+ */
+exports.createGroupCallPushNotifications = onDocumentCreated(
+  { document: 'groupCalls/{callId}', region: 'us-central1' },
+  async (event) => {
+    const call = event.data?.data()
+    if (!call) return
+    const { hostUid, participantUids, chatId, type } = call
+    if (!hostUid || !Array.isArray(participantUids)) return
+
+    const targets = participantUids.filter((uid) => uid && uid !== hostUid)
+    if (targets.length === 0) return
+
+    const hostSnap = await db().collection('users').doc(hostUid).get()
+    const hostData = hostSnap.data() || {}
+
+    await Promise.all(
+      targets.map(async (targetUid) => {
+        try {
+          const blockedSnap = await db().collection('users').doc(targetUid).collection('blockedUsers').doc(hostUid).get()
+          if (blockedSnap.exists) return
+
+          const prefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...((await db().collection('users').doc(targetUid).get()).data()?.notificationPreferences || {}) }
+          if (prefs.calls === false) return
+
+          await db().collection('users').doc(targetUid).collection('notifications').add({
+            actorUid: hostUid,
+            actorName: hostData.displayName || 'Someone',
+            actorAvatar: hostData.avatar || '',
+            chatId: chatId || '',
+            callType: type || 'voice',
+            type: 'group_call',
+            read: false,
+            createdAt: new Date()
+          })
+        } catch (err) {
+          console.error('[createGroupCallPushNotifications] failed for participant', { targetUid, hostUid, message: err?.message })
+        }
+      })
+    )
+  }
+)

@@ -30,7 +30,9 @@ export const NOTIFICATION_ICONS = {
   community_join_approved: 'Users',
   community_role_changed: 'ShieldCheck',
   story_like: 'Heart',
-  story_comment: 'MessageCircle'
+  story_comment: 'MessageCircle',
+  call: 'Phone',
+  group_call: 'Phone'
 }
 
 export function getNotificationText(notification) {
@@ -107,7 +109,66 @@ export function getNotificationText(notification) {
       return { lead: name, action: 'liked your story', preview: null }
     case 'story_comment':
       return { lead: name, action: 'replied to your story', preview: notification.commentPreview || null }
+    case 'call':
+      return { lead: name, action: notification.callType === 'video' ? 'is video calling you' : 'is calling you', preview: null }
+    case 'group_call':
+      return { lead: name, action: `started a group ${notification.callType === 'video' ? 'video' : 'voice'} call`, preview: null }
     default:
       return { lead: name, action: 'sent you a notification', preview: null }
   }
+}
+
+/**
+ * Extracted verbatim from NotificationCard.jsx's own handleClick — same
+ * routes, same fallback field priority, same "no match → no
+ * navigation" behavior (returns null rather than guessing). Pulled out
+ * here (Phase 3) so a push-notification tap and an in-app notification-
+ * list tap share exactly one source of truth for "where does this
+ * notification type go" — not two implementations that could quietly
+ * drift apart. NotificationCard.jsx now calls this instead of
+ * duplicating the logic; the resulting behavior is unchanged.
+ */
+export function getNotificationRoute(notification) {
+  if (!notification) return null
+
+  if (notification.type === 'badge' || notification.type === 'achievement_verified' || notification.type === 'achievement_rejected') {
+    return '/badges'
+  }
+  if (notification.type === 'level_up' || notification.type === 'streak') {
+    return '/progress'
+  }
+  if (notification.type === 'message_request' && notification.chatId) {
+    return '/messages/requests'
+  }
+  if (notification.type === 'message_request_accepted' && notification.chatId) {
+    return `/messages/${notification.chatId}`
+  }
+  if ((notification.type === 'call' || notification.type === 'group_call') && notification.chatId) {
+    // Lands the tap in the relevant chat either way: CallProvider is
+    // mounted globally (main.jsx), so if the call is still ringing its
+    // own live Firestore listener shows the real incoming-call UI the
+    // instant the app opens, on top of whatever route this resolves
+    // to. If the call already ended, this is just a sensible landing
+    // spot — not a stale/stuck incoming-call screen.
+    return `/messages/${notification.chatId}`
+  }
+  if (notification.type === 'follow' && notification.actorUsername) {
+    return `/student/${notification.actorUsername}`
+  }
+  if (notification.type === 'lostFoundClaim' && notification.itemId) {
+    return `/lost-found?item=${notification.itemId}`
+  }
+  if (notification.type === 'story_like' || notification.type === 'story_comment') {
+    return '/home'
+  }
+  if (notification.postId && notification.commentId) {
+    return `/post/${notification.postId}#comment-${notification.commentId}`
+  }
+  if (notification.postId) {
+    return `/post/${notification.postId}`
+  }
+  if (notification.communityId) {
+    return `/community/${notification.communityId}`
+  }
+  return null
 }

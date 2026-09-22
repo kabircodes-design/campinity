@@ -14,7 +14,8 @@ const OPTIONS = [
   { key: 'comments', label: 'Comments', description: 'Comments, replies, and mentions' },
   { key: 'follows', label: 'Follows', description: 'When someone starts following you' },
   { key: 'messages', label: 'Message requests', description: 'New requests and acceptances' },
-  { key: 'communities', label: 'Communities', description: 'Announcements from your communities' }
+  { key: 'communities', label: 'Communities', description: 'Announcements from your communities' },
+  { key: 'calls', label: 'Calls', description: 'Incoming voice and video calls' }
 ]
 
 /**

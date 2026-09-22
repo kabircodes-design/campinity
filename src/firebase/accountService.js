@@ -18,7 +18,9 @@ import {
   writeBatch
 } from 'firebase/firestore'
 import { ref, deleteObject, listAll } from 'firebase/storage'
+import { Capacitor } from '@capacitor/core'
 import { auth, db, storage } from './firebase.js'
+import { disableDevice, getOrCreateDeviceId } from './deviceService.js'
 
 const BATCH_LIMIT = 400 // stay comfortably under Firestore's 500-operation batch cap
 
@@ -75,12 +77,27 @@ export async function changePassword(currentPassword, newPassword) {
  * onSnapshot-backed listener reacts to the auth state change
  * immediately) and clears anything the app cached outside of React
  * state, such as recent searches.
+ *
+ * Phase 1 addition: on native, best-effort disable this device's push
+ * registration BEFORE signOut(auth) — the devices subcollection rule
+ * is owner-only (isOwner(uid) needs request.auth.uid to still equal
+ * uid at write time), so this has to happen while still authenticated,
+ * not after. Never blocks or fails logout itself: any error here is
+ * swallowed, exactly like the existing localStorage cleanup above it.
  */
 export async function logOut() {
   try {
     window.localStorage.removeItem('campinity:recentSearches')
   } catch {
     // Storage unavailable — not fatal, sign-out still proceeds.
+  }
+  if (Capacitor.isNativePlatform() && auth.currentUser) {
+    try {
+      await disableDevice(auth.currentUser.uid, getOrCreateDeviceId())
+    } catch {
+      // Never block logout on this — the device doc simply stays
+      // enabled until the next successful disable/re-register.
+    }
   }
   await signOut(auth)
 }

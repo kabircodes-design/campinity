@@ -3,6 +3,8 @@ import { Routes, Route } from 'react-router-dom'
 import LandingPage from './pages/LandingPage.jsx'
 import ProtectedRoute, { AppNavigationLoader, PublicRoute, RootRoute } from './auth/components/ProtectedRoute.jsx'
 import AppShell from './components/AppShell.jsx'
+import { useDeviceRegistration } from './hooks/useDeviceRegistration.js'
+import { usePushNotificationTapHandler } from './hooks/usePushNotificationTapHandler.js'
 
 const LoginPage = lazy(() => import('./auth/pages/LoginPage.jsx'))
 const SignupPage = lazy(() => import('./auth/pages/SignupPage.jsx'))
@@ -74,6 +76,22 @@ const ReputationPage = lazy(() => import('./pages/ReputationPage.jsx'))
 const AddAchievementPage = lazy(() => import('./pages/AddAchievementPage.jsx'))
 
 export default function App() {
+  // Phase 1 notification foundation — reads the existing shared
+  // AuthContext only (no new listener), runs for the whole session
+  // regardless of route. Deliberately called here, NOT inside
+  // RootRoute, so the startup/splash/auth-resolution logic that was
+  // carefully fixed earlier stays completely untouched. No-ops
+  // entirely on web (Capacitor.isNativePlatform() check happens inside
+  // the hook itself).
+  useDeviceRegistration()
+
+  // Phase 3 — notification tap navigation. Same isolation pattern as
+  // useDeviceRegistration() above: reads the existing shared
+  // AuthContext only, no new listener, mounted here (not inside
+  // RootRoute) so startup/splash/auth resolution stays untouched.
+  // No-ops entirely on web.
+  usePushNotificationTapHandler()
+
   return (
     <Suspense fallback={<AppNavigationLoader />}>
       <Routes>

@@ -33,9 +33,51 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Phase 1 push-notification foundation: config only, no
+             sending. Used only if/when a real FCM message ever arrives
+             without its own explicit icon/color (none does today —
+             this app never sends notifications yet). Reuses colorAccent,
+             already defined in values/colors.xml for the splash theme;
+             not a new color resource. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notify" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/colorAccent" />
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Required at runtime on Android 13+ (API 33+) before any
+         notification can be shown — requested via the Capacitor
+         Push Notifications plugin's own permission API from a
+         user-initiated tap (see NotificationPermissionBanner.jsx),
+         never automatically during splash/startup. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Phase 4 real-device testing gap found and fixed: WebRTC calling
+         (useCall.js/useGroupCall.js's getUserMedia) already existed and
+         already worked over the web, but had never been exercised
+         through the native Android WebView before — without these two
+         declared here, Android denies the WebView's underlying
+         mic/camera permission request before the user is ever even
+         shown a prompt, so every call attempt silently did nothing (no
+         error, no dialog). Actual runtime grant is still requested
+         on-demand by getUserMedia() itself the first time a user taps
+         Call/Video Call, exactly like the existing POST_NOTIFICATIONS
+         flow above — declaring these here does not grant them eagerly. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Requested alongside RECORD_AUDIO by Capacitor's own
+         BridgeWebChromeClient.onPermissionRequest() (see
+         node_modules/@capacitor/android's source) whenever a page asks
+         for AUDIO_CAPTURE — must be declared here too or that runtime
+         permission batch can't resolve correctly. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 </manifest>

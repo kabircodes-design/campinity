@@ -216,6 +216,20 @@ service cloud.firestore {
       match /mutedCommunities/{communityId} {
         allow read, write: if isOwner(uid);
       }
+      // users/{uid}/devices/{deviceId} — Phase 1 push-notification
+      // foundation (deviceService.js). Owner-only in every direction,
+      // same shape as blockedUsers/mutedUsers above. update is
+      // field-scoped via onlyChanged: a client may only ever touch its
+      // own token/version/enabled/timestamp fields, never platform or
+      // createdAt (registerDevice() never re-sends those on update
+      // either — see that function's own comment). No notification is
+      // ever SENT as part of this rule; nothing here does more than
+      // let a user manage their own device record.
+      match /devices/{deviceId} {
+        allow read, create: if isOwner(uid);
+        allow update: if isOwner(uid) && onlyChanged(['fcmToken', 'appVersion', 'osVersion', 'enabled', 'updatedAt', 'lastSeenAt']);
+        allow delete: if isOwner(uid);
+      }
     }
 
     // posts/{postId} — public read, author-owned writes, plus the

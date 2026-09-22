@@ -93,6 +93,11 @@ export async function createGroupCallDoc({ chatId, hostUid, type, participantUid
     leftAt: null
   })
   await updateDoc(ref, { status: 'active', updatedAt: serverTimestamp() })
+  // Phase 4 — one push notification per invited participant is created
+  // server-side by a Cloud Function triggered on THIS document's
+  // creation (createGroupCallPushNotifications in
+  // functions/functions/index.js), same reasoning as createCallDoc's
+  // own comment — not a client-side write here.
   return ref.id
 }
 

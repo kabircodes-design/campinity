@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
-import { AtSign, Award, BadgeCheck, CornerUpLeft, FileWarning, Flame, Heart, Mail, Megaphone, MessageCircle, PackageSearch, Pin, Share2, ShieldCheck, Star, Trash2, UserPlus, Users } from 'lucide-react'
+import { AtSign, Award, BadgeCheck, CornerUpLeft, FileWarning, Flame, Heart, Mail, Megaphone, MessageCircle, PackageSearch, Phone, Pin, Share2, ShieldCheck, Star, Trash2, UserPlus, Users } from 'lucide-react'
 import Avatar from './Avatar.jsx'
-import { getNotificationText } from '../utils/notificationText.js'
+import { getNotificationText, getNotificationRoute } from '../utils/notificationText.js'
 import { formatTimeAgo } from '../firebase/postService.js'
 
 const ICON_STYLES = {
@@ -26,7 +26,9 @@ const ICON_STYLES = {
   community_join_approved: { Icon: Users, bg: 'bg-emerald-500', fill: false },
   community_role_changed: { Icon: ShieldCheck, bg: 'bg-blue-600', fill: false },
   story_like: { Icon: Heart, bg: 'bg-red-500', fill: true },
-  story_comment: { Icon: MessageCircle, bg: 'bg-blue-600', fill: false }
+  story_comment: { Icon: MessageCircle, bg: 'bg-blue-600', fill: false },
+  call: { Icon: Phone, bg: 'bg-emerald-500', fill: false },
+  group_call: { Icon: Phone, bg: 'bg-emerald-500', fill: false }
 }
 
 /**
@@ -55,34 +57,11 @@ export default function NotificationCard({ notification, onRead, onDelete }) {
   const handleClick = () => {
     if (!notification.read) onRead(notification.id)
 
-    if (notification.type === 'badge' || notification.type === 'achievement_verified' || notification.type === 'achievement_rejected') {
-      navigate('/badges')
-    } else if (notification.type === 'level_up' || notification.type === 'streak') {
-      navigate('/progress')
-    } else if (notification.type === 'message_request' && notification.chatId) {
-      navigate('/messages/requests')
-    } else if (notification.type === 'message_request_accepted' && notification.chatId) {
-      navigate(`/messages/${notification.chatId}`)
-    } else if (notification.type === 'follow' && notification.actorUsername) {
-      navigate(`/student/${notification.actorUsername}`)
-    } else if (notification.type === 'lostFoundClaim' && notification.itemId) {
-      navigate(`/lost-found?item=${notification.itemId}`)
-    } else if (notification.type === 'story_like' || notification.type === 'story_comment') {
-      // No dedicated story route exists — stories are only ever viewed
-      // inline from Home's story tray, so that's the honest destination
-      // (a story can also have expired by the time this is tapped;
-      // Home is still the correct place to land either way).
-      navigate('/home')
-    } else if (notification.postId && notification.commentId) {
-      // #comment-{id} matches the anchor id PostDetailPage.jsx's comment
-      // list items should carry — see that page's update for the other
-      // half of this (scroll-into-view + highlight on load).
-      navigate(`/post/${notification.postId}#comment-${notification.commentId}`)
-    } else if (notification.postId) {
-      navigate(`/post/${notification.postId}`)
-    } else if (notification.communityId) {
-      navigate(`/community/${notification.communityId}`)
-    }
+    // Route resolution now lives in notificationText.js's
+    // getNotificationRoute() (Phase 3) — shared with the push-
+    // notification tap handler so both paths navigate identically.
+    const route = getNotificationRoute(notification)
+    if (route) navigate(route)
   }
 
   const handleDelete = (event) => {

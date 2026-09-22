@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "803486094288",
+    "project_id": "campinity-app",
+    "storage_bucket": "campinity-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:803486094288:android:967e71c418a29dd3a65fd5",
+        "android_client_info": {
+          "package_name": "com.campinity.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "803486094288-m24ns9fq3a8dkm387hfjd8cmuafql3b3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAO3PYhhH5ICWOoiVxQs34vZy5PEklALY8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "803486094288-m24ns9fq3a8dkm387hfjd8cmuafql3b3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

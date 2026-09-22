@@ -21,6 +21,8 @@ import { useForYouFeed } from '../hooks/useForYouFeed.js'
 import { useCampusVerificationReminder } from '../hooks/useCampusVerificationReminder.js'
 import CampusVerificationModal from '../components/CampusVerificationModal.jsx'
 import CampusVerificationBanner from '../components/CampusVerificationBanner.jsx'
+import { useNotificationPermissionPrompt } from '../hooks/useNotificationPermissionPrompt.js'
+import NotificationPermissionBanner from '../components/NotificationPermissionBanner.jsx'
 import CampusAnnouncementBanner from '../components/CampusAnnouncementBanner.jsx'
 import PostingStatusPill from '../components/PostingStatusPill.jsx'
 import { usePostingStatus } from '../context/PostingStatusContext.jsx'
@@ -324,6 +326,7 @@ export default function HomePage() {
   const [openGroupIndex, setOpenGroupIndex] = useState(null)
 
   const { showModal, showBanner, closeModal, dismissBanner } = useCampusVerificationReminder(profile)
+  const { showPrompt: showNotificationPrompt, requestPermission: allowNotifications, dismiss: dismissNotificationPrompt } = useNotificationPermissionPrompt()
 
   // The intro is a sibling of the loading/loaded branch below, not
   // nested inside it — if it lived inside the `loading` branch, the
@@ -355,6 +358,9 @@ export default function HomePage() {
     <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
       <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-full lg:min-h-0 bg-white dark:bg-[#11131a] border-x border-gray-100 dark:border-white/10 lg:my-4 lg:rounded-2xl lg:border lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
         {showBanner && <CampusVerificationBanner onDismiss={dismissBanner} />}
+        {showNotificationPrompt && (
+          <NotificationPermissionBanner onAllow={allowNotifications} onDismiss={dismissNotificationPrompt} />
+        )}
 
         <section className={`mx-4 lg:mx-6 mt-5 mb-5 ${entranceClass(0)}`}>
           <div

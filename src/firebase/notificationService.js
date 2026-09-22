@@ -89,7 +89,8 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS = {
   comments: true,
   follows: true,
   messages: true,
-  communities: true
+  communities: true,
+  calls: true
 }
 
 export async function getNotificationPreferences(uid) {
@@ -346,6 +347,14 @@ export async function createFollowNotification({ targetUid, actorUid, actorName,
     type: 'follow'
   })
 }
+
+// Phase 4 note: incoming-call notifications ('call'/'group_call') are
+// NOT created here. They're created server-side by Cloud Functions
+// triggered on calls/{callId} and groupCalls/{callId} creation (see
+// functions/functions/index.js) — a client-side fire-and-forget write
+// proved unreliable in real browser testing, so this file has no
+// call-notification code at all; call-signaling stays exactly as it
+// was before Phase 4.
 
 /** Message Request system — see chatService.js's getOrCreateChat/acceptMessageRequest, the only two callers. */
 export async function createMessageRequestNotification({ targetUid, actorUid, actorName, actorAvatar, actorUsername, chatId }) {

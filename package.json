@@ -12,6 +12,7 @@
   "dependencies": {
     "@capacitor/android": "^8.5.2",
     "@capacitor/core": "^8.5.2",
+    "@capacitor/push-notifications": "^8.1.2",
     "@capacitor/splash-screen": "^8.0.2",
     "firebase": "^11.0.2",
     "framer-motion": "^11.18.2",
