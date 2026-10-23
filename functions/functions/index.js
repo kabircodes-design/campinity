@@ -2058,11 +2058,11 @@ exports.adminListAuditLog = onCall({ region: 'us-central1' }, async (request) =>
  * (confirmed by searching for Resend/SendGrid/Mailgun/Postmark/SMTP/
  * Nodemailer/Brevo/SES and every functions/env config). Resend was
  * chosen as the provider — see this feature's final report for setup
- * steps. Until RESEND_API_KEY is configured via
- * `firebase functions:secrets:set RESEND_API_KEY`, these functions'
- * token/Firestore logic is fully wired and correct, but the actual
- * send will fail — that failure is surfaced as a clear 'unavailable'
- * error rather than silently pretending an email went out.
+ * steps. createEmailVerification/resendEmailVerification declare
+ * RESEND_API_KEY as a Secret Manager secret; it must be set via
+ * `firebase functions:secrets:set RESEND_API_KEY` before deploying them.
+ * Any send failure is surfaced as a clear 'unavailable' error rather
+ * than silently pretending an email went out.
  * =====================================================================
  */
 
@@ -2240,18 +2240,16 @@ async function claimEmailVerificationToken(tokenRef) {
  * email come only from the authenticated Firebase Auth context/Admin
  * SDK lookup, never from client-supplied data.
  *
- * NOT declaring `secrets: ['RESEND_API_KEY']` here yet — Firebase
- * Functions v2 refuses to deploy a function that references a secret
- * that doesn't exist in Secret Manager yet, and RESEND_API_KEY has
- * never been set for this project (confirmed via
- * `firebase functions:secrets:access`, which 404'd). Once it's set
- * (see this bugfix's final report), add `secrets: ['RESEND_API_KEY']`
- * back to both this function and resendEmailVerification below and
- * redeploy — until then, process.env.RESEND_API_KEY is simply
- * undefined and resendProvider.js throws its own clear "not
- * configured" error, which is the intended, honest failure mode.
+ * Declares `secrets: ['RESEND_API_KEY']` (same pattern as
+ * moderateProfilePhoto's OPENAI_API_KEY) so Secret Manager injects it as
+ * process.env.RESEND_API_KEY at runtime. Without the declaration the
+ * variable is never populated, even once the secret exists. Deploying
+ * requires the secret to exist first:
+ * `firebase functions:secrets:set RESEND_API_KEY`. If it is somehow
+ * still missing at runtime, resendProvider.js throws its own clear
+ * "not configured" error, surfaced to the client as 'unavailable'.
  */
-exports.createEmailVerification = onCall({ region: 'us-central1' }, async (request) => {
+exports.createEmailVerification = onCall({ region: 'us-central1', secrets: ['RESEND_API_KEY'] }, async (request) => {
   const uid = request.auth?.uid
   if (!uid) {
     throw new HttpsError('unauthenticated', 'You need to be signed in.')
@@ -2278,11 +2276,10 @@ exports.createEmailVerification = onCall({ region: 'us-central1' }, async (reque
 /**
  * resendEmailVerification — Phase 5. Same authenticated-only,
  * server-derived-email rules as createEmailVerification, plus the
- * shared rate limit inside issueEmailVerificationToken above. See the
- * comment on createEmailVerification above re: RESEND_API_KEY not
- * being declared in `secrets` yet.
+ * shared rate limit inside issueEmailVerificationToken above. Declares
+ * the same RESEND_API_KEY secret as createEmailVerification above.
  */
-exports.resendEmailVerification = onCall({ region: 'us-central1' }, async (request) => {
+exports.resendEmailVerification = onCall({ region: 'us-central1', secrets: ['RESEND_API_KEY'] }, async (request) => {
   const uid = request.auth?.uid
   if (!uid) {
     throw new HttpsError('unauthenticated', 'You need to be signed in.')

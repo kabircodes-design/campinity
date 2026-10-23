@@ -24,6 +24,7 @@ import Avatar from './Avatar.jsx'
 import { useMyVerification } from '../access/useMyVerification.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
+import { useSystemBarsOverride } from '../theme/systemBars.js'
 
 const STORY_DURATION_MS = 5000
 
@@ -79,6 +80,9 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
   const stories = group?.stories || []
   const current = stories[index]
   const currentUid = auth.currentUser?.uid
+  // Always-black full-screen viewer: light status/navigation-bar icons
+  // regardless of the app theme while a story is showing.
+  useSystemBarsOverride('dark', !!current)
   const isOwn = current?.userId === currentUid
 
   // Reset the within-group story index whenever the OPEN GROUP changes
@@ -442,13 +446,13 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
               header in DOM order. */}
           {!showViewers && !showComments && mediaStatus !== 'error' && (
             <>
-              <button type="button" aria-label="Previous story" onClick={goPrev} className="absolute top-16 bottom-24 left-0 w-1/3 z-10" />
-              <button type="button" aria-label="Next story" onClick={goNext} className="absolute top-16 bottom-24 right-0 w-2/3 z-10" />
+              <button type="button" aria-label="Previous story" onClick={goPrev} className="absolute top-[calc(4rem+var(--app-safe-top))] bottom-24 left-0 w-1/3 z-10" />
+              <button type="button" aria-label="Next story" onClick={goNext} className="absolute top-[calc(4rem+var(--app-safe-top))] bottom-24 right-0 w-2/3 z-10" />
             </>
           )}
 
           {/* Progress bars */}
-          <div className="absolute top-3 left-3 right-3 z-20 flex items-center gap-1">
+          <div className="absolute top-[calc(0.75rem+var(--app-safe-top))] left-3 right-3 z-20 flex items-center gap-1">
             {stories.map((s, i) => (
               <div key={s.id} className="flex-1 h-0.5 rounded-full bg-white/30 overflow-hidden">
                 <div
@@ -460,7 +464,7 @@ export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup
           </div>
 
           {/* Top bar — always clickable, always on top (z-20, above the nav zones' z-10) */}
-          <div className="absolute top-7 left-3 right-3 z-20 flex items-center gap-2">
+          <div className="absolute top-[calc(1.75rem+var(--app-safe-top))] left-3 right-3 z-20 flex items-center gap-2">
             <Avatar initials={getInitials(group.label)} colorClass={getAvatarColor(group.userId)} size="sm" src={group.avatar || undefined} />
             <span className="text-white text-sm font-semibold drop-shadow">{group.label}</span>
             {isOwn && (

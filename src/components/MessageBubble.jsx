@@ -19,6 +19,7 @@ import {
   X
 } from 'lucide-react'
 import SharedCard from '../sharing/SharedCard.jsx'
+import { useSystemBarsOverride } from '../theme/systemBars.js'
 
 const REACTION_EMOJIS = ['❤️', '😂', '👍', '😮', '😢', '🙏']
 
@@ -216,6 +217,8 @@ export default function MessageBubble({
 }) {
   const type = message.type || 'text' // existing messages have no `type` field at all — this is what makes them render exactly as before, through this same branch
   const [enlarged, setEnlarged] = useState(false)
+  // The enlarged-image viewer is a near-black full-screen layer.
+  useSystemBarsOverride('dark', enlarged)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageFailed, setImageFailed] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -562,7 +565,7 @@ export default function MessageBubble({
               type="button"
               onClick={() => setEnlarged(false)}
               aria-label="Close"
-              className="absolute top-4 right-4 text-white/90 hover:text-white"
+              className="absolute top-[calc(1rem+var(--app-safe-top))] right-4 text-white/90 hover:text-white"
             >
               <X className="w-6 h-6" />
             </button>

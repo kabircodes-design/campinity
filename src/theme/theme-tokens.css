@@ -590,28 +590,61 @@ html.dark {
   }
 }
 
-/* ANDROID STATUS-BAR SAFE AREA — shared rule, not a per-page patch.
-   This app's Android build (targetSdkVersion 36) has edge-to-edge
-   enforced by the OS, so the WebView draws behind the status bar/
-   camera cutout instead of Android reserving that space like it used
-   to. Nearly every page's top bar in this codebase follows the exact
-   same convention — a real <header> element with Tailwind's
-   `sticky top-0` utilities (confirmed: 50+ files, one consistent
-   pattern) — so one rule here covers all of them instead of editing
-   each file individually.
-   This overrides the STICKY ANCHOR itself (not just inner padding):
-   changing `top: 0` to `top: env(safe-area-inset-top)` means the
-   header stays correctly positioned below the status bar even after
-   the page is scrolled, not just on initial paint — padding alone
-   would still let it re-stick flush to the true viewport top (under
-   the status bar) once scrolled, since sticky's `top` offset is what
-   anchors it, not any ancestor's padding.
-   Resolves to 0px (identical to the original `top: 0`) on desktop,
-   Vercel/web, and any browser without a real inset — so this has no
-   visible effect outside the Android app. Scoped to `header` tags
-   specifically (not the bare `.top-0` utility) so it can't affect
-   unrelated absolutely-positioned elements like badges or dropdowns
-   that happen to also use `top-0`. */
-header.sticky.top-0 {
-  top: env(safe-area-inset-top);
+/* ANDROID SYSTEM-BAR SAFE AREA — the one shared place that keeps app
+   content out from under the status bar and gesture area.
+   The Android build (targetSdkVersion 36) is edge-to-edge: the WebView
+   draws behind both system bars, which are transparent. Measured on a
+   Galaxy A15: top inset 29px, bottom 15px.
+   The previous fix set `header.sticky.top-0 { top: inset }`. But #root
+   and AppShell's wrapper use overflow-x:hidden, which makes them
+   (never-scrolling) scroll containers — so on mobile a `sticky` bar is
+   offset from THAT wrapper, not the viewport, and never actually
+   sticks. The inset therefore just pushed every header 29px down over
+   the first content below it (Radar's accuracy banner, Settings'
+   profile card, Saved's tabs...); pages without a header (Messages)
+   still started under the status bar; and nothing opaque sat behind
+   the status bar, so scrolled content showed through it.
+   Now the page itself starts below the status bar (body padding) — the
+   wrappers included — so sticky offsets keep their plain Tailwind
+   values (top-0, top-14...) with no inset; a theme-coloured strip fills
+   the status-bar area; viewport-anchored (`fixed`) elements add the
+   inset themselves; and full-height layouts subtract it
+   (tailwind.config.js) so nothing is pushed off the bottom. Both insets
+   resolve to 0px on web/desktop, so nothing changes there. `max()`
+   covers older Android WebViews, where only Capacitor's injected
+   --safe-area-inset-* variables carry the real value. */
+:root {
+  --app-safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --app-safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+}
+
+body {
+  padding-top: var(--app-safe-top);
+}
+
+/* Opaque backdrop behind the transparent status bar, in the current
+   theme's surface colour (light: white, dark: #11131a, theme packs
+   included), so scrolled content never shows through and the icons —
+   styled to match by systemBars.js — always have contrast. Above
+   sticky headers (z-40), below modals/overlays (z-50+), which paint
+   their own background there. */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--app-safe-top);
+  background-color: var(--theme-surface);
+  z-index: 45;
+  pointer-events: none;
+}
+
+/* Viewport-anchored toasts (badge/achievement unlocks, incoming calls):
+   `fixed` is measured from the screen edge, so it needs the inset. */
+.fixed.top-4 {
+  top: calc(1rem + var(--app-safe-top));
+}
+.fixed.top-20 {
+  top: calc(5rem + var(--app-safe-top));
 }

@@ -9,6 +9,7 @@ import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { searchUsersForShare } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { createGroupChat } from '../firebase/chatService.js'
+import { useSystemBarsOverride } from '../theme/systemBars.js'
 
 const MIN_MEMBERS = 2 // + creator = 3 total, matching chatService.js's MIN_GROUP_MEMBERS
 
@@ -22,6 +23,8 @@ const MIN_MEMBERS = 2 // + creator = 3 total, matching chatService.js's MIN_GROU
  * path conventions I haven't verified for this project.
  */
 export default function CreateGroupFlow({ open, onClose }) {
+  // Always-white full-screen flow (no dark variant): dark system-bar icons.
+  useSystemBarsOverride('light', open)
   const navigate = useNavigate()
   const currentUid = auth.currentUser?.uid
 
@@ -89,7 +92,7 @@ export default function CreateGroupFlow({ open, onClose }) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[9999] bg-white flex flex-col"
+      className="fixed inset-0 z-[9999] bg-white flex flex-col pt-[var(--app-safe-top)] pb-[var(--app-safe-bottom)]"
     >
       <div className="h-14 flex items-center gap-2 px-3 border-b border-gray-100 flex-shrink-0">
         <button

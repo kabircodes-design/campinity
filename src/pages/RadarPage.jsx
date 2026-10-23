@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
 import { ArrowLeft, Search, MapPin, AlertTriangle, Info, RefreshCw } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
 import { useProfile } from '../radar/useProfileOnce.js'
@@ -99,6 +100,9 @@ export default function RadarPage() {
                 <p className="text-[12.5px] text-amber-800">
                   Location access is off — you're still discoverable to people on your campus. Enable location to also see who's
                   physically nearby.
+                  {/* After "Don't allow", Android stops showing the prompt, so
+                      retrying alone can't recover — point to Settings. */}
+                  {Capacitor.isNativePlatform() && ' If no prompt appears, allow Location for Campinity in your phone\'s Settings → Apps.'}
                 </p>
               </div>
               <button type="button" onClick={retryLocation} className="mt-2 ml-6 text-xs font-semibold text-amber-800 underline underline-offset-2">

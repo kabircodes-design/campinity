@@ -74,11 +74,21 @@ export default function SignupPage() {
 
     // 3. Send the verification email via our custom token system
     //    (Cloud Function createEmailVerification) — not Firebase's
-    //    hosted sendEmailVerification()/oobCode flow.
-    await createEmailVerification()
+    //    hosted sendEmailVerification()/oobCode flow. The account
+    //    already exists at this point, so a send failure must not
+    //    strand the user here (retrying signup would only hit
+    //    email-already-in-use). VerifyEmailPage tells them the email
+    //    wasn't sent and offers its rate-limited Resend instead.
+    let emailSendFailed = false
+    try {
+      await createEmailVerification()
+    } catch (err) {
+      logAuthErrorForDebug('SignupPage.createEmailVerification', err)
+      emailSendFailed = true
+    }
 
     // 4. Navigate to the verification step.
-    navigate('/verify-email')
+    navigate('/verify-email', { state: { emailSendFailed } })
   })
 
   /**

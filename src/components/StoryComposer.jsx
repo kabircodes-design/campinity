@@ -5,6 +5,7 @@ import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { createStory, uploadStoryMedia } from '../firebase/storyService.js'
+import { useSystemBarsOverride } from '../theme/systemBars.js'
 
 /**
  * The actual fix for this task's root problem: uploads go through
@@ -14,6 +15,8 @@ import { createStory, uploadStoryMedia } from '../firebase/storyService.js'
  * to a real story document; nothing here can produce a post.
  */
 export default function StoryComposer({ onClose, onCreated }) {
+  // Always-black full-screen composer: light system-bar icons.
+  useSystemBarsOverride('dark')
   const fileInputRef = useRef(null)
   const [preview, setPreview] = useState(null)
   const [file, setFile] = useState(null)
@@ -69,7 +72,7 @@ export default function StoryComposer({ onClose, onCreated }) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
+    <div className="fixed inset-0 z-[9999] bg-black flex flex-col pt-[var(--app-safe-top)] pb-[var(--app-safe-bottom)]">
       <div className="h-14 flex items-center justify-between px-4 flex-shrink-0">
         <button type="button" onClick={onClose} aria-label="Close" className="text-white/90 hover:text-white">
           <X className="w-6 h-6" />

@@ -6,6 +6,7 @@ import { auth } from '../firebase/firebase.js'
 import { updateUserProfile } from '../firebase/profileService.js'
 import { AVATAR_STYLES, generateCampusAvatar } from './avatarProvider.js'
 import { uploadCampusAvatar } from './avatarStorage.js'
+import { useSystemBarsOverride } from '../theme/systemBars.js'
 
 /**
  * Full multi-step flow: intro -> camera -> confirm selfie -> style
@@ -20,6 +21,8 @@ import { uploadCampusAvatar } from './avatarStorage.js'
  * spinners, every async operation needs loading/success/error/retry."
  */
 export default function CampusAvatarFlow({ open, onClose, onSaved }) {
+  // Always-white full-screen flow (no dark variant): dark system-bar icons.
+  useSystemBarsOverride('light', open)
   const [step, setStep] = useState('intro') // intro | camera | confirm | style | processing | preview | error
   const [cameraStatus, setCameraStatus] = useState('idle') // idle | requesting | granted | denied | unsupported | error
   const [capturedBlob, setCapturedBlob] = useState(null)
@@ -222,7 +225,7 @@ export default function CampusAvatarFlow({ open, onClose, onSaved }) {
 
   return createPortal(
     <AnimatePresence>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-white flex flex-col">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-white flex flex-col pt-[var(--app-safe-top)] pb-[var(--app-safe-bottom)]">
         <div className="h-14 flex items-center justify-between px-3 flex-shrink-0">
           <span className="text-base font-bold text-gray-900">Campus Avatar</span>
           <button type="button" aria-label="Close" onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300">

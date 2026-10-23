@@ -23,7 +23,10 @@ export default function CommunitiesHubPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <nav className="sticky top-14 lg:top-0 z-30 bg-white dark:bg-[#11131a] grid grid-cols-2 gap-1 px-4 lg:px-6 py-1.5 border-b border-gray-100 dark:border-white/10 flex-shrink-0">
+      {/* top-0, not top-14: AppShell's 56px mobile header only renders on
+          Home, so a 56px offset here just pushed this first bar down over
+          the hero card, leaving a blank gap above it. */}
+      <nav className="sticky top-0 z-30 bg-white dark:bg-[#11131a] grid grid-cols-2 gap-1 px-4 lg:px-6 py-1.5 border-b border-gray-100 dark:border-white/10 flex-shrink-0">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key
           return (

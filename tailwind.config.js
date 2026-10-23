@@ -22,6 +22,19 @@ export default {
       '2xl': '1440px'
     },
     extend: {
+      // Full-viewport heights exclude the Android status-bar inset, which
+      // the body already reserves as padding (theme-tokens.css) — so an
+      // h-screen/h-dvh layout (Messages, Chat) still ends exactly at the
+      // bottom of the screen instead of 29px below it. --app-safe-top is
+      // 0px on web/desktop, so these equal plain 100vh/100dvh there.
+      height: {
+        screen: 'calc(100vh - var(--app-safe-top, 0px))',
+        dvh: 'calc(100dvh - var(--app-safe-top, 0px))'
+      },
+      minHeight: {
+        screen: 'calc(100vh - var(--app-safe-top, 0px))',
+        dvh: 'calc(100dvh - var(--app-safe-top, 0px))'
+      },
       colors: {
         bg: '#FAFAFC',
         surface: '#FFFFFF',

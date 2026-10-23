@@ -6,6 +6,7 @@ import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { applySinkId, useAudioOutputDevices } from '../hooks/useAudioOutputDevices.js'
+import { useSystemBarsOverride } from '../theme/systemBars.js'
 
 /**
  * ROOT-CAUSE FIX — group VOICE calls had no remote audio at all, and a
@@ -172,6 +173,9 @@ export default function GroupCallOverlay({ call }) {
     const timer = window.setTimeout(() => resetCall(), 2000)
     return () => window.clearTimeout(timer)
   }, [isEndedState, resetCall])
+
+  // Full-screen group call UI is always dark.
+  useSystemBarsOverride('dark', groupCallState !== 'idle' && groupCallState !== 'incoming')
 
   if (groupCallState === 'idle' || groupCallState === 'incoming') return null
 

@@ -85,11 +85,11 @@ export default function AppShell() {
               isHome ? 'block' : 'hidden'
             }`}
           >
-            {/* Android status-bar clearance now comes from the shared
-                `header.sticky.top-0` rule in theme-tokens.css (applies
-                app-wide, not just here) — see that file for the full
-                reasoning. Not repeated as inline padding here anymore:
-                doing both would double the inset. */}
+            {/* Android status-bar clearance comes from the shared
+                safe-area block in theme-tokens.css (body padding +
+                status-bar strip, app-wide) — see that file for the full
+                reasoning. Not repeated as inline padding or a sticky
+                offset here: doing both would double the inset. */}
             <div className="h-14 flex items-center gap-3 px-4 lg:px-6">
               {isHome && (
                 <button

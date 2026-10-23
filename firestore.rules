@@ -26,6 +26,19 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verifiedCampus', false) == true;
     }
 
+    // Server-side enforcement of users/{uid}.moderationStatus, which only
+    // the Admin SDK can set (adminSetUserModerationStatus /
+    // adminModerateContent in functions/functions/index.js) and which the
+    // users/{uid} rule below makes immutable for owner writes. Values:
+    // absent (active), 'restricted', 'suspended'. Only 'suspended' is
+    // enforced here; 'restricted' has no defined behavior yet. A missing
+    // users doc counts as not suspended: suspension requires the doc to
+    // exist and users/{uid} can never be deleted by a client.
+    function notSuspended() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('moderationStatus', null) != 'suspended';
+    }
+
     function onlyChanged(fields) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
@@ -137,9 +150,11 @@ service cloud.firestore {
     // is untouched — it never touched verifiedCampus and still doesn't.
     match /users/{uid} {
       allow read: if isSignedIn();
-      allow create: if isOwner(uid) && request.resource.data.get('verifiedCampus', false) == false;
+      allow create: if isOwner(uid) && request.resource.data.get('verifiedCampus', false) == false &&
+        !('moderationStatus' in request.resource.data);
       allow update: if
-        (isOwner(uid) && request.resource.data.get('verifiedCampus', false) == resource.data.get('verifiedCampus', false)) ||
+        (isOwner(uid) && request.resource.data.get('verifiedCampus', false) == resource.data.get('verifiedCampus', false) &&
+          request.resource.data.get('moderationStatus', null) == resource.data.get('moderationStatus', null)) ||
         (isSignedIn() && onlyChanged(['followersCount', 'followingCount']));
       allow delete: if false;
 
@@ -245,9 +260,9 @@ service cloud.firestore {
       // FEATURES.CREATE_POST's UI gate in CreatePostPage.jsx/
       // PostComposer.jsx — this is the actual enforcement, those are
       // just the friendly UI in front of it.
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && isVerified();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && isVerified() && notSuspended();
       allow update: if isSignedIn() && (
-        resource.data.userId == request.auth.uid ||
+        (resource.data.userId == request.auth.uid && notSuspended()) ||
         onlyChanged(['likedBy', 'likesCount']) ||
         onlyChanged(['commentsCount']) ||
         onlyChanged(['shareCount']) ||
@@ -279,9 +294,9 @@ service cloud.firestore {
       // decision, not an oversight; see final report).
       match /comments/{commentId} {
         allow read: if isSignedIn();
-        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && notSuspended();
         allow update: if isSignedIn() && (
-          resource.data.userId == request.auth.uid ||
+          (resource.data.userId == request.auth.uid && notSuspended()) ||
           onlyChanged(['likedBy', 'likesCount']) ||
           onlyChanged(['pinned']) ||
           onlyChanged(['replyCount'])
@@ -368,8 +383,8 @@ service cloud.firestore {
           !chatIsBlocked(request.auth.uid, resource.data.userId)
         )
       );
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && notSuspended();
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && notSuspended();
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
 
       // stories/{storyId}/comments/{commentId} — same shape and same
@@ -380,7 +395,7 @@ service cloud.firestore {
       // than introducing a new, inconsistent restriction.
       match /comments/{commentId} {
         allow read: if isSignedIn();
-        allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+        allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid && notSuspended();
         allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
         allow update: if false;
       }
@@ -471,7 +486,7 @@ service cloud.firestore {
       // FIRST by a verified user can still read/reply in that chat
       // (messages/{messageId}'s own create rule below is unchanged) —
       // only starting new conversations themselves is blocked.
-      allow create: if isSignedIn() && request.auth.uid in request.resource.data.participants && isVerified() &&
+      allow create: if isSignedIn() && request.auth.uid in request.resource.data.participants && isVerified() && notSuspended() &&
         (request.resource.data.get('type', 'direct') != 'group' || request.resource.data.participants.size() >= 3) &&
         (request.resource.data.get('status', 'accepted') != 'pending' || request.resource.data.get('requestedBy', '') == request.auth.uid) &&
         (request.resource.data.get('type', 'direct') == 'group' ||
@@ -560,7 +575,7 @@ service cloud.firestore {
       // directly, repeatedly, bypassing that transaction).
       match /messages/{messageId} {
         allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-        allow create: if isSignedIn() &&
+        allow create: if isSignedIn() && notSuspended() &&
           request.resource.data.senderId == request.auth.uid &&
           request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants &&
           (
@@ -587,7 +602,7 @@ service cloud.firestore {
         // the same uid overwrites their own key, never adds a new one).
         allow update: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants &&
           (
-            (resource.data.senderId == request.auth.uid && onlyChanged(['text', 'edited', 'editedAt'])) ||
+            (resource.data.senderId == request.auth.uid && onlyChanged(['text', 'edited', 'editedAt']) && notSuspended()) ||
             onlyChanged(['read']) ||
             (onlyChanged(['deletedFor']) && request.auth.uid in request.resource.data.deletedFor) ||
             (onlyChanged(['reactions']) &&
@@ -622,7 +637,7 @@ service cloud.firestore {
     // candidates, never forge the other's.
     match /calls/{callId} {
       allow read: if isSignedIn() && (request.auth.uid == resource.data.callerUid || request.auth.uid == resource.data.calleeUid);
-      allow create: if isSignedIn() && request.auth.uid == request.resource.data.callerUid;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.callerUid && notSuspended();
 
       // Hardened from a previous unconditional "either participant may
       // change ANY field" rule — that let either side rewrite the
@@ -678,7 +693,7 @@ service cloud.firestore {
       allow read: if isSignedIn() &&
         request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants;
 
-      allow create: if isSignedIn() &&
+      allow create: if isSignedIn() && notSuspended() &&
         request.auth.uid == request.resource.data.hostUid &&
         request.auth.uid in get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.participants &&
         get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.get('type', 'direct') == 'group';
@@ -752,11 +767,11 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Verification-gated: matches FEATURES.CREATE_COMMUNITY's existing
       // UI gate (DesktopRightRail.jsx, CreateCommunityPage.jsx).
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid && isVerified();
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid && isVerified() && notSuspended();
       allow update: if isSignedIn() && (
-        resource.data.ownerId == request.auth.uid ||
+        (resource.data.ownerId == request.auth.uid && notSuspended()) ||
         (request.auth.uid in resource.data.admins &&
-          onlyChanged(['description', 'coverImage', 'icon', 'tags', 'rules', 'admins', 'moderators'])) ||
+          onlyChanged(['description', 'coverImage', 'icon', 'tags', 'rules', 'admins', 'moderators']) && notSuspended()) ||
         onlyChanged(['membersCount'])
       );
       allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
@@ -770,7 +785,11 @@ service cloud.firestore {
       // but never create, rename, or remove one.
       match /channels/{channelId} {
         allow read: if isSignedIn();
-        allow create, update, delete: if isSignedIn() && (
+        allow create, update: if isSignedIn() && notSuspended() && (
+          get(/databases/$(database)/documents/communities/$(communityId)).data.ownerId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/communities/$(communityId)).data.admins
+        );
+        allow delete: if isSignedIn() && (
           get(/databases/$(database)/documents/communities/$(communityId)).data.ownerId == request.auth.uid ||
           request.auth.uid in get(/databases/$(database)/documents/communities/$(communityId)).data.admins
         );
@@ -889,8 +908,9 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Verification-gated: matches FEATURES.CREATE_LOST_FOUND's UI gate
       // in LostFoundPage.jsx.
-      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid && isVerified();
-      allow update, delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid && isVerified() && notSuspended();
+      allow update: if isSignedIn() && resource.data.createdBy == request.auth.uid && notSuspended();
+      allow delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
     }
 
     // products/{productId} — Marketplace. marketplaceService.js's own
@@ -907,8 +927,9 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Verification-gated: matches FEATURES.CREATE_MARKETPLACE_LISTING's
       // UI gate in CreateProductPage.jsx.
-      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid && isVerified();
-      allow update, delete: if isSignedIn() && resource.data.sellerId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid && isVerified() && notSuspended();
+      allow update: if isSignedIn() && resource.data.sellerId == request.auth.uid && notSuspended();
+      allow delete: if isSignedIn() && resource.data.sellerId == request.auth.uid;
     }
 
     // savedItems/{uid}/items/{itemId} and savedCollections/{uid}/collections/{id}

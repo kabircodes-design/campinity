@@ -77,6 +77,15 @@
          for AUDIO_CAPTURE — must be declared here too or that runtime
          permission batch can't resolve correctly. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Radar (useRadarLocation.js) gets location through
+         @capacitor/geolocation, which requests exactly these two
+         permissions at runtime (Precise or Approximate on Android 12+).
+         Undeclared, Android denies them without ever showing a prompt.
+         Foreground only — no ACCESS_BACKGROUND_LOCATION; Radar reads
+         location only while open. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />

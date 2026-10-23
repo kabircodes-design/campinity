@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ThemeContext } from './ThemeContext.jsx'
 import { THEMES, getThemeById } from './themes.js'
+import { syncSystemBarsWithTheme } from './systemBars.js'
 
 const MODE_KEY = 'campinity:appearanceMode'
 const PACK_KEY = 'campinity:themePack'
@@ -77,6 +78,9 @@ export function ThemeProvider({ children }) {
     const root = document.documentElement
     root.classList.toggle('dark', resolvedIsDark)
     root.setAttribute('data-theme-pack', themePack.id)
+    // Android status/navigation-bar icons follow the app theme, not the
+    // phone's (see systemBars.js). No-op on web.
+    syncSystemBarsWithTheme(resolvedIsDark)
 
     const shouldApplyTokens = themePack.id !== 'default' && themePack.tokens
     const allTokenKeys = THEMES.flatMap((theme) => (theme.tokens ? Object.keys(theme.tokens) : []))

@@ -6,6 +6,7 @@ import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { applySinkId, useAudioOutputDevices } from '../hooks/useAudioOutputDevices.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useSystemBarsOverride } from '../theme/systemBars.js'
 
 function formatDuration(totalSeconds) {
   const m = Math.floor(totalSeconds / 60)
@@ -125,6 +126,9 @@ export default function CallOverlay({ call }) {
     return () => window.clearTimeout(timer)
   }, [isEndedState, resetCall])
 
+  // Full-screen call UI is always dark; the minimized pill is not full-screen.
+  useSystemBarsOverride('dark', callState !== 'idle' && !(minimized && !isEndedState))
+
   if (callState === 'idle') return null
 
   const displayName = otherProfile?.displayName || 'Student'
@@ -193,7 +197,7 @@ export default function CallOverlay({ call }) {
           type="button"
           onClick={() => setMinimized(true)}
           aria-label="Minimize call"
-          className="absolute top-4 left-4 z-20 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors duration-200"
+          className="absolute top-[calc(1rem+var(--app-safe-top))] left-4 z-20 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors duration-200"
         >
           <Minimize2 className="w-4 h-4" />
         </button>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, Clock3, Loader2, MailCheck, ShieldAlert, TriangleAlert, XCircle } from 'lucide-react'
 import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
@@ -132,10 +132,14 @@ function TokenVerificationView({ token }) {
 
 function WaitingView() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [resending, setResending] = useState(false)
   const [checking, setChecking] = useState(false)
   const [resendMessage, setResendMessage] = useState('')
   const [error, setError] = useState('')
+  // Set by SignupPage when the account was created but the first
+  // verification email could not be sent — never claim it was sent.
+  const [sendFailed, setSendFailed] = useState(location.state?.emailSendFailed === true)
 
   const email = auth.currentUser?.email
 
@@ -151,6 +155,10 @@ function WaitingView() {
           ? "Your email is already verified — tap \"I've verified\" to continue."
           : 'Verification email sent — check your inbox.'
       )
+      if (sendFailed) {
+        setSendFailed(false)
+        navigate(location.pathname, { replace: true, state: null })
+      }
     } catch (err) {
       logAuthErrorForDebug('VerifyEmailPage.resend', err)
       setError(getAuthErrorMessage(err))
@@ -184,15 +192,26 @@ function WaitingView() {
       eyebrow="One last step"
       title="Verify your email"
       subtitle={
-        email
-          ? `We've sent a verification email to ${email}.`
-          : "We've sent a verification email to your inbox."
+        sendFailed
+          ? `Your account was created, but we couldn't send the verification email${email ? ` to ${email}` : ''}.`
+          : email
+            ? `We've sent a verification email to ${email}.`
+            : "We've sent a verification email to your inbox."
       }
     >
       <div className="flex flex-col items-center text-center">
         <div className="w-16 h-16 rounded-2xl bg-accent-tint dark:bg-blue-500/15 flex items-center justify-center">
           <MailCheck className="w-8 h-8 text-accent" strokeWidth={1.6} />
         </div>
+
+        {sendFailed && (
+          <p
+            role="alert"
+            className="mt-5 w-full rounded-xl2 bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 text-[13px] px-4 py-3"
+          >
+            The verification email couldn't be sent. Tap "Resend email" to try again.
+          </p>
+        )}
 
         {resendMessage && (
           <p
