@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ThemeContext } from './ThemeContext.jsx'
 import { THEMES, getThemeById } from './themes.js'
 import { syncSystemBarsWithTheme } from './systemBars.js'
+import { syncNativeAppTheme } from './nativeAppTheme.js'
 
 const MODE_KEY = 'campinity:appearanceMode'
 const PACK_KEY = 'campinity:themePack'
@@ -94,6 +95,12 @@ export function ThemeProvider({ children }) {
       uniqueTokenKeys.forEach((key) => root.style.removeProperty(`--theme-${key}`))
     }
   }, [resolvedIsDark, themePack])
+
+  // Android's native launch splash follows the saved theme mode on the
+  // next launch (see nativeAppTheme.js). No-op on web.
+  useEffect(() => {
+    syncNativeAppTheme(mode)
+  }, [mode])
 
   const setMode = useCallback((nextMode) => {
     setModeState(nextMode)

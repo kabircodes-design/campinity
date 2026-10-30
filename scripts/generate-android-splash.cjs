@@ -12,13 +12,12 @@
  * transparent-background icon-only PNGs for Android 12+'s native
  * Splash Screen API.
  *
- * Both the light-theme and dark-theme splash icon use the SAME mark
- * (logo-light.png's content) rather than switching to logo-dark.png
- * for dark mode — confirmed deliberately after comparing both: logo-
- * dark.png's castle silhouette is drawn in dark navy, which nearly
- * disappears against the near-black splash_background, while logo-
- * light.png's mark (white cutout details on solid blue) stays legible
- * on both backgrounds.
+ * The light-theme splash icon uses logo-light.png; the dark-theme one
+ * (drawable-night) uses logo-dark.png — the approved dark-mode artwork,
+ * whose windows/door/tower details are transparent so they show the
+ * dark splash_background cleanly. (Previously both used logo-light.png,
+ * because the old logo-dark.png's navy castle nearly disappeared on the
+ * dark background; the replacement doesn't have that problem.)
  */
 const { Jimp } = require('jimp')
 const path = require('path')
@@ -27,7 +26,8 @@ const ROOT = path.join(__dirname, '..')
 const RES = path.join(ROOT, 'android/app/src/main/res')
 
 const LIGHT_BG = 0xf7f8fcff // matches --theme-background light token
-const MARK_SRC = path.join(ROOT, 'public/logo-light.png') // used for both themes — see header comment
+const MARK_SRC = path.join(ROOT, 'public/logo-light.png') // legacy splash + light splash icon
+const DARK_MARK_SRC = path.join(ROOT, 'public/logo-dark.png') // dark (drawable-night) splash icon
 
 const LEGACY_TARGETS = [
   ['drawable/splash.png', 480, 320],
@@ -71,7 +71,7 @@ async function main() {
     await composeLegacy(MARK_SRC, w, h, path.join(RES, rel))
   }
   await composeIcon(MARK_SRC, path.join(RES, 'drawable/ic_splash_icon.png'))
-  await composeIcon(MARK_SRC, path.join(RES, 'drawable-night/ic_splash_icon.png'))
+  await composeIcon(DARK_MARK_SRC, path.join(RES, 'drawable-night/ic_splash_icon.png'))
 }
 
 main().catch((err) => {
