@@ -6,7 +6,7 @@
  * string the Functions SDK falls back to.
  */
 const FIREBASE_AUTH_MESSAGES = {
-  'auth/email-already-in-use': 'An account with this email already exists.',
+  'auth/email-already-in-use': 'An account with this email already exists. Log in instead — if it isn’t verified yet, you can resend the verification email after logging in.',
   'auth/invalid-email': 'Please enter a valid email address.',
   'auth/weak-password': 'Please choose a stronger password.',
   'auth/wrong-password': 'Incorrect email or password.',

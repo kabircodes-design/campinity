@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { browserLocalPersistence, browserSessionPersistence, setPersistence, signInWithEmailAndPassword } from 'firebase/auth'
 import AuthLayout from '../components/AuthLayout.jsx'
 import Button from '../components/Button.jsx'
@@ -19,6 +19,13 @@ import { completeGoogleRedirect, routeAfterGoogleSignIn, signInWithGoogle } from
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  // Arriving from an email-verification link opened without a session.
+  const verifyNotice = location.state?.emailJustVerified
+    ? 'Your email is verified. Log in to start using Campinity.'
+    : location.state?.needsVerification
+      ? 'Log in and we’ll help you get a fresh verification link.'
+      : ''
   const emailRef = useRef(null)
   const [rememberMe, setRememberMe] = useState(true)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -107,6 +114,11 @@ export default function LoginPage() {
         </>
       }
     >
+      {verifyNotice && (
+        <p role="status" className="mb-4 rounded-xl2 bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[13px] font-medium px-4 py-3">
+          {verifyNotice}
+        </p>
+      )}
       <Button variant="secondary" icon={<GoogleGlyph />} loading={googleLoading} disabled={isSubmitting} onClick={handleGoogle}>
         Continue with Google
       </Button>

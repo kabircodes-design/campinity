@@ -15,7 +15,7 @@ import { validateSignupForm } from '../validation/authValidation.js'
 import { sanitizeEmail, sanitizePassword, sanitizeText } from '../utils/sanitize.js'
 import { auth, googleProvider } from '../../firebase/firebase.js'
 import { createInitialUserDoc } from '../utils/userProfile.js'
-import { createEmailVerification } from '../../firebase/emailVerificationService.js'
+import { sendVerificationEmail } from '../../firebase/emailVerificationService.js'
 import { getAuthErrorMessage, logAuthErrorForDebug } from '../utils/authErrorMessages.js'
 import { completeGoogleRedirect, routeAfterGoogleSignIn, signInWithGoogle } from '../utils/googleAuth.js'
 
@@ -69,26 +69,33 @@ export default function SignupPage() {
       await updateProfile(user, { displayName: fullName })
     }
 
-    // 2. Immediately create the Firestore users/{uid} doc with defaults.
-    await createInitialUserDoc(user.uid, user.email)
-
-    // 3. Send the verification email via our custom token system
-    //    (Cloud Function createEmailVerification) — not Firebase's
-    //    hosted sendEmailVerification()/oobCode flow. The account
-    //    already exists at this point, so a send failure must not
-    //    strand the user here (retrying signup would only hit
-    //    email-already-in-use). VerifyEmailPage tells them the email
-    //    wasn't sent and offers its rate-limited Resend instead.
-    let emailSendFailed = false
+    // 2. Create the Firestore users/{uid} doc with defaults. The Auth account
+    //    already exists at this point, so a failure here must NOT strand the
+    //    user on this form (retrying would only say "email already in use").
+    //    VerifyEmailPage re-runs ensureUserDoc() and recovers it.
     try {
-      await createEmailVerification()
+      await createInitialUserDoc(user.uid, user.email)
     } catch (err) {
-      logAuthErrorForDebug('SignupPage.createEmailVerification', err)
-      emailSendFailed = true
+      logAuthErrorForDebug('SignupPage.createInitialUserDoc', err)
+    }
+
+    // 3. Send the verification email (Firebase's built-in verification by
+    //    default — see emailVerificationService.js). A send failure is shown
+    //    honestly on the next screen, with a resend button.
+    let verificationSent = false
+    let sendError = ''
+    let resendAvailableInSeconds = 0
+    try {
+      const result = await sendVerificationEmail(user)
+      verificationSent = true
+      resendAvailableInSeconds = result?.resendAvailableInSeconds || 0
+    } catch (err) {
+      logAuthErrorForDebug('SignupPage.sendVerificationEmail', err)
+      sendError = getAuthErrorMessage(err)
     }
 
     // 4. Navigate to the verification step.
-    navigate('/verify-email', { state: { emailSendFailed } })
+    navigate('/verify-email', { state: { verificationSent, sendError, resendAvailableInSeconds } })
   })
 
   /**

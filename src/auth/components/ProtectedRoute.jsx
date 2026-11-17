@@ -191,8 +191,13 @@ export default function ProtectedRoute({ stage, children }) {
   // sign up, or a session that already expired) — the token itself,
   // not an authenticated session, is what verifyEmailVerificationToken
   // checks server-side. Let VerifyEmailPage render and handle it.
-  if (stage === 'verify-email' && !user && new URLSearchParams(location.search).has('token')) {
-    return children
+  // Same for Firebase's own flow: the hosted action page's "Continue" button
+  // (?verified=1) or an in-app action link (?mode=verifyEmail&oobCode=…).
+  // These screens only display a result / tell the user to log in; they
+  // never grant access themselves.
+  if (stage === 'verify-email' && !user) {
+    const q = new URLSearchParams(location.search)
+    if (q.has('token') || q.has('oobCode') || q.get('verified') === '1') return children
   }
 
   if (!user) {
