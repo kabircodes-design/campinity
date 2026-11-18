@@ -150,11 +150,34 @@ service cloud.firestore {
     // is untouched — it never touched verifiedCampus and still doesn't.
     match /users/{uid} {
       allow read: if isSignedIn();
+      // Create gets the same username/email guarantees as update, otherwise a
+      // brand-new account could start life as "@someone_else" (signup writes
+      // no username; reserveUsername() sets it later) or with a made-up email
+      // (the shipped signup writes the caller's own Auth email, unverified).
       allow create: if isOwner(uid) && request.resource.data.get('verifiedCampus', false) == false &&
-        !('moderationStatus' in request.resource.data);
+        !('moderationStatus' in request.resource.data) &&
+        (request.resource.data.get('username', '') == '' ||
+          getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == request.auth.uid) &&
+        (request.resource.data.get('email', '') == '' || request.resource.data.email == request.auth.token.email);
+      // A CHANGED username must be one this user has reserved in usernames/{name}
+      // (reserveUsername() writes both in one transaction, so getAfter sees it).
+      // Unchanged / cleared usernames need no extra read.
+      function usernameChangeIsReserved() {
+        let next = request.resource.data.get('username', '');
+        return next == resource.data.get('username', '') || next == '' ||
+          getAfter(/databases/$(database)/documents/usernames/$(next)).data.uid == request.auth.uid;
+      }
+      // Legacy `email` field: may stay, be removed, or be synced ONLY to the
+      // caller's own verified Firebase Auth email (after a verified email change).
+      function emailFieldIsTrusted() {
+        let next = request.resource.data.get('email', null);
+        return next == resource.data.get('email', null) || next == null ||
+          (request.auth.token.email_verified == true && next == request.auth.token.email);
+      }
       allow update: if
         (isOwner(uid) && request.resource.data.get('verifiedCampus', false) == resource.data.get('verifiedCampus', false) &&
-          request.resource.data.get('moderationStatus', null) == resource.data.get('moderationStatus', null)) ||
+          request.resource.data.get('moderationStatus', null) == resource.data.get('moderationStatus', null) &&
+          usernameChangeIsReserved() && emailFieldIsTrusted()) ||
         (isSignedIn() && onlyChanged(['followersCount', 'followingCount']));
       allow delete: if false;
 
@@ -194,6 +217,11 @@ service cloud.firestore {
       // mutedUsers, mutedCommunities. All owner-only, every direction.
       match /savedPosts/{postId} {
         allow read, write: if isOwner(uid);
+      }
+      // Notice Board read markers: owner-only, a single server-timestamped field.
+      match /noticeReads/{groupId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && request.resource.data.keys().hasOnly(['readAt']) && request.resource.data.readAt == request.time;
       }
       match /blockedUsers/{blockedUid} {
         allow read, create, delete: if isOwner(uid);
@@ -429,10 +457,18 @@ service cloud.firestore {
 
     // usernames/{username} — reservation collection. Unchanged from the
     // previous incident fix.
+    // After a rename the old name is kept as an alias of the same account
+    // (releasedAt set) so old links/@mentions still resolve; another user may
+    // claim it only once that 30-day hold has passed (usernameService.js).
     match /usernames/{username} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn() && request.resource.data.uid == request.auth.uid && (
+        resource.data.uid == request.auth.uid ||
+        (resource.data.get('releasedAt', null) != null &&
+          resource.data.releasedAt < request.time - duration.value(30, 'd') &&
+          !('releasedAt' in request.resource.data))
+      );
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
@@ -948,7 +984,17 @@ service cloud.firestore {
     // bypasses these rules entirely), not a client-side platformAdmins
     // check, so read/update/delete stay denied for every client here.
     match /reports/{reportId} {
-      allow create: if isSignedIn() && request.resource.data.reporterUid == request.auth.uid;
+      // Shape-checked to exactly what reportService.submitReport() writes (same
+      // in the shipped build): every new report lands as 'pending' in the
+      // admin queue, with bounded text, and no extra fields.
+      allow create: if isSignedIn() && request.resource.data.reporterUid == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['reporterUid', 'targetType', 'targetId', 'targetOwnerUid', 'reason', 'details', 'status', 'createdAt']) &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.targetType is string && request.resource.data.targetType.size() <= 40 &&
+        request.resource.data.targetId is string && request.resource.data.targetId.size() <= 200 &&
+        request.resource.data.reason is string && request.resource.data.reason.size() <= 80 &&
+        request.resource.data.get('details', '') is string && request.resource.data.get('details', '').size() <= 500;
       allow read, update, delete: if false;
     }
 
@@ -969,12 +1015,74 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // radarLocations/{uid} — radarLocationService.js's own comment
-    // documents this exactly: "Read: any signed-in user (required)...
-    // Write: owner only."
+    // notices/{deliveryId} — Notice Board deliveries (written only by the
+    // admin Cloud Functions in notices.js). A user may read a delivery only
+    // if it targets everyone, their own uid, or the college on their own
+    // profile. Personal notices are one delivery per recipient, so no user
+    // can see who else received them. The master records (noticeGroups/*,
+    // incl. recipient lists) have no rule here and stay admin-only.
+    // Visibility timing is enforced HERE, not only in the app: a delivery is
+    // readable only inside its [publishAt, expiresAt) window, so a scheduled
+    // notice can't be fetched early and an expired one can't be fetched at
+    // all. Deliveries carry a non-null expiresAt (year 9999 = never) so the
+    // comparison always has a value. List queries must filter on both fields
+    // (publishAt <= t1 <= now, expiresAt > t2 >= now) for the rule to be
+    // provable — see src/notices/noticeService.js. Drafts/archived notices
+    // never have deliveries (the server deletes them).
+    match /notices/{deliveryId} {
+      allow get, list: if isSignedIn() &&
+        resource.data.publishAt <= request.time &&
+        resource.data.expiresAt > request.time && (
+        resource.data.audienceKeys.hasAny(['all', 'uid:' + request.auth.uid]) ||
+        resource.data.audienceKeys.hasAny(['college:' + get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('collegeId', '__none__')])
+      );
+      allow write: if false;
+    }
+
+    // PREPARED (not deployed) — Radar location privacy. Exact coordinates
+    // are now readable only by their owner; proximity for everyone else is
+    // computed server-side by the radarNearby Cloud Function (Admin SDK,
+    // not subject to these rules), which returns rounded distances only.
+    // Previously: `allow read: if isSignedIn()` exposed everyone's exact
+    // lat/lng to every signed-in user. Owner writes stay allowed (shape-
+    // checked) so app builds without VITE_SECURE_RADAR keep working; their
+    // direct proximity read now fails and degrades to campus-only
+    // discovery (already caught client-side). See SECURITY_ROLLOUT.md.
     match /radarLocations/{uid} {
-      allow read: if isSignedIn();
-      allow write: if isOwner(uid);
+      allow read: if isOwner(uid);
+      allow delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) &&
+        request.resource.data.keys().hasOnly(['geohash', 'lat', 'lng', 'accuracy', 'updatedAt']) &&
+        request.resource.data.geohash is string && request.resource.data.geohash.size() <= 12 &&
+        request.resource.data.lat is number && request.resource.data.lat >= -90 && request.resource.data.lat <= 90 &&
+        request.resource.data.lng is number && request.resource.data.lng >= -180 && request.resource.data.lng <= 180 &&
+        (request.resource.data.accuracy == null || request.resource.data.accuracy is number) &&
+        request.resource.data.updatedAt == request.time;
+    }
+
+    // PREPARED (not deployed) — private account data. Destination of the
+    // reviewed-only email migration (functions/scripts/migrate-public-email.cjs):
+    // users' email addresses move here from the public users/{uid} doc.
+    // Owner can read their own; nobody else can; only the Admin SDK writes.
+    match /users/{uid}/private/{docId} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    // PREPARED (not deployed) — block-aware presence, used only by builds
+    // with VITE_SECURE_PRESENCE=true. The heartbeat lives here instead of
+    // on the public users/{uid} doc, so it can be hidden from people who
+    // are blocked in either direction and from everyone while the owner
+    // has "Show activity status" off.
+    match /presence/{uid} {
+      allow read: if isOwner(uid) ||
+        (isSignedIn() && !chatIsBlocked(uid, request.auth.uid) &&
+          (resource == null || resource.data.get('visible', true) != false));
+      allow create, update: if isOwner(uid) &&
+        request.resource.data.keys().hasOnly(['lastActiveAt', 'visible']) &&
+        (!('lastActiveAt' in request.resource.data) || request.resource.data.lastActiveAt == null || request.resource.data.lastActiveAt == request.time) &&
+        (!('visible' in request.resource.data) || request.resource.data.visible is bool);
+      allow delete: if isOwner(uid);
     }
 
     // Gamification — userProgress/{uid}, userBadges/{uid}/earned/{id},
