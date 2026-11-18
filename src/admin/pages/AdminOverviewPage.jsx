@@ -1,307 +1,328 @@
 import { useEffect, useState } from 'react'
 import {
+  AlertTriangle,
   ArrowRight,
-  Bell,
+  Award,
+  Ban,
+  BadgeCheck,
   Flag,
-  Gavel,
   GraduationCap,
-  History,
   Image,
+  MessageSquare,
+  Newspaper,
   PackageSearch,
-  ShieldCheck,
+  RefreshCw,
   ShoppingBag,
-  Sparkles,
-  Users2,
-  Users
+  UserPlus,
+  Users,
+  UsersRound
 } from 'lucide-react'
-import { useAdminSession } from '../hooks/useAdminSession.jsx'
-import { callAdmin } from '../services/adminCallable.js'
-import { ACTION_LABELS, formatAuditWhen } from '../utils/auditLogFormat.js'
+import { useAdminWorkspace } from '../hooks/useAdminWorkspace.jsx'
+import { Badge, Button, Card, EmptyState, ErrorState, PageHeader, Skeleton, StatTile, fmtDuration, fmtNumber, fmtRelative } from '../components/ui.jsx'
+import DailyColumnChart from '../components/DailyColumnChart.jsx'
+import { ACTION_LABELS } from '../utils/auditLogFormat.js'
 
 /**
- * Every card below is driven by adminGetOverviewCounts (extended with
- * newUsersToday/marketplaceListings on the SAME function — see that
- * function's own comment in functions/index.js) plus adminListAuditLog
- * for Recent Activity — both callable functions this admin panel
- * already had before this pass. No new backend surface, no second
- * counting/audit system, no fabricated numbers: a key with no matching
- * field in the response renders "Unavailable," never a fake 0.
- *
- * Clicking a card calls `onNavigateSection` — the SAME setActiveSection
- * callback AdminSidebar.jsx already uses (AdminPage.jsx owns admin
- * "sections" as in-memory state, not real routes, since the whole
- * dashboard only exists behind an in-memory unlock anyway — see
- * AdminSidebar.jsx's own comment). This reuses that exact mechanism
- * rather than introducing React Router for a part of the tree that was
- * deliberately built without it.
+ * Command center. Everything comes from ONE read-only callable,
+ * adminGetDashboard (functions/adminControl.js), shared with the top-bar
+ * alerts through useAdminWorkspace. Any metric the server couldn't
+ * measure arrives as null and renders "Unavailable" — never a fake 0 —
+ * and an empty alert list is described as "no thresholds crossed",
+ * never as "the platform is healthy".
  */
-const ATTENTION_CARDS = [
-  { key: 'reports', label: 'Pending Reports', section: 'reports', icon: Flag, tone: 'red' },
-  { key: 'verification', label: 'Photo Verifications', section: 'photo-verification', icon: Image, tone: 'amber' },
-  { key: 'college', label: 'College Requests', section: 'college-requests', icon: GraduationCap, tone: 'blue' },
-  { key: 'lostFound', label: 'Active Lost & Found', section: 'lost-found', icon: PackageSearch, tone: 'violet' }
-]
 
-// `derived: true` cards are computed client-side from fields already in
-// the response (no extra backend call); `section: null` cards have no
-// destination that would show something more specific than the search-
-// driven User Verification page already covers via the two cards above
-// it, so per this task's own "keep non-clickable rather than force a
-// destination" instruction, they stay informational only.
-const PLATFORM_CARDS = [
-  { key: 'totalUsers', label: 'Total Users', section: 'user-verification', icon: Users },
-  { key: 'verifiedUsers', label: 'Verified Users', section: 'user-verification', icon: ShieldCheck },
-  { key: 'unverifiedUsers', label: 'Unverified Users', section: null, derived: true },
-  { key: 'newUsersToday', label: 'New Users Today', section: null },
-  { key: 'marketplaceListings', label: 'Marketplace Listings', section: 'marketplace', icon: ShoppingBag }
+const FEED_META = {
+  user_registered: { label: 'New user', icon: UserPlus, tone: 'blue' },
+  post_created: { label: 'Post', icon: Newspaper, tone: 'gray' },
+  community_created: { label: 'Community', icon: UsersRound, tone: 'purple' },
+  club_created: { label: 'Club', icon: UsersRound, tone: 'purple' },
+  listing_created: { label: 'Listing', icon: ShoppingBag, tone: 'emerald' },
+  report_submitted: { label: 'Report', icon: Flag, tone: 'rose' },
+  moderation_action: { label: 'Admin action', icon: Ban, tone: 'amber' },
+  verification_submitted: { label: 'Verification', icon: BadgeCheck, tone: 'blue' }
+}
+const FEED_SECTION = {
+  report_submitted: 'reports',
+  moderation_action: 'audit-log',
+  verification_submitted: 'photo-verification',
+  listing_created: 'marketplace',
+  community_created: 'communities',
+  club_created: 'communities'
+}
+const FEED_FILTERS = [
+  ['all', 'All'],
+  ['people', 'People'],
+  ['content', 'Content'],
+  ['safety', 'Trust & Safety']
 ]
-
-const QUICK_ACTIONS = [
-  { label: 'Review Reports', section: 'reports', icon: Flag },
-  { label: 'Verify Photos', section: 'photo-verification', icon: Image },
-  { label: 'College Requests', section: 'college-requests', icon: GraduationCap },
-  { label: 'Review Users', section: 'user-verification', icon: ShieldCheck },
-  { label: 'Moderation', section: 'moderation', icon: Gavel },
-  { label: 'Marketplace', section: 'marketplace', icon: ShoppingBag },
-  { label: 'Lost & Found', section: 'lost-found', icon: PackageSearch },
-  { label: 'Communities', section: 'communities', icon: Users2 },
-  { label: 'Send Notification', section: 'notifications', icon: Bell }
-]
-
-const TONE_CLASSES = {
-  red: 'bg-red-50 text-red-600',
-  amber: 'bg-amber-50 text-amber-600',
-  blue: 'bg-blue-50 text-blue-600',
-  violet: 'bg-violet-50 text-violet-600'
+const FEED_GROUP = {
+  user_registered: 'people',
+  verification_submitted: 'people',
+  post_created: 'content',
+  community_created: 'content',
+  club_created: 'content',
+  listing_created: 'content',
+  report_submitted: 'safety',
+  moderation_action: 'safety'
 }
 
-function CardValue({ loading, value }) {
-  if (loading) return <span className="inline-block w-10 h-7 rounded-md bg-gray-100 animate-pulse" />
-  if (value === undefined || value === null) return <span className="text-sm font-medium text-gray-300">Unavailable</span>
-  return <span>{value}</span>
+function QueueRow({ icon: Icon, label, value, onClick, ageMs, ageAtLeast }) {
+  const n = fmtNumber(value)
+  return (
+    <button type="button" onClick={onClick} className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-100 transition-colors duration-150">
+      <span className="w-8 h-8 rounded-xl bg-gray-100 text-gray-600 flex items-center justify-center flex-shrink-0">
+        <Icon className="w-4 h-4" />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-[13.5px] font-medium text-gray-900">{label}</span>
+        {typeof ageMs === 'number' && ageMs > 0 && (
+          <span className="block text-xs text-gray-500">
+            Oldest waiting {ageAtLeast ? 'at least ' : ''}
+            {fmtDuration(ageMs)}
+          </span>
+        )}
+      </span>
+      {n === null ? (
+        <span className="text-xs font-semibold text-gray-400" title="Could not be counted">Unavailable</span>
+      ) : (
+        <span className={`text-[17px] font-bold tabular-nums ${value > 0 ? 'text-gray-900' : 'text-gray-400'}`}>{n}</span>
+      )}
+      <ArrowRight className="w-4 h-4 text-gray-300" />
+    </button>
+  )
 }
 
-export default function AdminOverviewPage({ onNavigateSection }) {
-  const { sessionToken } = useAdminSession()
-  const [counts, setCounts] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  const [activity, setActivity] = useState([])
-  const [activityLoading, setActivityLoading] = useState(true)
-  const [activityError, setActivityError] = useState('')
-
-  const loadCounts = () => {
-    setLoading(true)
-    setError('')
-    callAdmin('adminGetOverviewCounts', { sessionToken })
-      .then((data) => setCounts(data || {}))
-      .catch((err) => setError(err?.message || 'Could not load overview stats.'))
-      .finally(() => setLoading(false))
-  }
-
-  const loadActivity = () => {
-    setActivityLoading(true)
-    setActivityError('')
-    // Small pageSize deliberately — this is a preview, not the log
-    // itself (AdminAuditLogPage.jsx), so it stays a cheap read.
-    callAdmin('adminListAuditLog', { sessionToken, pageSize: 6 })
-      .then((data) => setActivity(data?.entries || []))
-      .catch((err) => setActivityError(err?.message || 'Could not load recent activity.'))
-      .finally(() => setActivityLoading(false))
-  }
-
+export default function AdminOverviewPage() {
+  const { dashboard, dashboardLoading, dashboardError, reloadDashboard, navigate } = useAdminWorkspace()
+  const [feedFilter, setFeedFilter] = useState('all')
+  const [, tick] = useState(0)
+  // Keep "x minutes ago" honest without refetching anything.
   useEffect(() => {
-    loadCounts()
-    loadActivity()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionToken])
+    const t = window.setInterval(() => tick((n) => n + 1), 60000)
+    return () => window.clearInterval(t)
+  }, [])
 
-  const goTo = (section) => {
-    if (section && onNavigateSection) onNavigateSection(section)
+  if (dashboardError && !dashboard) {
+    return (
+      <div>
+        <PageHeader title="Overview" description="Platform state at a glance." />
+        <Card>
+          <ErrorState message={dashboardError} onRetry={reloadDashboard} />
+        </Card>
+      </div>
+    )
   }
 
-  const unverifiedUsers =
-    counts && typeof counts.totalUsers === 'number' && typeof counts.verifiedUsers === 'number'
-      ? counts.totalUsers - counts.verifiedUsers
-      : undefined
-
-  const valueFor = (card) => (card.derived ? unverifiedUsers : counts ? counts[card.key] : undefined)
-
-  const totalPending = ATTENTION_CARDS.reduce((sum, card) => {
-    const v = counts ? counts[card.key] : undefined
-    return typeof v === 'number' ? sum + v : sum
-  }, 0)
-  const allClear = !loading && !error && counts && totalPending === 0
+  const o = dashboard?.overview || {}
+  const loading = dashboardLoading && !dashboard
+  const alerts = dashboard?.alerts || []
+  const feed = (dashboard?.feed || []).filter((e) => feedFilter === 'all' || FEED_GROUP[e.type] === feedFilter)
+  const tile = (props) => (loading ? <Skeleton key={props.label} className="h-[106px] rounded-2xl" /> : <StatTile key={props.label} {...props} />)
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Overview</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            {allClear ? "Here's your platform — everything's clear right now." : "Here's what needs your attention."}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Overview"
+        description={
+          dashboard?.generatedAtMs ? (
+            <>
+              Snapshot from {fmtRelative(dashboard.generatedAtMs)}. {dashboard.notes?.trendsTimezone}
+            </>
+          ) : (
+            'Platform state at a glance.'
+          )
+        }
+        actions={
+          <Button onClick={reloadDashboard} disabled={dashboardLoading}>
+            <RefreshCw className={`w-3.5 h-3.5 ${dashboardLoading ? 'animate-spin' : ''}`} />
+            {dashboardLoading ? 'Refreshing' : 'Refresh'}
+          </Button>
+        }
+      />
 
-      {error && (
-        <div className="mt-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3 flex items-center justify-between">
-          {error}
-          <button type="button" onClick={loadCounts} className="font-semibold underline underline-offset-2">
-            Retry
-          </button>
+      {dashboardError && dashboard && (
+        <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-600">
+          Refresh failed: {dashboardError} Showing the previous snapshot.
         </div>
       )}
 
-      {/* NEEDS YOUR ATTENTION — the actionable queue, most important first. */}
-      <section className="mt-6">
-        <h2 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Needs your attention</h2>
-
-        {allClear ? (
-          <div className="mt-2.5 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3.5 flex items-center gap-2.5">
-            <Sparkles className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <p className="text-sm font-medium text-emerald-700">All clear — no pending reports, verifications or requests.</p>
-          </div>
-        ) : (
-          <div className="mt-2.5 grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {ATTENTION_CARDS.map((card) => {
-              const value = counts ? counts[card.key] : undefined
-              const urgent = typeof value === 'number' && value > 0
-              const Icon = card.icon
-              return (
-                <button
-                  key={card.key}
-                  type="button"
-                  onClick={() => goTo(card.section)}
-                  className="group text-left rounded-xl border border-gray-100 bg-white p-4 transition-all duration-200 hover:border-gray-200 hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${TONE_CLASSES[card.tone]}`}>
-                      <Icon className="w-4 h-4" strokeWidth={1.8} />
-                    </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-gray-300 opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
-                  </div>
-                  <p className="mt-3 text-2xl font-bold text-gray-900">
-                    <CardValue loading={loading} value={value} />
-                  </p>
-                  <p className="mt-0.5 text-xs text-gray-400">{card.label}</p>
-                  {urgent && <span className="mt-2 inline-block w-1.5 h-1.5 rounded-full bg-red-500" aria-hidden="true" />}
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* PLATFORM OVERVIEW — general stats, lower visual weight than the attention row. */}
-      <section className="mt-7">
-        <h2 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Platform overview</h2>
-        <div className="mt-2.5 grid grid-cols-2 lg:grid-cols-3 gap-3">
-          {PLATFORM_CARDS.map((card) => {
-            const value = valueFor(card)
-            const clickable = Boolean(card.section)
-            const Wrapper = clickable ? 'button' : 'div'
-            return (
-              <Wrapper
-                key={card.key}
-                type={clickable ? 'button' : undefined}
-                onClick={clickable ? () => goTo(card.section) : undefined}
-                className={`text-left rounded-xl border border-gray-100 bg-white p-4 transition-all duration-200 ${
-                  clickable
-                    ? 'group cursor-pointer hover:border-gray-200 hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40'
-                    : ''
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  {card.icon ? (
-                    <span className="w-7 h-7 rounded-md bg-gray-50 text-gray-500 flex items-center justify-center">
-                      <card.icon className="w-3.5 h-3.5" strokeWidth={1.8} />
-                    </span>
-                  ) : (
-                    <span />
-                  )}
-                  {clickable && (
-                    <ArrowRight className="w-3.5 h-3.5 text-gray-300 opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
-                  )}
-                </div>
-                <p className="mt-2.5 text-2xl font-bold text-gray-900">
-                  <CardValue loading={loading} value={value} />
-                </p>
-                <p className="mt-0.5 text-xs text-gray-400">{card.label}</p>
-              </Wrapper>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* QUICK ACTIONS — one tap to every section this dashboard can meaningfully jump into. */}
-      <section className="mt-7">
-        <h2 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Quick actions</h2>
-        <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          {QUICK_ACTIONS.map((action) => (
+      {/* Alerts */}
+      {!loading && alerts.length > 0 && (
+        <div className="mb-6 grid gap-2.5 md:grid-cols-2">
+          {alerts.map((a) => (
             <button
-              key={action.section}
+              key={a.key}
               type="button"
-              onClick={() => goTo(action.section)}
-              className="flex items-center gap-2 rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-left text-[13px] font-medium text-gray-700 transition-all duration-200 hover:border-gray-200 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              onClick={() => a.section && navigate(a.section)}
+              className={`text-left rounded-2xl border px-4 py-3 flex gap-3 items-start transition-colors duration-150 ${
+                a.level === 'critical' ? 'border-red-200 bg-red-50' : a.level === 'warning' ? 'border-gray-100 bg-amber-50' : 'border-gray-100 bg-blue-50'
+              }`}
             >
-              <action.icon className="w-4 h-4 text-gray-400 flex-shrink-0" strokeWidth={1.8} />
-              <span className="truncate">{action.label}</span>
+              <AlertTriangle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${a.level === 'critical' ? 'text-red-600' : a.level === 'warning' ? 'text-amber-600' : 'text-blue-600'}`} />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="text-[13.5px] font-semibold text-gray-900">{a.title}</span>
+                  <Badge tone={a.level === 'critical' ? 'rose' : a.level === 'warning' ? 'amber' : 'blue'}>{a.level}</Badge>
+                </span>
+                <span className="block mt-0.5 text-xs text-gray-600">{a.detail}</span>
+              </span>
+              <ArrowRight className="w-4 h-4 mt-0.5 text-gray-400 flex-shrink-0" />
             </button>
           ))}
         </div>
+      )}
+
+      {/* Platform KPIs */}
+      <section aria-label="Platform totals" className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {tile({ label: 'Total users', value: o.totalUsers, icon: Users, onClick: () => navigate('users') })}
+        {tile({ label: 'Posts', value: o.totalPosts, icon: Newspaper, tone: 'gray' })}
+        {tile({ label: 'Communities', value: o.totalCommunities, icon: UsersRound, tone: 'purple', hint: typeof o.totalClubs === 'number' ? `${fmtNumber(o.totalClubs)} official clubs` : undefined, onClick: () => navigate('communities') })}
+        {tile({ label: 'Listings', value: o.totalProducts, icon: ShoppingBag, tone: 'emerald', onClick: () => navigate('marketplace') })}
+        {tile({ label: 'Active Lost & Found', value: o.activeLostFound, icon: PackageSearch, tone: 'amber', onClick: () => navigate('lost-found') })}
+        {tile({ label: 'Chat messages', value: o.totalMessages, icon: MessageSquare, tone: 'gray', hint: 'Count only — no content read' })}
       </section>
 
-      {/* RECENT ACTIVITY — a preview of the same audit trail AdminAuditLogPage.jsx reads in full. */}
-      <section className="mt-7">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Recent activity</h2>
-          <button
-            type="button"
-            onClick={() => goTo('audit-log')}
-            className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-          >
-            View full log
-            <ArrowRight className="w-3 h-3" />
-          </button>
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0 space-y-6">
+          {/* Growth & engagement */}
+          <Card title="Registrations & activity" subtitle={dashboard?.notes?.activity}>
+            {loading ? (
+              <Skeleton className="h-[120px]" />
+            ) : (
+              <div className="grid gap-px rounded-xl overflow-hidden border border-gray-100 bg-gray-100 sm:grid-cols-2">
+                {[
+                  ['New registrations', [['24 hours', o.newUsers24h], ['7 days', o.newUsers7d], ['30 days', o.newUsers30d]]],
+                  ['Active users', [['24 hours', o.active24h], ['7 days', o.active7d], ['30 days', o.active30d]]]
+                ].map(([heading, rows]) => (
+                  <div key={heading} className="bg-white p-4">
+                    <p className="text-[12.5px] font-medium text-gray-500">{heading}</p>
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                      {rows.map(([k, v]) => (
+                        <div key={k}>
+                          <p className={`text-[20px] font-bold tabular-nums leading-tight ${v === null || v === undefined ? 'text-gray-400 text-sm' : 'text-gray-900'}`}>
+                            {fmtNumber(v) ?? 'Unavailable'}
+                          </p>
+                          <p className="text-[11.5px] text-gray-500">{k}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Trends: one series per chart (small multiples, shared style) */}
+          <section aria-label="30-day trends">
+            <div className="flex items-baseline justify-between mb-3">
+              <h2 className="text-[15px] font-semibold text-gray-900">30-day trends</h2>
+              <p className="text-xs text-gray-500">New items per day</p>
+            </div>
+            {loading ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-[236px] rounded-2xl" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                <DailyColumnChart title="New users" data={dashboard?.trends?.users || []} unit="sign-ups" />
+                <DailyColumnChart title="New posts" data={dashboard?.trends?.posts || []} unit="posts" />
+                <DailyColumnChart title="New communities" data={dashboard?.trends?.communities || []} unit="communities" />
+                <DailyColumnChart title="New listings" data={dashboard?.trends?.products || []} unit="listings" />
+              </div>
+            )}
+          </section>
         </div>
 
-        <div className="mt-2.5 rounded-xl border border-gray-100 bg-white overflow-hidden">
-          {activityLoading ? (
-            <div className="py-10 flex justify-center">
-              <div className="w-5 h-5 rounded-full border-2 border-gray-200 border-t-blue-600 animate-spin" />
-            </div>
-          ) : activityError ? (
-            <div className="py-8 text-center">
-              <p className="text-sm text-gray-400">{activityError}</p>
-              <button type="button" onClick={loadActivity} className="mt-2 text-xs font-semibold text-blue-600">
-                Retry
-              </button>
-            </div>
-          ) : activity.length === 0 ? (
-            <div className="py-8 text-center">
-              <History className="w-4 h-4 text-gray-300 mx-auto" />
-              <p className="mt-2 text-sm text-gray-400">No admin actions recorded yet.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {activity.map((entry) => (
-                <div key={entry.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-medium text-gray-900 truncate">{ACTION_LABELS[entry.action] || entry.action}</p>
-                    <p className="mt-0.5 text-xs text-gray-400 truncate">
-                      {entry.targetType && entry.targetType}
-                      {entry.targetUid && ` · user ${entry.targetUid}`}
-                    </p>
-                  </div>
-                  <p className="flex-shrink-0 text-[11px] text-gray-400">{formatAuditWhen(entry.createdAt)}</p>
+        <div className="min-w-0 space-y-6">
+          {/* Work queues */}
+          <Card title="Work queues" subtitle="Pending items waiting for an admin." padded={false}>
+            <div className="mt-2 pb-2 divide-y divide-gray-100">
+              {loading ? (
+                <div className="px-5 py-3 space-y-3">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <Skeleton key={i} className="h-9" />
+                  ))}
                 </div>
+              ) : (
+                <>
+                  <QueueRow icon={Flag} label="Reports" value={o.pendingReports} ageMs={dashboard?.oldestPending?.reports?.ageMs} ageAtLeast={dashboard?.oldestPending?.reports?.atLeast} onClick={() => navigate('reports')} />
+                  <QueueRow icon={Image} label="Campus verification" value={o.pendingVerifications} ageMs={dashboard?.oldestPending?.verifications?.ageMs} ageAtLeast={dashboard?.oldestPending?.verifications?.atLeast} onClick={() => navigate('photo-verification')} />
+                  <QueueRow icon={Award} label="Achievements" value={o.pendingAchievements} onClick={() => navigate('achievement-verification')} />
+                  <QueueRow icon={GraduationCap} label="College requests" value={o.pendingCollegeRequests} onClick={() => navigate('college-requests')} />
+                  <QueueRow icon={Ban} label="Suspended users" value={o.suspendedUsers} onClick={() => navigate('users', { moderationStatus: 'suspended' })} />
+                </>
+              )}
+            </div>
+          </Card>
+
+          {/* Live activity feed (latest snapshot; refreshes with the dashboard) */}
+          <Card
+            title="Latest activity"
+            subtitle="Newest events across the platform, as of this snapshot."
+            padded={false}
+            action={
+              <button type="button" onClick={() => navigate('audit-log')} className="text-xs font-semibold text-blue-600 whitespace-nowrap">
+                Audit logs
+              </button>
+            }
+          >
+            <div className="px-5 pt-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Filter activity">
+              {FEED_FILTERS.map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="tab"
+                  aria-selected={feedFilter === k}
+                  onClick={() => setFeedFilter(k)}
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors duration-150 ${feedFilter === k ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                  {label}
+                </button>
               ))}
             </div>
-          )}
+            {loading ? (
+              <div className="p-5 space-y-3">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} className="h-10" />
+                ))}
+              </div>
+            ) : feed.length === 0 ? (
+              <EmptyState title="Nothing here yet" description="No events of this kind in the latest snapshot." />
+            ) : (
+              <ul className="mt-2 pb-2 max-h-[560px] overflow-y-auto">
+                {feed.map((e) => {
+                  const meta = FEED_META[e.type] || { label: e.type, icon: Flag, tone: 'gray' }
+                  const Icon = meta.icon
+                  const goto = e.type === 'user_registered' && e.userId ? () => navigate('users', { openUid: e.userId }) : FEED_SECTION[e.type] ? () => navigate(FEED_SECTION[e.type]) : null
+                  const title = e.type === 'moderation_action' ? ACTION_LABELS[e.title] || e.title : e.title
+                  const Row = goto ? 'button' : 'div'
+                  return (
+                    <li key={`${e.type}-${e.id}`}>
+                      <Row type={goto ? 'button' : undefined} onClick={goto || undefined} className={`w-full text-left flex gap-3 px-5 py-2.5 ${goto ? 'hover:bg-gray-100' : ''}`}>
+                        <span className="w-7 h-7 mt-0.5 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center flex-shrink-0">
+                          <Icon className="w-3.5 h-3.5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <span className="text-[13px] font-medium text-gray-900 truncate">{title}</span>
+                          </span>
+                          <span className="block text-xs text-gray-500 truncate">
+                            {meta.label}
+                            {e.subtitle ? ` · ${e.subtitle}` : ''}
+                          </span>
+                        </span>
+                        <span className="text-[11px] text-gray-400 whitespace-nowrap mt-0.5">{fmtRelative(e.atMs)}</span>
+                      </Row>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </Card>
         </div>
-      </section>
+      </div>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { Megaphone, Pin, PinOff, Send, Trash2 } from 'lucide-react'
 import { useAdminSession } from '../hooks/useAdminSession.jsx'
 import { callAdmin } from '../services/adminCallable.js'
 import AdminToast from '../components/AdminToast.jsx'
+import { ConfirmDialog } from '../components/ui.jsx'
 import { listRecentAnnouncementsForAdmin } from '../../firebase/announcementService.js'
 
 const PRIORITIES = [
@@ -35,6 +36,7 @@ export default function AdminNotificationsPage() {
   const [sending, setSending] = useState(false)
   const [confirmSend, setConfirmSend] = useState(false)
   const [toast, setToast] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   const [announcements, setAnnouncements] = useState([])
   const [announcementsLoading, setAnnouncementsLoading] = useState(true)
@@ -278,7 +280,7 @@ export default function AdminNotificationsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDelete(a)}
+                  onClick={() => setConfirmDelete(a)}
                   disabled={busyId === a.id}
                   aria-label="Remove"
                   className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
@@ -291,6 +293,20 @@ export default function AdminNotificationsPage() {
         </div>
       </div>
 
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title="Remove this announcement?"
+        body="It disappears from Home for everyone. Notifications already delivered stay in people’s inboxes. This can’t be undone and is recorded in the audit log."
+        confirmLabel="Remove"
+        tone="danger"
+        busy={Boolean(confirmDelete) && busyId === confirmDelete.id}
+        onConfirm={async () => {
+          const target = confirmDelete
+          await handleDelete(target)
+          setConfirmDelete(null)
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
       <AdminToast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   )

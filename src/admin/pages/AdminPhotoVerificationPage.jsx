@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ImageOff } from 'lucide-react'
 import { useAdminSession } from '../hooks/useAdminSession.jsx'
+import { useAdminWorkspace } from '../hooks/useAdminWorkspace.jsx'
 import { callAdmin } from '../services/adminCallable.js'
 import AdminToast from '../components/AdminToast.jsx'
 import VerificationReviewModal from '../components/VerificationReviewModal.jsx'
@@ -19,7 +20,31 @@ import VerificationReviewModal from '../components/VerificationReviewModal.jsx'
  * Cloud Functions are session-token gated — the same real security
  * boundary as Reports, not a UI-only guard.
  */
+/**
+ * Never call the verification list unless the backend confirms that
+ * listing is read-only (the pre-v2 version auto-approved on open).
+ */
 export default function AdminPhotoVerificationPage() {
+  const { capabilities } = useAdminWorkspace()
+  if (capabilities === undefined) {
+    return (
+      <div className="py-16 flex justify-center">
+        <div className="w-5 h-5 rounded-full border-2 border-gray-200 border-t-blue-600 animate-spin" />
+      </div>
+    )
+  }
+  if (!capabilities?.verificationListReadOnly) {
+    return (
+      <div className="py-16 text-center max-w-md mx-auto">
+        <p className="text-sm font-semibold text-gray-900">Verification is disabled</p>
+        <p className="mt-1 text-sm text-gray-500">The backend has not confirmed that opening this queue is read-only, so it is not loaded. Deploy the updated admin functions first.</p>
+      </div>
+    )
+  }
+  return <VerificationQueue />
+}
+
+function VerificationQueue() {
   const { sessionToken } = useAdminSession()
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -64,8 +89,10 @@ export default function AdminPhotoVerificationPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-gray-900">Photo Verification</h1>
-      <p className="mt-1 text-sm text-gray-400">Review submitted ID documents and verify campus identity.</p>
+      <h1 className="text-xl font-bold text-gray-900">Verification</h1>
+      <p className="mt-1 text-sm text-gray-400">
+        Review submitted ID documents and verify campus identity. Opening this queue never approves or rejects anything — only your explicit decision does.
+      </p>
 
       <div className="mt-5">
         {loading ? (
@@ -102,8 +129,15 @@ export default function AdminPhotoVerificationPage() {
                     {req.username && <p className="text-xs text-gray-400">@{req.username}</p>}
                     {req.collegeName && <p className="mt-1 text-xs text-gray-500">{req.collegeName}</p>}
                   </div>
-                  <span className="flex-shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-amber-50 text-amber-600">
-                    Pending
+                  <span className="flex-shrink-0 flex flex-col items-end gap-1">
+                    <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold bg-amber-50 text-amber-600">Pending</span>
+                    {/* Flag only — listing never changes a request or user. The admin
+                        decides explicitly in the reviewer (approve or reject). */}
+                    {req.alreadyVerified && (
+                      <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold bg-blue-50 text-blue-600" title="This user's account is already campus-verified. Review and close this request explicitly.">
+                        Already verified
+                      </span>
+                    )}
                   </span>
                 </div>
               </button>

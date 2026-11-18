@@ -1,70 +1,82 @@
-import { useState } from 'react'
 import { AdminSessionProvider, useAdminSession } from '../admin/hooks/useAdminSession.jsx'
+import { AdminWorkspaceProvider, useAdminWorkspace } from '../admin/hooks/useAdminWorkspace.jsx'
 import AdminLockScreen from '../admin/components/AdminLockScreen.jsx'
-import AdminSidebar from '../admin/components/AdminSidebar.jsx'
+import AdminShell from '../admin/components/AdminShell.jsx'
 import AdminOverviewPage from '../admin/pages/AdminOverviewPage.jsx'
+import AdminUsersPage from '../admin/pages/AdminUsersPage.jsx'
 import AdminReportsPage from '../admin/pages/AdminReportsPage.jsx'
 import AdminPhotoVerificationPage from '../admin/pages/AdminPhotoVerificationPage.jsx'
 import AdminAchievementVerificationPage from '../admin/pages/AdminAchievementVerificationPage.jsx'
 import AdminCollegeRequestsPage from '../admin/pages/AdminCollegeRequestsPage.jsx'
-import AdminUserVerificationPage from '../admin/pages/AdminUserVerificationPage.jsx'
 import AdminCommunitiesPage from '../admin/pages/AdminCommunitiesPage.jsx'
 import AdminModerationPage from '../admin/pages/AdminModerationPage.jsx'
 import AdminLostFoundPage from '../admin/pages/AdminLostFoundPage.jsx'
 import AdminMarketplacePage from '../admin/pages/AdminMarketplacePage.jsx'
 import AdminNotificationsPage from '../admin/pages/AdminNotificationsPage.jsx'
 import AdminAuditLogPage from '../admin/pages/AdminAuditLogPage.jsx'
+import AdminSystemHealthPage from '../admin/pages/AdminSystemHealthPage.jsx'
+import AdminDevicesPage from '../admin/pages/AdminDevicesPage.jsx'
+import AdminNoticesPage from '../admin/pages/AdminNoticesPage.jsx'
 
+/**
+ * Sections are in-memory state (useAdminWorkspace), not router
+ * sub-routes: the whole Control Center only exists behind the in-memory
+ * admin session, and a refresh intentionally re-locks it.
+ *
+ * 'user-verification' is kept as an alias of Users: the Users workspace
+ * now covers search + manual verify/unverify (same adminSetUserVerification
+ * callable) with suspension and history alongside it.
+ */
 const SECTION_COMPONENTS = {
   overview: AdminOverviewPage,
+  users: AdminUsersPage,
+  'user-verification': AdminUsersPage,
   reports: AdminReportsPage,
   'photo-verification': AdminPhotoVerificationPage,
   'achievement-verification': AdminAchievementVerificationPage,
   'college-requests': AdminCollegeRequestsPage,
-  'user-verification': AdminUserVerificationPage,
   communities: AdminCommunitiesPage,
   moderation: AdminModerationPage,
   'lost-found': AdminLostFoundPage,
   marketplace: AdminMarketplacePage,
   notifications: AdminNotificationsPage,
-  'audit-log': AdminAuditLogPage
+  'audit-log': AdminAuditLogPage,
+  'system-health': AdminSystemHealthPage,
+  devices: AdminDevicesPage,
+  notices: AdminNoticesPage
 }
 
 function AdminDashboard() {
-  const [activeSection, setActiveSection] = useState('overview')
-  const ActiveSection = SECTION_COMPONENTS[activeSection] || AdminOverviewPage
-
+  const { section, navigate } = useAdminWorkspace()
+  const ActiveSection = SECTION_COMPONENTS[section] || AdminOverviewPage
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex">
-      <AdminSidebar activeSection={activeSection} onSelectSection={setActiveSection} />
-      <main className="flex-1 min-w-0 px-6 py-6 lg:px-10 lg:py-8 max-w-[1000px]">
-        {/* Only Overview needs to programmatically switch sections (its
-            clickable cards / quick actions) — every other section is
-            reached exclusively via AdminSidebar, so this prop stays
-            scoped to the one component that actually uses it. */}
-        {activeSection === 'overview' ? <ActiveSection onNavigateSection={setActiveSection} /> : <ActiveSection />}
-      </main>
-    </div>
+    <AdminShell>
+      {/* key: switching sections remounts the page so each one loads fresh. */}
+      <ActiveSection key={section} onNavigateSection={navigate} />
+    </AdminShell>
   )
 }
 
-function AdminGate() {
+function AdminGate({ onSignOut, accountLabel }) {
   const { isLoggedIn } = useAdminSession()
-  return isLoggedIn ? <AdminDashboard /> : <AdminLockScreen />
+  return isLoggedIn ? (
+    <AdminWorkspaceProvider>
+      <AdminDashboard />
+    </AdminWorkspaceProvider>
+  ) : (
+    <AdminLockScreen onSignOut={onSignOut} accountLabel={accountLabel} />
+  )
 }
 
 /**
- * Entry point for /admin. Reachable by ANY authenticated Campinity
- * user now — App.jsx's route uses stage="home", not stage="admin",
- * per the explicit architectural pivot away from platformAdmins as a
- * prerequisite. This component's password gate (AdminLockScreen) is
- * the actual boundary from here on, backed by the server-verified
- * session token every privileged admin action independently checks.
+ * Entry point for /admin. The password gate (AdminLockScreen) is the
+ * boundary; every privileged call is independently re-authorized on the
+ * server via the session token (requireValidAdminSession).
  */
-export default function AdminPage() {
+export default function AdminPage({ onSignOut, accountLabel } = {}) {
   return (
     <AdminSessionProvider>
-      <AdminGate />
+      <AdminGate onSignOut={onSignOut} accountLabel={accountLabel} />
     </AdminSessionProvider>
   )
 }
