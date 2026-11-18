@@ -129,8 +129,14 @@ export function useAuthUser() {
   // and every HEARTBEAT_INTERVAL_MS while a user is signed in and this
   // hook (i.e. any protected route) is mounted; only while the tab is
   // actually visible, so a backgrounded tab doesn't keep writing.
+  //
+  // "Show activity status" (users.activityStatusVisible, absent = on):
+  // while it's off, no heartbeat is written at all, so nothing about the
+  // user's activity reaches Firestore. Waits for the profile to settle so
+  // a user who turned it off never gets one stray write at startup.
+  const showActivity = profileSettled ? profile?.activityStatusVisible !== false : null
   useEffect(() => {
-    if (!user?.uid) return undefined
+    if (!user?.uid || showActivity !== true) return undefined
 
     touchPresence(user.uid)
     const interval = window.setInterval(() => {
@@ -146,7 +152,7 @@ export function useAuthUser() {
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [user?.uid])
+  }, [user?.uid, showActivity])
 
   return { user, profile, loading, profileSettled }
 }

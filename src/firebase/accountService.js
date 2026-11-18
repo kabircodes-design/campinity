@@ -255,6 +255,14 @@ export async function deleteAccount(password) {
   if (username) {
     await deleteDoc(doc(db, 'usernames', username)).catch(() => {})
   }
+  // …and any previous names still held as 30-day aliases after a username
+  // change (usernameService.reserveUsername), so they free up immediately
+  // instead of pointing at a deleted account.
+  const aliasSnap = await getDocs(query(collection(db, 'usernames'), where('uid', '==', uid))).catch(() => ({ docs: [] }))
+  await commitInChunks(aliasSnap.docs.map((a) => (batch) => batch.delete(a.ref)))
+  // Notice Board read markers (users/{uid}/noticeReads).
+  const noticeReadsSnap = await getDocs(collection(db, 'users', uid, 'noticeReads')).catch(() => ({ docs: [] }))
+  await commitInChunks(noticeReadsSnap.docs.map((r) => (batch) => batch.delete(r.ref)))
 
   // 2i. Radar location + this user's own blockedUsers subcollection —
   // both added after this function was first written (radarLocations

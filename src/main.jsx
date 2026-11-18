@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { MotionConfig } from 'framer-motion'
 import App from './App.jsx'
-import { PostsProvider } from './hooks/usePosts.jsx'
 import { ThemeProvider } from './theme/ThemeProvider.jsx'
 import { PostingStatusProvider } from './context/PostingStatusContext.jsx'
 import { CallProvider } from './context/CallContext.jsx'
@@ -62,13 +61,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <BrowserRouter>
         <ThemeProvider>
           <AuthProvider>
-            <PostsProvider>
-              <PostingStatusProvider>
-                <CallProvider>
-                  <App />
-                </CallProvider>
-              </PostingStatusProvider>
-            </PostsProvider>
+            <PostingStatusProvider>
+              <CallProvider>
+                <App />
+              </CallProvider>
+            </PostingStatusProvider>
           </AuthProvider>
         </ThemeProvider>
       </BrowserRouter>

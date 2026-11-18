@@ -26,6 +26,11 @@ export function PostingStatusProvider({ children }) {
     setState({ status: 'posting', message, newPost: null, error: null })
   }, [])
 
+  // Live text while a post is still posting (e.g. photo upload progress).
+  const updatePostingMessage = useCallback((message) => {
+    setState((prev) => (prev.status === 'posting' ? { ...prev, message } : prev))
+  }, [])
+
   const markSuccess = useCallback((newPost, message = 'Posted') => {
     setState({ status: 'success', message, newPost, error: null })
   }, [])
@@ -39,8 +44,8 @@ export function PostingStatusProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ ...state, startPosting, markSuccess, markError, reset }),
-    [state, startPosting, markSuccess, markError, reset]
+    () => ({ ...state, startPosting, updatePostingMessage, markSuccess, markError, reset }),
+    [state, startPosting, updatePostingMessage, markSuccess, markError, reset]
   )
 
   return <PostingStatusContext.Provider value={value}>{children}</PostingStatusContext.Provider>

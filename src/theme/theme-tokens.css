@@ -345,7 +345,11 @@ html:not(.dark) body {
 .border-gray-200 { border-color: var(--theme-border); }
 .border-gray-300 { border-color: color-mix(in srgb, var(--theme-textPrimary) 16%, var(--theme-surface)); }
 .hover\:border-gray-300:hover { border-color: color-mix(in srgb, var(--theme-textPrimary) 16%, var(--theme-surface)); }
-.divide-gray-100 > * + * { border-color: var(--theme-border); }
+.divide-gray-100 > * + *,
+/* Tailwind compiles divide colours as `> :not([hidden]) ~ :not([hidden])`
+   (more specific than `> * + *`), so the remap above alone lost to the
+   light gray in Dark Mode. Same specificity + later in the cascade wins. */
+.divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--theme-border); }
 
 .bg-blue-600 { background-color: var(--theme-accent); }
 .text-blue-600 { color: var(--theme-accent); }

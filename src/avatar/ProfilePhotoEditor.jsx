@@ -9,6 +9,7 @@ import { uploadCampusAvatar } from './avatarStorage.js'
 import { moderateImage } from '../moderation/imageModeration.js'
 import { updateUserProfile, getUserProfile } from '../firebase/profileService.js'
 import { auth } from '../firebase/firebase.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // matches the existing campusAvatars Storage rule's own 10MB limit — no client/server mismatch
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -64,6 +65,8 @@ function mapStorageError(err) {
  * flow, unchanged — this doesn't touch or loosen that path.
  */
 export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, verifiedCampus, onSaved }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   const [stage, setStage] = useState('sheet') // 'sheet' | 'cropper' | 'error'
   const [rawImageUrl, setRawImageUrl] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
@@ -89,7 +92,6 @@ export default function ProfilePhotoEditor({ open, onClose, currentPhotoUrl, ver
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       console.log('[ProfilePhotoUpload] auth state:', {
         uid: user?.uid,
-        email: user?.email,
         status: user ? 'ready' : 'signed-out'
       })
       if (user) {

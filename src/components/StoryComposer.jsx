@@ -6,6 +6,7 @@ import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { createStory, uploadStoryMedia } from '../firebase/storyService.js'
 import { useSystemBarsOverride } from '../theme/systemBars.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * The actual fix for this task's root problem: uploads go through
@@ -15,6 +16,8 @@ import { useSystemBarsOverride } from '../theme/systemBars.js'
  * to a real story document; nothing here can produce a post.
  */
 export default function StoryComposer({ onClose, onCreated }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(true, onClose)
   // Always-black full-screen composer: light system-bar icons.
   useSystemBarsOverride('dark')
   const fileInputRef = useRef(null)

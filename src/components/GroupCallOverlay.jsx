@@ -7,6 +7,7 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { applySinkId, useAudioOutputDevices } from '../hooks/useAudioOutputDevices.js'
 import { useSystemBarsOverride } from '../theme/systemBars.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * ROOT-CAUSE FIX — group VOICE calls had no remote audio at all, and a
@@ -176,6 +177,10 @@ export default function GroupCallOverlay({ call }) {
 
   // Full-screen group call UI is always dark.
   useSystemBarsOverride('dark', groupCallState !== 'idle' && groupCallState !== 'incoming')
+  // Full-screen group call: Android Back does nothing (it used to
+  // navigate the page underneath while the call kept covering the screen).
+  // Leaving is an explicit action via the Leave button.
+  useBackToClose(groupCallState !== 'idle' && groupCallState !== 'incoming' && !isEndedState, () => {})
 
   if (groupCallState === 'idle' || groupCallState === 'incoming') return null
 
@@ -248,7 +253,7 @@ export default function GroupCallOverlay({ call }) {
             onClick={toggleMute}
             aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
             className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-95 transition-all duration-200 ${
-              muted ? 'bg-white text-gray-900' : 'bg-white/15 hover:bg-white/25 text-white'
+              muted ? 'bg-[#ffffff] text-[#0f172a]' : 'bg-white/15 hover:bg-white/25 text-white'
             }`}
           >
             {muted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -259,7 +264,7 @@ export default function GroupCallOverlay({ call }) {
               onClick={toggleCamera}
               aria-label={cameraOff ? 'Turn camera on' : 'Turn camera off'}
               className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-95 transition-all duration-200 ${
-                cameraOff ? 'bg-white text-gray-900' : 'bg-white/15 hover:bg-white/25 text-white'
+                cameraOff ? 'bg-[#ffffff] text-[#0f172a]' : 'bg-white/15 hover:bg-white/25 text-white'
               }`}
             >
               {cameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}

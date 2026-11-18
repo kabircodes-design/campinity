@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import { auth } from '../firebase/firebase.js'
 import { REPORT_REASONS, submitReport } from '../firebase/reportService.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * One reusable modal for every target type — matches "prefer a clean
@@ -14,6 +15,8 @@ import { REPORT_REASONS, submitReport } from '../firebase/reportService.js'
  * targetId={post.id} targetOwnerUid={post.userId} />
  */
 export default function ReportModal({ open, onClose, targetType, targetId, targetOwnerUid }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   const [reason, setReason] = useState(null)
   const [details, setDetails] = useState('')
   const [step, setStep] = useState('reason') // 'reason' | 'details' | 'submitting' | 'done'

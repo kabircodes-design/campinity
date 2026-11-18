@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Check, ShieldCheck } from 'lucide-react'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * Contextual, feature-specific gate — distinct from the existing
@@ -29,6 +30,8 @@ const MESSAGES = {
 }
 
 export default function VerificationGate({ open, onClose, feature }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   const navigate = useNavigate()
   if (!open) return null
 

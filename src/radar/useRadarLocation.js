@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Geolocation } from '@capacitor/geolocation'
-import { maybeUpdateMyLocation, disableRadarVisibility } from './radarLocationService.js'
+import { maybeUpdateMyLocation, disableRadarVisibility, SECURE_RADAR } from './radarLocationService.js'
 
 const POSITION_OPTIONS = { enableHighAccuracy: true, maximumAge: 60000, timeout: 12000 }
 const UNAVAILABLE_MESSAGE = "Couldn't find your location. Make sure Location is turned on for your device, then try again."
@@ -64,7 +64,8 @@ export function useRadarLocation(uid, enabled) {
       setError('')
 
       try {
-        lastWriteRef.current = await maybeUpdateMyLocation(uid, position.coords, lastWriteRef.current)
+        // Secure mode: the radarNearby function stores the position itself.
+        if (!SECURE_RADAR) lastWriteRef.current = await maybeUpdateMyLocation(uid, position.coords, lastWriteRef.current)
       } catch (err) {
         // A failed write shouldn't block the rest of Radar — the
         // campus pool (radarService.js) doesn't depend on this at
@@ -120,8 +121,10 @@ export function useRadarLocation(uid, enabled) {
   // Disabling Radar removes the location document entirely, per "a
   // user who disables Radar should not appear to others" — not just
   // stopping the watcher, actually un-listing them.
+  // `enabled === null` means "preference still loading" — neither start
+  // the watcher nor delete anything until the saved choice is known.
   useEffect(() => {
-    if (enabled || !uid) return
+    if (enabled !== false || !uid) return
     disableRadarVisibility(uid).catch(() => {})
   }, [enabled, uid])
 

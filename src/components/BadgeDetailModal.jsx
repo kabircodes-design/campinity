@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { BADGE_CATEGORY_LABELS } from '../gamification/config.js'
 import { formatTimeAgo } from '../firebase/postService.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * One shared detail view for any badge — earned or locked — reused by
@@ -9,6 +10,8 @@ import { formatTimeAgo } from '../firebase/postService.js'
  * story is told the exact same way everywhere a badge appears.
  */
 export default function BadgeDetailModal({ open, onClose, badge, earnedAt, progress }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   if (!open || !badge) return null
 
   const isEarned = Boolean(earnedAt)

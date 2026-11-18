@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { BarChart3, Clock, FileText, Image as ImageIcon, Plus, X } from 'lucide-react'
+import { BarChart3, Clock, Eye, EyeOff, FileText, Image as ImageIcon, Plus, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
+import MentionText from '../components/MentionText.jsx'
 import Switch from '../components/Switch.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile } from '../firebase/profileService.js'
@@ -43,6 +44,9 @@ const EXPIRATION_OPTIONS = [
 ]
 
 const MAX_LENGTH = 500
+// Photos: common camera/screenshot formats, up to 10 MB (larger files upload slowly on mobile data).
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif']
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
 function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`
@@ -56,7 +60,8 @@ export default function CreatePostPage() {
   const preselectedCommunityId = location.state?.communityId || null
   const preselectedChannelId = location.state?.channelId || null
   const verified = useMyVerification()
-  const { startPosting, markSuccess, markError } = usePostingStatus()
+  const { startPosting, updatePostingMessage, markSuccess, markError } = usePostingStatus()
+  const [showPreview, setShowPreview] = useState(false)
   const imageInputRef = useRef(null)
   const pdfInputRef = useRef(null)
 
@@ -255,6 +260,16 @@ export default function CreatePostPage() {
   const handleImageChange = (event) => {
     const file = event.target.files?.[0]
     if (!file) return
+    if (file.type && !IMAGE_TYPES.includes(file.type)) {
+      setError('That file type isn’t supported. Use a JPG, PNG, WebP, GIF or HEIC photo.')
+      if (imageInputRef.current) imageInputRef.current.value = ''
+      return
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError(`That photo is ${(file.size / 1024 / 1024).toFixed(1)} MB — the limit is 10 MB.`)
+      if (imageInputRef.current) imageInputRef.current.value = ''
+      return
+    }
     setImageFile(file)
     setImagePreviewUrl(URL.createObjectURL(file))
     setError('')
@@ -377,7 +392,9 @@ export default function CreatePostPage() {
     try {
       let imageUrl = null
       if (publishData.imageFile) {
-        imageUrl = await uploadPostImage(publishData.uid, publishData.imageFile)
+        imageUrl = await uploadPostImage(publishData.uid, publishData.imageFile, {
+          onProgress: (pct) => updatePostingMessage(pct < 100 ? `Uploading photo… ${pct}%` : 'Posting…')
+        })
       }
 
       let fileData = null
@@ -710,6 +727,11 @@ export default function CreatePostPage() {
               }}
               onKeyDown={(event) => {
                 handleMentionKeyDown(event)
+                // Ctrl/⌘ + Enter publishes (when the mention picker didn't consume the key).
+                if (!event.defaultPrevented && event.key === 'Enter' && (event.ctrlKey || event.metaKey) && isValid && !isPublishing) {
+                  event.preventDefault()
+                  handlePublish()
+                }
               }}
               placeholder={
                 lockedCommunity
@@ -720,8 +742,8 @@ export default function CreatePostPage() {
               }
               className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 lg:px-5 lg:py-4 lg:min-h-[180px] text-[15px] lg:text-base text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
             />
-            <p className="mt-1 text-right text-xs text-gray-400">
-              {postText.length}/{MAX_LENGTH}
+            <p className={`mt-1 text-right text-xs tabular-nums ${postText.length >= MAX_LENGTH ? 'text-red-600 font-semibold' : postText.length >= MAX_LENGTH * 0.9 ? 'text-amber-600' : 'text-gray-400'}`} aria-live="polite">
+              {postText.length >= MAX_LENGTH * 0.9 ? `${MAX_LENGTH - postText.length} left` : `${postText.length}/${MAX_LENGTH}`}
             </p>
             {mentionQuery !== null && (
               <MentionSuggestions
@@ -953,6 +975,48 @@ export default function CreatePostPage() {
           </div>
           </div>
 
+          {showPreview && (
+            <section aria-label="Post preview" className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+              <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Preview</p>
+              <div className="rounded-2xl bg-white border border-gray-100 p-4">
+                <div className="flex items-center gap-3">
+                  <Avatar
+                    initials={isAnonymous ? '?' : initials}
+                    colorClass={isAnonymous ? 'from-gray-400 to-gray-500' : getAvatarColor(auth.currentUser?.uid || displayName)}
+                    size="sm"
+                    src={isAnonymous ? undefined : getProfileIdentityImage(profile) || undefined}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{isAnonymous ? 'Anonymous' : displayName}</p>
+                    <p className="text-[11.5px] text-gray-400 truncate">
+                      just now · {categoryLabels[category] || 'Post'}
+                      {postTarget !== 'public' ? ` · ${myCommunities.find((c) => c.id === postTarget)?.name || 'Community'}` : ''}
+                    </p>
+                  </div>
+                </div>
+                {postText.trim() ? <MentionText text={postText} className="mt-3 block text-[15px] leading-relaxed text-gray-800 whitespace-pre-line break-words" /> : <p className="mt-3 text-sm text-gray-400">Your text will appear here.</p>}
+                {imagePreviewUrl && <img src={imagePreviewUrl} alt="" className="mt-3 w-full max-h-72 rounded-xl object-cover" />}
+                {pdfFile && (
+                  <p className="mt-3 flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-[13px] text-gray-700">
+                    <FileText className="w-4 h-4 text-blue-600" /> {pdfFile.name}
+                  </p>
+                )}
+                {pollEnabled && pollQuestion.trim() && (
+                  <div className="mt-3 rounded-xl border border-gray-100 p-3">
+                    <p className="text-sm font-semibold text-gray-900">{pollQuestion.trim()}</p>
+                    <div className="mt-2 space-y-1.5">
+                      {pollOptions.filter((o) => o.trim()).map((o, i) => (
+                        <p key={i} className="rounded-lg border border-gray-200 px-3 py-1.5 text-[13px] text-gray-700">
+                          {o.trim()}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
           {error && (
             <p role="alert" className="rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3">
               {error}
@@ -960,6 +1024,16 @@ export default function CreatePostPage() {
           )}
 
           <div className="flex items-center gap-3 pt-1 lg:justify-end">
+            <button
+              type="button"
+              onClick={() => setShowPreview((v) => !v)}
+              aria-pressed={showPreview}
+              className="flex-shrink-0 w-11 h-11 lg:w-auto lg:h-auto lg:px-5 lg:py-3 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold hover:border-gray-300 inline-flex items-center justify-center gap-2 transition-all duration-300"
+              aria-label={showPreview ? 'Hide preview' : 'Show preview'}
+            >
+              {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              <span className="hidden lg:inline">{showPreview ? 'Hide preview' : 'Preview'}</span>
+            </button>
             <button
               type="button"
               onClick={() => navigate('/home')}

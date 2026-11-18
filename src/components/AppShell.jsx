@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Bell, Radar } from 'lucide-react'
 import DesktopSidebar from './DesktopSidebar.jsx'
@@ -11,6 +11,8 @@ import { auth } from '../firebase/firebase.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
 import { subscribeToUnreadChatsCount } from '../firebase/chatService.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import { getMainTabIndex } from '../navigation/mainTabs.js'
+import { useTabSwipe } from '../navigation/useTabSwipe.js'
 
 /**
  * The persistent app shell — sidebar, global header and bottom nav are
@@ -46,6 +48,26 @@ export default function AppShell() {
   // icon only lives on its Home tab, not every screen. Desktop is
   // unaffected (DesktopSidebar already covers navigation everywhere).
   const isHome = location.pathname === '/home'
+
+  // Horizontal swipe between the main tabs — one shared mechanism for
+  // every tab page (see useTabSwipe.js). The ref goes on the stable
+  // slot below, not the keyed wrapper inside it, which remounts on
+  // every navigation.
+  const swipeRef = useTabSwipe()
+
+  // Entrance animation for the incoming page, decided once per
+  // navigation: moving between two main tabs (swipe, bottom-nav tap or
+  // Android back) slides in from the side it came from; everything else
+  // keeps the existing short fade-up. Held in a ref keyed by pathname so
+  // later re-renders of the same page never restart the animation.
+  const pageAnimRef = useRef({ path: location.pathname, name: 'campinity-fade-up' })
+  if (pageAnimRef.current.path !== location.pathname) {
+    const from = getMainTabIndex(pageAnimRef.current.path)
+    const to = getMainTabIndex(location.pathname)
+    const name =
+      from !== -1 && to !== -1 ? (to > from ? 'campinity-tab-in-next' : 'campinity-tab-in-prev') : 'campinity-fade-up'
+    pageAnimRef.current = { path: location.pathname, name }
+  }
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
@@ -149,7 +171,7 @@ export default function AppShell() {
             </div>
           </header>
 
-          <div className="flex-1 min-h-0">
+          <div ref={swipeRef} className="flex-1 min-h-0">
             <Suspense
               fallback={
                 <div className="h-full flex items-center justify-center">
@@ -158,10 +180,18 @@ export default function AppShell() {
               }
             >
               {/* Keyed by pathname so switching between shell pages
-                  retriggers a short, subtle fade — the sidebar/header
+                  retriggers a short, subtle entrance — the sidebar/header
                   above never re-render because of this key, only this
-                  wrapper and whatever Outlet renders inside it. */}
-              <div key={location.pathname} className="h-full [animation:campinity-fade-up_0.2s_ease-out_both]">
+                  wrapper and whatever Outlet renders inside it.
+                  fill-mode is 'backwards' (not 'both') on purpose: once
+                  the animation ends no transform remains on this
+                  wrapper, so position:fixed elements inside a page stay
+                  fixed to the screen rather than to this box. */}
+              <div
+                key={location.pathname}
+                className="h-full"
+                style={{ animation: `${pageAnimRef.current.name} 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards` }}
+              >
                 <Outlet />
               </div>
             </Suspense>
@@ -169,9 +199,15 @@ export default function AppShell() {
         </div>
       </div>
 
-      <div className="lg:hidden">
-        <BottomNav />
-      </div>
+      {/* The post page has its own fixed comment composer at the bottom
+          of the screen; the tab bar (and floating +) would sit on top of
+          it, so it is hidden there, as on other social apps' comment
+          screens. Back returns to the tabbed screen. */}
+      {!/^\/post\//.test(location.pathname) && (
+        <div className="lg:hidden">
+          <BottomNav />
+        </div>
+      )}
 
       <BadgeUnlockToast uid={auth.currentUser?.uid} />
       <VerifiedAchievementUnlockToast uid={auth.currentUser?.uid} />

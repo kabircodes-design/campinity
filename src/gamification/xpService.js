@@ -20,7 +20,8 @@ import {
   getLevelStepXP,
   STREAK_REWARDS,
   CONTRIBUTION_ACTIVITY_TYPES,
-  REPUTATION_CATEGORY_LABELS
+  REPUTATION_CATEGORY_LABELS,
+  BADGES
 } from './config.js'
 import { createLevelUpNotification, createStreakNotification } from '../firebase/notificationService.js'
 
@@ -278,10 +279,14 @@ async function buildDisplayProgress(uid, raw) {
     streak: raw.currentStreak || 0,
     longestStreak: raw.longestStreak || 0,
     reputation: raw.reputationScore || 0,
-    // badgeCount is denormalized by awardBadge() going forward; older
-    // progress docs (or any drift) fall back to the live subcollection
-    // count rather than showing a stale/missing number.
-    totalBadges: raw.badgeCount ?? badgesSnap.size,
+    // The live count of earned-badge documents (badges that still exist
+    // in BADGES), i.e. exactly what Campus Rank's achievement list and the
+    // Badges page show. Not raw.badgeCount: that denormalized counter only
+    // started being incremented by awardBadge() on 2026-09-21, so badges
+    // earned before then are missing from it, and its increment failures
+    // are swallowed. badgeCount itself is left as is (the leaderboard's
+    // Badges metric still reads it); no stored data is changed here.
+    totalBadges: badgesSnap.docs.filter((d) => BADGES[d.id]).length,
     contributionsCount: raw.contributionsCount || 0,
     verifiedCampus: Boolean(raw.verifiedCampus),
     collegeId: raw.collegeId || null,

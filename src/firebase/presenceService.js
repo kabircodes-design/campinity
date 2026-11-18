@@ -1,4 +1,4 @@
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db } from './firebase.js'
 
 /**
@@ -24,9 +24,36 @@ export const HEARTBEAT_INTERVAL_MS = 30 * 1000
 export const ONLINE_WINDOW_MS = 45 * 1000 // > heartbeat interval, so one missed tick doesn't flicker offline
 const RECENT_WINDOW_MS = 5 * 60 * 1000
 
+/**
+ * Secure presence (prepared, OFF by default): with VITE_SECURE_PRESENCE
+ * set to 'true', the heartbeat goes to presence/{uid} instead of the
+ * public users/{uid} doc. presence/{uid} is only readable by signed-in
+ * users who are not blocked in either direction and only while the
+ * owner shows their activity — enforced by firestore.rules
+ * (match /presence/{uid}). Turn the flag on only AFTER those rules are
+ * deployed; until then the existing users-doc path keeps working.
+ */
+export const SECURE_PRESENCE = import.meta.env.VITE_SECURE_PRESENCE === 'true'
+
 export async function touchPresence(uid) {
   if (!uid) return
-  await setDoc(doc(db, 'users', uid), { lastActiveAt: serverTimestamp() }, { merge: true }).catch(() => {})
+  const target = SECURE_PRESENCE ? doc(db, 'presence', uid) : doc(db, 'users', uid)
+  await setDoc(target, { lastActiveAt: serverTimestamp() }, { merge: true }).catch(() => {})
+}
+
+/**
+ * "Show activity status" switch. Off: the heartbeat stops (useAuthUser)
+ * and the last stored timestamp is cleared, so nothing — not even the
+ * moment you switched it off — stays readable. Reciprocal, like other
+ * messengers: while yours is hidden you don't see other people's either.
+ */
+export async function setActivityStatusVisible(uid, visible) {
+  if (!uid) return
+  const profileUpdate = visible ? { activityStatusVisible: true } : { activityStatusVisible: false, lastActiveAt: null }
+  await setDoc(doc(db, 'users', uid), profileUpdate, { merge: true })
+  if (SECURE_PRESENCE) {
+    await setDoc(doc(db, 'presence', uid), visible ? { visible: true } : { visible: false, lastActiveAt: null }, { merge: true })
+  }
 }
 
 /** true/false/null (null = no presence data at all, e.g. never signed in since this feature shipped). */
@@ -48,4 +75,61 @@ export function presenceLabel(profile) {
   if (hours < 24) return `Last seen ${hours}h ago`
   const days = Math.round(hours / 24)
   return `Last seen ${days}d ago`
+}
+
+/**
+ * Presence for chat surfaces, from the same heartbeat (lastActiveAt).
+ * Deliberately coarse — the heartbeat is every 30s, so nothing finer
+ * than minutes is claimed:
+ *   < 45s           "Active now"        (online)
+ *   < 5 min         "Active recently"
+ *   < 60 min        "Active 12 min ago"
+ *   same day        "Active today"
+ *   previous day    "Active yesterday"
+ *   < 7 days        "Active Mon"
+ *   older           "Active 3 Nov"
+ *   no data         null  (show nothing rather than a guess)
+ */
+export function formatPresence(lastActiveMs, now = Date.now()) {
+  if (!lastActiveMs) return { online: false, label: null }
+  const diff = now - lastActiveMs
+  if (diff < ONLINE_WINDOW_MS) return { online: true, label: 'Active now' }
+  if (diff < RECENT_WINDOW_MS) return { online: false, label: 'Active recently' }
+  if (diff < 60 * 60 * 1000) return { online: false, label: `Active ${Math.floor(diff / 60000)} min ago` }
+  const then = new Date(lastActiveMs)
+  const today = new Date(now)
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+  if (lastActiveMs >= startOfToday) return { online: false, label: 'Active today' }
+  if (lastActiveMs >= startOfToday - 24 * 60 * 60 * 1000) return { online: false, label: 'Active yesterday' }
+  if (lastActiveMs >= startOfToday - 6 * 24 * 60 * 60 * 1000) {
+    return { online: false, label: `Active ${then.toLocaleDateString(undefined, { weekday: 'short' })}` }
+  }
+  return { online: false, label: `Active ${then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` }
+}
+
+/**
+ * Live presence for one user: { lastActiveMs, visible }. Hidden (their
+ * own setting) and unreadable (secure rules: blocked either way) both
+ * come back as no presence at all — never a guess.
+ */
+export function subscribeToPresence(uid, onChange) {
+  if (!uid) return () => {}
+  if (SECURE_PRESENCE) {
+    return onSnapshot(
+      doc(db, 'presence', uid),
+      (snap) => {
+        const data = snap.exists() ? snap.data() : null
+        onChange({ lastActiveMs: data?.lastActiveAt?.toMillis?.() ?? null, visible: data ? data.visible !== false : true })
+      },
+      () => onChange({ lastActiveMs: null, visible: false })
+    )
+  }
+  return onSnapshot(
+    doc(db, 'users', uid),
+    (snap) => {
+      const data = snap.exists() ? snap.data() : null
+      onChange({ lastActiveMs: data?.lastActiveAt?.toMillis?.() ?? null, visible: data ? data.activityStatusVisible !== false : true })
+    },
+    () => onChange({ lastActiveMs: null, visible: false })
+  )
 }

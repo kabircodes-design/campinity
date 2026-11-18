@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Flame, Gem, Sparkles, Trophy } from 'lucide-react'
 import BottomNav from '../components/BottomNav.jsx'
 import { auth } from '../firebase/firebase.js'
 import { useProgress } from '../gamification/useProgress.js'
 import { getRecentXPEntries } from '../gamification/xpService.js'
-import { ACTIVITY_LABELS, XP_REWARDS } from '../gamification/config.js'
+import { getEarnedBadges } from '../gamification/badgeService.js'
+import { ACTIVITY_LABELS, BADGES, XP_REWARDS } from '../gamification/config.js'
 import { formatTimeAgo } from '../firebase/postService.js'
 
 function groupByDay(entries) {
@@ -55,12 +56,31 @@ export default function ProgressPage() {
     }
   }, [uid])
 
+  // Earned achievements — the same userBadges data the Badges page
+  // reads; only badges that still exist in config are shown.
+  const [earnedBadges, setEarnedBadges] = useState(null)
+  useEffect(() => {
+    if (!uid) return undefined
+    let cancelled = false
+    getEarnedBadges(uid)
+      .then((rows) => {
+        if (!cancelled) setEarnedBadges(rows.filter((row) => BADGES[row.badgeId]))
+      })
+      .catch(() => {
+        if (!cancelled) setEarnedBadges([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [uid])
+
   const loading = progressLoading || entries === null
   const grouped = useMemo(() => (entries ? groupByDay(entries) : []), [entries])
 
   const xpIntoLevel = Math.max(0, progress?.currentLevelXp || 0)
   const xpForLevel = Math.max(1, progress?.nextLevelXp || 1)
   const progressPct = Math.min(100, Math.round((xpIntoLevel / xpForLevel) * 100))
+  const xpRemaining = Math.max(0, xpForLevel - xpIntoLevel)
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
@@ -75,7 +95,15 @@ export default function ProgressPage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900">Your Progress</span>
+            <span className="flex-1 text-base font-bold tracking-tight text-gray-900">Campus Rank</span>
+            <button
+              type="button"
+              aria-label="Leaderboard"
+              onClick={() => navigate('/leaderboard')}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-amber-500 hover:bg-amber-50 transition-all duration-300"
+            >
+              <Trophy className="w-5 h-5" />
+            </button>
           </div>
         </header>
 
@@ -87,21 +115,130 @@ export default function ProgressPage() {
             </div>
           ) : (
             <>
-              <div className="rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-5 text-white">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">{progress.levelEmoji}</span>
-                  <div>
-                    <p className="text-lg font-bold">Level {progress.level}</p>
-                    <p className="text-xs text-white/70">{progress.levelTitle}</p>
-                  </div>
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 px-5 pt-6 pb-5 text-white text-center shadow-lg shadow-blue-600/20">
+                <div className="absolute -top-12 -right-10 w-44 h-44 rounded-full bg-white/10 blur-2xl pointer-events-none" aria-hidden="true" />
+                <div className="absolute -bottom-14 -left-10 w-44 h-44 rounded-full bg-white/10 blur-2xl pointer-events-none" aria-hidden="true" />
+                <div className="relative mx-auto w-16 h-16 rounded-2xl bg-white/15 flex items-center justify-center">
+                  <Trophy className="w-8 h-8 text-amber-300" strokeWidth={1.8} />
                 </div>
-                <div className="mt-3 h-2 rounded-full bg-white/20 overflow-hidden">
-                  <div className="h-full rounded-full bg-white transition-all duration-500" style={{ width: `${progressPct}%` }} />
-                </div>
-                <p className="mt-1.5 text-xs text-white/70">
-                  {xpIntoLevel} / {xpForLevel} XP to Level {progress.level + 1}
+                <p className="relative mt-3 text-[28px] font-bold leading-none tracking-tight">Level {progress.level}</p>
+                <p className="relative mt-1.5 text-sm font-semibold text-white/85">
+                  {progress.levelTitle} {progress.levelEmoji}
                 </p>
+                <div
+                  className="relative mt-4 h-2.5 rounded-full bg-white/20 overflow-hidden"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={xpForLevel}
+                  aria-valuenow={xpIntoLevel}
+                  aria-label={`XP towards level ${progress.level + 1}`}
+                >
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-amber-300 to-white transition-all duration-500"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+                <div className="relative mt-2 flex items-center justify-between text-xs text-white/80">
+                  <span>
+                    {xpIntoLevel} / {xpForLevel} XP
+                  </span>
+                  <span>
+                    {xpRemaining} XP to Level {progress.level + 1}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/leaderboard')}
+                  className="relative mt-4 w-full flex items-center justify-between rounded-2xl bg-white/10 hover:bg-white/20 px-4 py-2.5 text-left transition-colors duration-200"
+                >
+                  <span>
+                    <span className="block text-[11px] text-white/70">Campus Rank</span>
+                    <span className="block text-base font-bold leading-tight">{progress.rank ? `#${progress.rank}` : '—'}</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold">
+                    View Leaderboard
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
+                </button>
               </div>
+
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                <div className="rounded-2xl border border-gray-100 bg-white px-2 py-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                  <Flame className="w-5 h-5 mx-auto text-orange-500" />
+                  <p className="mt-1.5 text-sm font-bold text-gray-900">{progress.streak ?? 0}</p>
+                  <p className="text-[10px] text-gray-400">Streak</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/badges')}
+                  className="rounded-2xl border border-gray-100 bg-white px-2 py-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-blue-100 transition-colors duration-200"
+                >
+                  <Trophy className="w-5 h-5 mx-auto text-amber-500" />
+                  <p className="mt-1.5 text-sm font-bold text-gray-900">{progress.totalBadges ?? 0}</p>
+                  <p className="text-[10px] text-gray-400">Badges</p>
+                </button>
+                <div className="rounded-2xl border border-gray-100 bg-white px-2 py-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                  <Gem className="w-5 h-5 mx-auto text-cyan-500" />
+                  <p className="mt-1.5 text-sm font-bold text-gray-900">{progress.campusPoints ?? 0}</p>
+                  <p className="text-[10px] text-gray-400">Points</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/reputation')}
+                  className="rounded-2xl border border-gray-100 bg-white px-2 py-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-blue-100 transition-colors duration-200"
+                >
+                  <Sparkles className="w-5 h-5 mx-auto text-violet-500" />
+                  <p className="mt-1.5 text-sm font-bold text-gray-900">{progress.reputation ?? 0}</p>
+                  <p className="text-[10px] text-gray-400">Reputation</p>
+                </button>
+              </div>
+
+              <div className="mt-6 flex items-center justify-between">
+                <p className="text-base font-bold text-gray-900">Achievements</p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/badges')}
+                  className="inline-flex items-center gap-0.5 text-[13px] font-semibold text-blue-600"
+                >
+                  See All
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {earnedBadges === null ? (
+                <div className="mt-2 grid grid-cols-4 gap-2 animate-pulse">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-20 rounded-2xl bg-gray-100" />
+                  ))}
+                </div>
+              ) : earnedBadges.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/badges')}
+                  className="mt-2 w-full rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-center hover:border-blue-200 transition-colors duration-200"
+                >
+                  <p className="text-sm font-semibold text-gray-900">No achievements yet</p>
+                  <p className="mt-0.5 text-xs text-gray-400">See what you can unlock.</p>
+                </button>
+              ) : (
+                <div className="mt-2 grid grid-cols-4 gap-2">
+                  {earnedBadges.slice(0, 4).map((row) => {
+                    const badge = BADGES[row.badgeId]
+                    return (
+                      <button
+                        key={row.badgeId}
+                        type="button"
+                        onClick={() => navigate('/badges')}
+                        className="rounded-2xl border border-gray-100 bg-white px-1.5 py-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-blue-100 transition-colors duration-200"
+                      >
+                        <span className="block text-2xl leading-none" aria-hidden="true">
+                          {badge.emoji}
+                        </span>
+                        <span className="mt-1.5 block text-[10px] font-semibold text-gray-700 leading-tight line-clamp-2">{badge.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
 
               <p className="mt-6 text-[11px] font-bold uppercase tracking-wide text-gray-400">Ways to earn XP</p>
               <div className="mt-2 grid grid-cols-2 gap-2">

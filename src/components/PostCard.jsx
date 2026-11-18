@@ -6,7 +6,6 @@ import { useOpenDocument } from '../hooks/useOpenDocument.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
 import {
-  Bookmark,
   CalendarDays,
   Clock,
   FileText,
@@ -18,12 +17,12 @@ import {
   MoreHorizontal,
   PackageSearch,
   Pin,
-  Share,
   ShoppingBag,
   Users
 } from 'lucide-react'
 import { getDisplayFileName } from '../utils/postFile.js'
 import Avatar from './Avatar.jsx'
+import PostActionButton from './post/PostActionButton.jsx'
 import MentionText from './MentionText.jsx'
 import PostPoll from './PostPoll.jsx'
 import VerifiedBadge from './VerifiedBadge.jsx'
@@ -34,6 +33,7 @@ import { subscribeToIsItemSaved } from '../saved/savedService.js'
 import { postTypeConfig } from '../data/dummyFeed.js'
 import { auth } from '../firebase/firebase.js'
 import { likePost, unlikePost, subscribeToPostShareCount, deletePost, editPost, pinPost, unpinPost } from '../firebase/engagementService.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * 'general' and 'study' were added for Feature 4B (Create Post) — every
@@ -94,6 +94,8 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
   const [menuOpen, setMenuOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  useBackToClose(menuOpen, () => setMenuOpen(false))
+  useBackToClose(confirmingDelete, () => setConfirmingDelete(false))
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [isDeleted, setIsDeleted] = useState(false)
@@ -416,7 +418,9 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
               apps' own actual feed behavior: the photo itself isn't a
               single-tap navigation target, avoiding a click-delay hack
               that would otherwise make every single tap feel slower). */}
-          {post.imageUrl && <PostImage src={post.imageUrl} onDoubleTapLike={handleDoubleTapLike} />}
+          {(post.imageUrl || post.imagePreviewUrl) && (
+            <PostImage src={post.imageUrl || post.imagePreviewUrl} onDoubleTapLike={handleDoubleTapLike} />
+          )}
           {post.poll && <PostPoll postId={post.id} poll={post.poll} />}
         </>
       )}
@@ -528,47 +532,22 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
         </div>
       )}
 
-      <div className="flex items-center gap-5 px-4 lg:px-6 py-3 mt-1">
-        <button
-          type="button"
+      <div className="flex items-center gap-1 px-2 lg:px-4 py-1.5 mt-1">
+        <PostActionButton
+          action="like"
+          active={liked}
+          showLabel={false}
+          label={liked ? 'Unlike' : 'Like'}
+          count={likeCount}
           onClick={toggleLike}
-          aria-pressed={liked}
-          className={`flex items-center gap-1.5 text-xs font-medium transition-all duration-300 ${
-            liked ? 'text-red-500 dark:text-red-400' : 'text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400'
-          }`}
-        >
-          <Heart
-            className={`w-[18px] h-[18px] transition-transform duration-300 ${justLiked ? 'scale-125' : 'scale-100'}`}
-            fill={liked ? 'currentColor' : 'none'}
-          />
-          {likeCount}
-        </button>
-        <button
-          type="button"
-          onClick={goToPost}
-          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-all duration-300"
-        >
-          <MessageCircle className="w-[18px] h-[18px]" />
-          {post.comments}
-        </button>
-        <button
-          type="button"
-          onClick={handleShare}
-          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-all duration-300 ml-auto"
-        >
-          <Share className="w-[18px] h-[18px]" />
-          Share
+          className="px-2"
+          iconClassName={`transition-transform duration-300 ${justLiked ? 'scale-125' : 'scale-100'}`}
+        />
+        <PostActionButton action="comment" showLabel={false} label="Comments" count={post.comments} onClick={goToPost} className="px-2" />
+        <PostActionButton action="share" label="Share" onClick={handleShare} className="px-2 ml-auto">
           {isOwner && shareCount > 0 && <span className="text-gray-400 dark:text-gray-500">· {shareCount}</span>}
-        </button>
-        <button
-          type="button"
-          onClick={() => setSaveSheetOpen(true)}
-          aria-label={isSaved ? 'Saved' : 'Save'}
-          aria-pressed={isSaved}
-          className={`flex items-center transition-all duration-300 ${isSaved ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400'}`}
-        >
-          <Bookmark className="w-[18px] h-[18px]" fill={isSaved ? 'currentColor' : 'none'} />
-        </button>
+        </PostActionButton>
+        <PostActionButton action="save" active={isSaved} showLabel={false} label={isSaved ? 'Saved' : 'Save'} onClick={() => setSaveSheetOpen(true)} className="w-10" />
       </div>
 
       <ShareBottomSheet

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Flame, X } from 'lucide-react'
 import { getRecentActivityDates } from '../gamification/xpService.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
@@ -12,6 +13,8 @@ const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
  * modals getting trapped behind BottomNav inside SwipeablePage.
  */
 export default function StreakDetailModal({ open, onClose, uid, streak, longestStreak }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   const [activeDates, setActiveDates] = useState(null)
 
   useEffect(() => {

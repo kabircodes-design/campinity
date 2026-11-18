@@ -26,6 +26,7 @@ import ChatListPanel from '../components/ChatListPanel.jsx'
 import MessageBubble from '../components/MessageBubble.jsx'
 import MessageInput from '../components/MessageInput.jsx'
 import TypingIndicator from '../components/TypingIndicator.jsx'
+import GroupSenderLabel from '../components/GroupSenderLabel.jsx'
 import ReportModal from '../components/ReportModal.jsx'
 import ChatMediaModal from '../components/ChatMediaModal.jsx'
 import Loader from '../auth/components/Loader.jsx'
@@ -45,7 +46,7 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { subscribeToUnreadCount } from '../firebase/notificationService.js'
-import { isOnline, presenceLabel } from '../firebase/presenceService.js'
+import { usePresence } from '../hooks/usePresence.js'
 import { blockUser } from '../firebase/blockService.js'
 import { useChat } from '../hooks/useChat.js'
 import { useMessages } from '../hooks/useMessages.js'
@@ -335,7 +336,11 @@ export default function ChatPage() {
   const isPending = chat?.status === 'pending'
   const isMyRequest = isPending && chat?.requestedBy === currentUid
   const pendingLimitReached = isMyRequest && (chat?.pendingMessageCount || 0) >= 1
-  const otherOnline = !isGroup && isOnline(otherProfile)
+  // Live presence (listener + 30s re-check). otherProfile itself is a
+  // one-time fetch, so reading lastActiveAt from it froze the header on
+  // whatever status the person had when the chat was opened.
+  const otherPresence = usePresence(otherUid, { enabled: !isGroup && Boolean(otherUid) })
+  const otherOnline = otherPresence.online
 
   // Same "unread" definition as ChatCard.jsx/subscribeToUnreadChatsCount
   // — derived from listAllChats (this page's own existing
@@ -627,9 +632,11 @@ export default function ChatPage() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
-                          <p className={`text-[11px] truncate ${otherOnline ? 'text-emerald-600' : 'text-gray-400'}`}>
-                            {presenceLabel(otherProfile)}
-                          </p>
+                          {otherPresence.label && (
+                            <p className={`text-[11px] truncate ${otherOnline ? 'text-emerald-600 font-medium' : 'text-gray-400'}`}>
+                              {otherPresence.label}
+                            </p>
+                          )}
                         </div>
                       </button>
                       <button
@@ -799,9 +806,27 @@ export default function ChatPage() {
                 {messagesError && <p className="text-center text-xs text-red-500">{messagesError}</p>}
 
                 {groupedMessages.length === 0 ? (
-                  <p className="py-12 text-center text-sm text-gray-400">Say hello 👋</p>
+                  <div className="py-12 flex flex-col items-center text-center">
+                    {isGroup ? (
+                      <span className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center text-2xl font-bold">
+                        {getInitials(chat?.groupName || 'Group')}
+                      </span>
+                    ) : (
+                      <Avatar
+                        initials={getInitials(displayName)}
+                        colorClass={getAvatarColor(otherUid || chatId)}
+                        size="xl"
+                        src={getProfileIdentityImage(otherProfile) || undefined}
+                      />
+                    )}
+                    <p className="mt-3 text-base font-bold text-gray-900">{isGroup ? chat?.groupName || 'Group chat' : displayName}</p>
+                    {!isGroup && otherProfile?.username && <p className="text-[13px] text-gray-500">@{otherProfile.username}</p>}
+                    <p className="mt-3 text-sm text-gray-500 max-w-[260px] leading-relaxed">
+                      {isGroup ? 'Say hello to the group 👋' : 'No messages yet. Say hello 👋'}
+                    </p>
+                  </div>
                 ) : (
-                  groupedMessages.map((item) =>
+                  groupedMessages.map((item, index) =>
                     item.type === 'separator' ? (
                       <div key={item.id} className="flex items-center justify-center py-2">
                         <span className="text-[11px] font-medium text-gray-500 bg-gray-100 rounded-full px-3 py-1">
@@ -809,8 +834,14 @@ export default function ChatPage() {
                         </span>
                       </div>
                     ) : (
+                      <div key={item.id} className="space-y-1">
+                      {isGroup &&
+                        item.message.senderId !== currentUid &&
+                        item.message.type !== 'call' &&
+                        (groupedMessages[index - 1]?.type !== 'message' || groupedMessages[index - 1]?.message?.senderId !== item.message.senderId) && (
+                          <GroupSenderLabel uid={item.message.senderId} />
+                        )}
                       <MessageBubble
-                        key={item.id}
                         message={item.message}
                         isMine={item.message.senderId === currentUid}
                         currentUid={currentUid}
@@ -823,6 +854,7 @@ export default function ChatPage() {
                         onJumpToMessage={handleJumpToMessage}
                         highlighted={highlightedMessageId === item.message.id}
                       />
+                      </div>
                     )
                   )
                 )}
@@ -848,7 +880,7 @@ export default function ChatPage() {
                 otherPhotoUrl={!isGroup ? getProfileIdentityImage(otherProfile) : undefined}
               />
 
-              <div className="flex-shrink-0 border-t border-gray-100 bg-white pb-[env(safe-area-inset-bottom)]">
+              <div className="flex-shrink-0 border-t border-gray-100 bg-white" style={{ paddingBottom: 'var(--app-safe-bottom, env(safe-area-inset-bottom))' }}>
                 {pendingLimitReached ? (
                   <p className="px-4 py-3.5 text-center text-xs text-gray-400">
                     You've sent your message — you can reply again once they accept.

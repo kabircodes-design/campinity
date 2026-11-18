@@ -18,11 +18,17 @@ function timeAgoFromMs(ms) {
   return `${Math.floor(days / 7)}w ago`
 }
 
+function formatPrice(price) {
+  const n = Number(price)
+  if (!Number.isFinite(n)) return `₹${price}`
+  return `₹${n.toLocaleString('en-IN')}`
+}
+
 /**
- * Reusable product card used by every product grid on the Marketplace
- * (main grid, Sponsored row, From Your Campus row). Favorite toggle is
- * real — it uses the same generic savedItems system PostCard.jsx already
- * relies on (entityType: 'product'), not a fake/local-only heart.
+ * Product card used by every product grid / rail on the Marketplace.
+ * The save (heart) toggle is real — the same savedItems system PostCard
+ * uses (entityType 'product'). Tapping the card opens product detail,
+ * where contacting / messaging the seller lives.
  */
 export default function ProductCard({ product, onOpen }) {
   const uid = auth.currentUser?.uid
@@ -49,22 +55,31 @@ export default function ProductCard({ product, onOpen }) {
   }
 
   return (
-    <button
-      type="button"
+    <div
+      role="link"
+      tabIndex={0}
+      aria-label={`${product.name}, ${formatPrice(product.price)}`}
       onClick={onOpen}
-      className="group text-left rounded-2xl border border-gray-100 bg-white overflow-hidden shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:border-gray-200 hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] hover:-translate-y-[1px] transition-all duration-200"
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen?.()
+        }
+      }}
+      className="group min-w-0 cursor-pointer text-left rounded-2xl border border-gray-100 bg-white overflow-hidden shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:border-gray-200 hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] active:scale-[0.985] transition-all duration-200"
     >
-      <div className="relative aspect-square bg-gray-100">
+      <div className="relative aspect-square bg-gray-100 overflow-hidden">
         {product.imageUrl ? (
           <img
             src={product.imageUrl}
             alt={product.name}
             loading="lazy"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <ShoppingBag className="w-6 h-6 text-gray-300" />
+            <ShoppingBag className="w-7 h-7 text-gray-300" />
           </div>
         )}
 
@@ -74,41 +89,42 @@ export default function ProductCard({ product, onOpen }) {
           </span>
         )}
 
-        {uid && (
-          <span
-            role="button"
-            tabIndex={0}
-            aria-label={saved ? 'Remove from saved' : 'Save product'}
-            onClick={handleToggleSave}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') handleToggleSave(e)
-            }}
-            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/90 backdrop-blur-[2px] flex items-center justify-center shadow-sm hover:bg-white transition-all duration-150"
-          >
-            <Heart className={`w-3.5 h-3.5 ${saved ? 'fill-rose-500 text-rose-500' : 'text-gray-500'}`} />
+        {product.category && (
+          <span className="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-black/55 text-white text-[10px] font-semibold px-2 py-0.5 backdrop-blur-[2px]">
+            {product.category}
           </span>
+        )}
+
+        {uid && (
+          <button
+            type="button"
+            aria-label={saved ? 'Remove from saved' : 'Save product'}
+            aria-pressed={saved}
+            onClick={handleToggleSave}
+            className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm active:scale-90 transition-all duration-150"
+          >
+            <Heart className={`w-4 h-4 ${saved ? 'fill-rose-500 text-rose-500' : 'text-gray-600'}`} />
+          </button>
         )}
       </div>
 
       <div className="p-2.5 lg:p-3">
-        <p className="text-sm font-semibold text-gray-900 truncate">{product.name}</p>
-        <p className="text-sm font-bold text-blue-600 mt-0.5">₹{product.price}</p>
-        <div className="mt-1.5 flex items-center gap-1.5 min-w-0">
+        <p className="text-base font-bold text-gray-900 leading-tight truncate" title={formatPrice(product.price)}>{formatPrice(product.price)}</p>
+        <p className="mt-0.5 text-[13px] font-medium text-gray-700 leading-snug line-clamp-2 min-h-[2.4em] break-words">{product.name}</p>
+        <div className="mt-2 flex items-center gap-1.5 min-w-0">
           <Avatar
             initials={getInitials(product.sellerName)}
             colorClass={getAvatarColor(product.sellerId)}
-            size="sm"
+            size="xs"
             src={undefined}
           />
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] text-gray-500 truncate leading-tight">{product.sellerName}</p>
-            {product.collegeName && (
-              <p className="text-[10px] text-gray-400 truncate leading-tight">{product.collegeName}</p>
-            )}
-          </div>
-          <span className="flex-shrink-0 text-[10px] text-gray-300">{timeAgoFromMs(product.createdAtMs)}</span>
+          <p className="min-w-0 flex-1 text-[11px] text-gray-500 truncate leading-tight">
+            {product.sellerName}
+            {product.collegeName ? <span className="text-gray-400"> · {product.collegeName}</span> : null}
+          </p>
+          <span className="flex-shrink-0 text-[10px] text-gray-400">{timeAgoFromMs(product.createdAtMs)}</span>
         </div>
       </div>
-    </button>
+    </div>
   )
 }

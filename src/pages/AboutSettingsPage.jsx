@@ -26,7 +26,8 @@ export default function AboutSettingsPage() {
         <main className="px-4 py-8 text-center">
           <Logo className="w-14 h-14 mx-auto" />
           <p className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-50">Campinity</p>
-          <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Version 1.0.0 (MVP)</p>
+          <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Version {__APP_VERSION__}</p>
+          <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">Built {new Date(__BUILD_TIME__).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</p>
           <p className="mt-4 text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto leading-relaxed">
             Your campus, one place — feeds, notes, communities and people, all in one login.
           </p>

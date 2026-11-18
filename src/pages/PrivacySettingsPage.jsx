@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, ChevronRight, Star, UserX } from 'lucide-react'
+import { Activity, ArrowLeft, Check, ChevronRight, Star, UserX } from 'lucide-react'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
+import { setActivityStatusVisible } from '../firebase/presenceService.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const MESSAGE_OPTIONS = [
   { value: 'everyone', label: 'Everyone', description: 'Any signed-in student can send you a message request' },
@@ -29,6 +31,24 @@ export default function PrivacySettingsPage() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
+  const { profile: liveProfile } = useAuth()
+  const activityVisible = liveProfile ? liveProfile.activityStatusVisible !== false : null
+  const [activitySaving, setActivitySaving] = useState(false)
+
+  const toggleActivityStatus = async () => {
+    if (!currentUid || activitySaving || activityVisible === null) return
+    setActivitySaving(true)
+    try {
+      await setActivityStatusVisible(currentUid, !activityVisible)
+      setToast(!activityVisible ? 'Activity status is visible' : 'Activity status hidden')
+      window.setTimeout(() => setToast(''), 1800)
+    } catch (err) {
+      setToast(err?.message || "Couldn't update this setting.")
+      window.setTimeout(() => setToast(''), 2200)
+    } finally {
+      setActivitySaving(false)
+    }
+  }
 
   useEffect(() => {
     if (!currentUid) {
@@ -108,6 +128,35 @@ export default function PrivacySettingsPage() {
                     )}
                   </button>
                 ))}
+              </div>
+
+              <p className="px-1 pt-6 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Activity status</p>
+              <div className="rounded-2xl border border-gray-100 dark:border-white/10 px-4 py-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                    <Activity className="w-[18px] h-[18px]" strokeWidth={1.8} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-50">Show activity status</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
+                      Let people see when you're active or were last active. If you turn this off, you won't see theirs either.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={activityVisible === true}
+                    aria-label="Show activity status"
+                    disabled={activityVisible === null || activitySaving}
+                    onClick={toggleActivityStatus}
+                    className={`relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-200 disabled:opacity-60 ${activityVisible ? 'bg-blue-600' : 'bg-gray-300'}`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full shadow transition-transform duration-200 ${activityVisible ? 'translate-x-5' : ''}`}
+                      style={{ backgroundColor: '#ffffff' }}
+                    />
+                  </button>
+                </div>
               </div>
 
               <p className="px-1 pt-6 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Blocking</p>

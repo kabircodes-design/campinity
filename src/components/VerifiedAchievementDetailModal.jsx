@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom'
 import { BadgeCheck, X } from 'lucide-react'
 import { formatTimeAgo } from '../firebase/postService.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * Detail view for a Verified Campus Achievement — deliberately styled
@@ -14,6 +15,8 @@ import { formatTimeAgo } from '../firebase/postService.js'
  * verifiedAchievements).
  */
 export default function VerifiedAchievementDetailModal({ open, onClose, achievement, collegeName }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   if (!open || !achievement) return null
 
   return createPortal(

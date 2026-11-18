@@ -9,11 +9,12 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { useShareRecipients } from './useShareRecipients.js'
 import { shareContentToRecipients } from './shareService.js'
-import { getCanonicalUrl } from './shareTypes.js'
+import { copyText, getShareUrl } from './shareTypes.js'
 import ExternalShareRow from './ExternalShareRow.jsx'
 import { useMyVerification } from '../access/useMyVerification.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * Root cause of "share button pops the bottom nav, no overlay opens":
@@ -73,6 +74,8 @@ function buildRecipient(selection) {
 }
 
 export default function ShareBottomSheet({ open, onClose, referenceType, referenceId, preview }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   const currentUid = auth.currentUser?.uid
   const [currentUserProfile, setCurrentUserProfile] = useState(null)
   const verified = useMyVerification()
@@ -210,16 +213,12 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
   const handleRetry = (item) => performSend([item])
 
   const handleCopyLink = async () => {
-    const path = getCanonicalUrl(referenceType, referenceId)
-    if (!path) return
-    const url = `${window.location.origin}${path}`
-    try {
-      await navigator.clipboard.writeText(url)
-      setLinkCopied(true)
-      window.setTimeout(() => setLinkCopied(false), 1500)
-    } catch {
-      // Clipboard API unavailable on this device/context — silent no-op, ExternalShareRow's links still work independently.
-    }
+    const url = getShareUrl(referenceType, referenceId)
+    if (!url) return
+    // 'copied' only when the copy really succeeded; otherwise say so.
+    const ok = await copyText(url)
+    setLinkCopied(ok ? 'copied' : 'failed')
+    window.setTimeout(() => setLinkCopied(false), ok ? 1500 : 2500)
   }
 
   const rawList = isSearching ? searchResults : recentChats
@@ -307,7 +306,7 @@ export default function ShareBottomSheet({ open, onClose, referenceType, referen
             className="flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-300 transition-all duration-200"
           >
             <LinkIcon className="w-3.5 h-3.5" />
-            {linkCopied ? 'Copied!' : 'Copy Link'}
+            {linkCopied === 'copied' ? 'Copied!' : linkCopied === 'failed' ? "Couldn't copy" : 'Copy Link'}
           </button>
         </div>
 

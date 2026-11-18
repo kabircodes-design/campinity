@@ -1,5 +1,6 @@
 import { Mail, MessageCircle, Send as TelegramIcon, Share2 } from 'lucide-react'
-import { getCanonicalUrl } from './shareTypes.js'
+import { useEffect, useState } from 'react'
+import { canUseNativeShare as detectNativeShare, getShareUrl, getPublicAppUrl, nativeShare } from './shareTypes.js'
 
 /**
  * Native Web Share API where available (this covers Instagram,
@@ -20,20 +21,25 @@ import { getCanonicalUrl } from './shareTypes.js'
  * not a promise this code can't keep.
  */
 export default function ExternalShareRow({ referenceType, referenceId, preview }) {
-  const path = getCanonicalUrl(referenceType, referenceId)
-  const url = path ? `${window.location.origin}${path}` : window.location.href
+  const url = getShareUrl(referenceType, referenceId) || getPublicAppUrl()
   const shareText = preview?.title || 'Check this out on Campinity'
 
-  const canUseNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
-
-  const handleNativeShare = async () => {
-    try {
-      await navigator.share({ title: shareText, url })
-    } catch {
-      // User cancelled, or the share failed for another reason —
-      // either way, not an error to surface; the fallback row below
-      // is always visible for devices without native share support.
+  const [canUseNativeShare, setCanUseNativeShare] = useState(false)
+  const [shareError, setShareError] = useState('')
+  useEffect(() => {
+    let alive = true
+    detectNativeShare().then((v) => alive && setCanUseNativeShare(v))
+    return () => {
+      alive = false
     }
+  }, [])
+
+  // System share sheet (Android: Capacitor Share; browsers: Web Share
+  // API). Cancelling is silent; a real failure is shown, never hidden.
+  const handleNativeShare = async () => {
+    setShareError('')
+    const result = await nativeShare({ title: shareText, text: shareText, url })
+    if (result.error || result.unsupported) setShareError(result.error ? "Couldn't open the share sheet. Try another option." : "Sharing isn't supported here. Use Copy Link instead.")
   }
 
   const externalLinks = [
@@ -43,6 +49,7 @@ export default function ExternalShareRow({ referenceType, referenceId, preview }
   ]
 
   return (
+    <>
     <div className="px-4 pb-2 flex items-center gap-2 overflow-x-auto scroll-hidden">
       {canUseNativeShare && (
         <button
@@ -51,7 +58,7 @@ export default function ExternalShareRow({ referenceType, referenceId, preview }
           className="flex-shrink-0 flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-300 transition-all duration-200"
         >
           <Share2 className="w-3.5 h-3.5" />
-          More
+          Share via…
         </button>
       )}
       {externalLinks.map(({ key, label, Icon, href }) => (
@@ -67,5 +74,11 @@ export default function ExternalShareRow({ referenceType, referenceId, preview }
         </a>
       ))}
     </div>
+    {shareError && (
+      <p role="alert" className="px-4 pb-2 text-xs text-red-600">
+        {shareError}
+      </p>
+    )}
+    </>
   )
 }

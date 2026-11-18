@@ -5,6 +5,7 @@ import ProtectedRoute, { AppNavigationLoader, PublicRoute, RootRoute } from './a
 import AppShell from './components/AppShell.jsx'
 import { useDeviceRegistration } from './hooks/useDeviceRegistration.js'
 import { usePushNotificationTapHandler } from './hooks/usePushNotificationTapHandler.js'
+import { useAndroidBackButton } from './navigation/useAndroidBackButton.js'
 
 const LoginPage = lazy(() => import('./auth/pages/LoginPage.jsx'))
 const SignupPage = lazy(() => import('./auth/pages/SignupPage.jsx'))
@@ -20,6 +21,15 @@ const ProductDetailPage = lazy(() => import('./marketplace/ProductDetailPage.jsx
 const AdsDiscoveryPage = lazy(() => import('./ads/AdsDiscoveryPage.jsx'))
 const AdsDashboardPage = lazy(() => import('./ads/AdsDashboardPage.jsx'))
 const CreateCampaignPage = lazy(() => import('./ads/CreateCampaignPage.jsx'))
+const ComingSoon = lazy(() => import('./pages/ComingSoon.jsx'))
+// The Ads screens are a design prototype built entirely on invented data
+// (mockAdsData.js: made-up stores, ratings, distances and campaign stats,
+// including real brand names). They must never render for real users, so
+// production builds show an honest "not available yet" page instead.
+const ADS_PROTOTYPE_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_ADS_PROTOTYPE === 'true'
+function AdsUnavailable() {
+  return <ComingSoon title="Campinity Ads is coming soon" message="Promoting listings and campus businesses isn't available yet." />
+}
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage.jsx'))
 const DeleteAccountPage = lazy(() => import('./pages/DeleteAccountPage.jsx'))
 const BlockedUsersPage = lazy(() => import('./pages/BlockedUsersPage.jsx'))
@@ -41,6 +51,9 @@ const ActivitySettingsPage = lazy(() => import('./pages/ActivitySettingsPage.jsx
 const MessagesSettingsPage = lazy(() => import('./pages/MessagesSettingsPage.jsx'))
 const CommunitiesSettingsPage = lazy(() => import('./pages/CommunitiesSettingsPage.jsx'))
 const SecuritySettingsPage = lazy(() => import('./pages/SecuritySettingsPage.jsx'))
+const ChangeUsernamePage = lazy(() => import('./pages/ChangeUsernamePage.jsx'))
+const ChangeEmailPage = lazy(() => import('./pages/ChangeEmailPage.jsx'))
+const LegalPage = lazy(() => import('./pages/LegalPage.jsx'))
 const HashtagPage = lazy(() => import('./pages/HashtagPage.jsx'))
 const CreatePostPage = lazy(() => import('./pages/CreatePostPage.jsx'))
 const PostDetailPage = lazy(() => import('./pages/PostDetailPage.jsx'))
@@ -91,6 +104,10 @@ export default function App() {
   // RootRoute) so startup/splash/auth resolution stays untouched.
   // No-ops entirely on web.
   usePushNotificationTapHandler()
+
+  // Android hardware Back: in-app navigation instead of closing the app
+  // from every screen. Registered once; no-op on web.
+  useAndroidBackButton()
 
   return (
     <Suspense fallback={<AppNavigationLoader />}>
@@ -218,6 +235,9 @@ export default function App() {
           <Route path="/settings/messages" element={<MessagesSettingsPage />} />
           <Route path="/settings/communities" element={<CommunitiesSettingsPage />} />
           <Route path="/settings/security" element={<SecuritySettingsPage />} />
+          <Route path="/settings/username" element={<ChangeUsernamePage />} />
+          <Route path="/settings/email" element={<ChangeEmailPage />} />
+          <Route path="/settings/legal/:doc" element={<LegalPage />} />
           <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
           <Route path="/settings/change-password" element={<ChangePasswordPage />} />
           <Route path="/settings/delete-account" element={<DeleteAccountPage />} />
@@ -376,7 +396,7 @@ export default function App() {
           path="/ads"
           element={
             <ProtectedRoute stage="home">
-              <AdsDiscoveryPage />
+              {ADS_PROTOTYPE_ENABLED ? <AdsDiscoveryPage /> : <AdsUnavailable />}
             </ProtectedRoute>
           }
         />
@@ -384,7 +404,7 @@ export default function App() {
           path="/ads/dashboard"
           element={
             <ProtectedRoute stage="home">
-              <AdsDashboardPage />
+              {ADS_PROTOTYPE_ENABLED ? <AdsDashboardPage /> : <AdsUnavailable />}
             </ProtectedRoute>
           }
         />
@@ -392,7 +412,7 @@ export default function App() {
           path="/ads/create-campaign"
           element={
             <ProtectedRoute stage="home">
-              <CreateCampaignPage />
+              {ADS_PROTOTYPE_ENABLED ? <CreateCampaignPage /> : <AdsUnavailable />}
             </ProtectedRoute>
           }
         />

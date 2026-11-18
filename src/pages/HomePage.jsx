@@ -15,7 +15,6 @@ import { getFeedStories, getViewedStoryIds } from '../firebase/storyService.js'
 import { getTrendingCommunities } from '../firebase/communityService.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
-import SwipeablePage from '../components/SwipeablePage.jsx'
 import { useFollowingFeed } from '../hooks/useFollowingFeed.js'
 import { useForYouFeed } from '../hooks/useForYouFeed.js'
 import { useCampusVerificationReminder } from '../hooks/useCampusVerificationReminder.js'
@@ -354,7 +353,6 @@ export default function HomePage() {
       <CampinityIntro campusName={profile?.college} onComplete={handleIntroComplete} />
     )}
     <div className="h-full lg:grid lg:gap-3 lg:[grid-template-columns:minmax(0,1fr)_minmax(260px,320px)] lg:overflow-hidden">
-    <SwipeablePage>
     <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
       <div className="mx-auto max-w-[480px] lg:max-w-[760px] min-h-full lg:min-h-0 bg-white dark:bg-[#11131a] border-x border-gray-100 dark:border-white/10 lg:my-4 lg:rounded-2xl lg:border lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
         {showBanner && <CampusVerificationBanner onDismiss={dismissBanner} />}
@@ -362,7 +360,7 @@ export default function HomePage() {
           <NotificationPermissionBanner onAllow={allowNotifications} onDismiss={dismissNotificationPrompt} />
         )}
 
-        <section className={`mx-4 lg:mx-6 mt-5 mb-5 ${entranceClass(0)}`}>
+        <section className={`mx-4 lg:mx-6 mt-4 mb-4 ${entranceClass(0)}`}>
           <div
             className="relative overflow-hidden rounded-2xl lg:rounded-3xl px-5 py-5 lg:px-7 lg:py-6 bg-gradient-to-br from-[#eaf3ff] via-[#dcecff] to-[#e7f7f7] dark:from-[#141a2e] dark:via-[#121629] dark:to-[#101f21]"
           >
@@ -399,12 +397,15 @@ export default function HomePage() {
             </span>
           </button>
 
-          <div className="mt-4">
+          {/* Mobile creates posts from the bottom nav's central + button
+              (BottomNav.jsx), so the inline composer is desktop-only —
+              desktop has no bottom nav. */}
+          <div className="mt-4 hidden lg:block">
             <PostComposer profile={profile} initials={initials} colorClass={myColorClass} firstName={firstName} />
           </div>
         </section>
 
-        <section className={`mx-4 lg:mx-6 mb-5 py-0 ${entranceClass(80)}`}>
+        <section className={`mx-4 lg:mx-6 mb-4 py-0 ${entranceClass(80)}`}>
           <div className="flex items-start gap-3.5 overflow-x-auto scroll-hidden">
             {/* "Your Story" never waits on the stories fetch — it only
                 needs `profile`, already loaded by the time Home renders. */}
@@ -590,7 +591,6 @@ export default function HomePage() {
         </main>
       </div>
     </div>
-    </SwipeablePage>
     <DesktopRightRail
       communities={communities}
       posts={posts}

@@ -4,6 +4,7 @@ import { Gem, X } from 'lucide-react'
 import { getRecentXPEntries } from '../gamification/xpService.js'
 import { ACTIVITY_LABELS, POINTS_REWARDS } from '../gamification/config.js'
 import { formatTimeAgo } from '../firebase/postService.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * Explains Campus Points as their own thing, not a second XP — the
@@ -13,6 +14,8 @@ import { formatTimeAgo } from '../firebase/postService.js'
  * surfaces that real distinction rather than inventing a new one.
  */
 export default function PointsDetailModal({ open, onClose, uid, campusPoints }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   const [entries, setEntries] = useState(null)
 
   useEffect(() => {

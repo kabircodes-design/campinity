@@ -161,3 +161,28 @@ export async function findNearbyUserLocations(currentUid, lat, lng, { pageSize =
 
   return nearby.sort((a, b) => a.distanceMeters - b.distanceMeters)
 }
+
+/**
+ * Secure proximity (prepared; OFF unless built with VITE_SECURE_RADAR=true).
+ * The Cloud Function `radarNearby` stores this user's position server-side
+ * and returns only { uid, distanceMeters } for nearby, visible, non-blocked
+ * people — no one else's coordinates ever reach this device. Enable only
+ * after the function and the matching firestore.rules are deployed (see
+ * RADAR_SECURITY_PLAN.md).
+ */
+export const SECURE_RADAR = import.meta.env.VITE_SECURE_RADAR === 'true'
+
+// radarNearby allows one lookup per user every 5s; position updates can
+// arrive faster, so reuse the last answer briefly instead of hitting the
+// limit (which would make distance badges flicker away).
+let lastSecure = { at: 0, result: null }
+
+export async function fetchSecureNearby(lat, lng, accuracy) {
+  if (lastSecure.result && Date.now() - lastSecure.at < 6000) return lastSecure.result
+  const { getFunctions, httpsCallable } = await import('firebase/functions')
+  const result = await httpsCallable(getFunctions(), 'radarNearby')({ lat, lng, accuracy: accuracy ?? null })
+  const nearby = Array.isArray(result.data?.nearby) ? result.data.nearby : []
+  const mapped = nearby.map((n) => ({ uid: n.uid, distanceMeters: n.distanceMeters, accuracy: accuracy ?? null }))
+  lastSecure = { at: Date.now(), result: mapped }
+  return mapped
+}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BadgeCheck, Calendar, Camera, Link as LinkIcon, MessageCircle, MoreVertical, Pencil, Share2 } from 'lucide-react'
+import { BadgeCheck, Calendar, Camera, Link as LinkIcon, MessageCircle, MoreVertical, Pencil, Settings, Share2 } from 'lucide-react'
 import ProfilePhotoEditor from '../avatar/ProfilePhotoEditor.jsx'
 import Avatar from './Avatar.jsx'
 import VerifiedBadge from './VerifiedBadge.jsx'
@@ -7,6 +7,7 @@ import ReportModal from './ReportModal.jsx'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { auth } from '../firebase/firebase.js'
 import { blockUser, isBlocking, unblockUser } from '../firebase/blockService.js'
+import NoticeBoard from '../notices/NoticeBoard.jsx'
 
 /**
  * Complete redesign — built fresh since this is an explicit redesign
@@ -40,9 +41,11 @@ export default function ProfileHeader({
   onShare,
   onOpenFollowers,
   onOpenFollowing,
+  onOpenSettings, // own profile only: shows a settings button on the cover
   mutualFollowers = []
 }) {
   const [followBusy, setFollowBusy] = useState(false)
+  const [followError, setFollowError] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [blocked, setBlocked] = useState(false)
@@ -94,12 +97,17 @@ export default function ProfileHeader({
 
   const handleFollowClick = async () => {
     setFollowBusy(true)
+    setFollowError('')
     try {
       if (isFollowing) {
         await onUnfollow?.()
       } else {
         await onFollow?.()
       }
+    } catch {
+      // The follow state only changes after the write succeeds, so the
+      // button is already correct — just say it didn't work.
+      setFollowError(isFollowing ? "Couldn't unfollow. Please try again." : "Couldn't follow. Please try again.")
     } finally {
       setFollowBusy(false)
     }
@@ -109,16 +117,36 @@ export default function ProfileHeader({
     <div className="pb-4">
       <div className="relative h-40 lg:h-48 bg-gradient-to-br from-blue-500 via-indigo-500 to-blue-600 overflow-hidden">
         {profile.coverPhoto ? (
-          <img src={profile.coverPhoto} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <>
+            <img src={profile.coverPhoto} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            {/* keeps the Notice Board readable over any photo */}
+            {isOwnProfile && <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/15 to-transparent pointer-events-none" />}
+          </>
         ) : (
           <>
             <div className="absolute -top-10 -right-10 w-56 h-56 rounded-full bg-white/10 blur-3xl pointer-events-none" />
             <div className="absolute -bottom-12 left-1/4 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
           </>
         )}
+        {/* Own profile: the cover hosts the Campinity Notice Board (admin
+            notices for this user). Other people's profiles keep the plain cover. */}
+        {isOwnProfile && auth.currentUser?.uid && <NoticeBoard uid={auth.currentUser.uid} collegeId={profile.collegeId || null} />}
+        {onOpenSettings && (
+          <button
+            type="button"
+            aria-label="Settings"
+            onClick={onOpenSettings}
+            className="absolute top-3 right-3 w-10 h-10 rounded-full bg-black/25 backdrop-blur-sm text-white flex items-center justify-center hover:bg-black/35 active:scale-95 transition-all duration-200"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+        )}
       </div>
-      <div className="px-4 -mt-12">
-      <div className="flex items-end justify-between gap-3">
+      {/* relative: the cover above is positioned, and a positioned box
+          paints over later non-positioned siblings, which hid the action
+          buttons. This block now stacks above the cover. */}
+      <div className="relative px-4 -mt-12">
+      <div className="flex items-start justify-between gap-3">
         <div
           className={`flex-shrink-0 rounded-full ring-4 ring-white dark:ring-[#11131a] relative group ${isOwnProfile ? 'cursor-pointer' : ''}`}
           onClick={() => isOwnProfile && setPhotoEditorOpen(true)}
@@ -140,11 +168,33 @@ export default function ProfileHeader({
             </>
           )}
         </div>
+        {isOwnProfile && (
+          // mt-14: the avatar overlaps the cover by 48px (-mt-12); 56px puts
+          // these buttons just below the cover edge, never on top of it.
+          <div className="mt-14 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex items-center justify-center gap-1.5 rounded-full bg-blue-50 text-blue-600 text-sm font-semibold px-4 py-2 hover:bg-blue-100 dark:bg-blue-500/15 dark:text-blue-400 dark:hover:bg-blue-500/25 active:scale-95 transition-all duration-200"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Edit Profile
+            </button>
+            <button
+              type="button"
+              onClick={onShare}
+              aria-label="Share profile"
+              className="w-9 h-9 flex-shrink-0 rounded-full border border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 dark:border-white/10 dark:text-gray-400 dark:hover:border-white/20 active:scale-95 transition-all duration-200"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mt-3">
         <div className="flex items-center gap-1.5">
-          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 truncate">{profile.displayName}</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-50 truncate tracking-tight">{profile.displayName}</h1>
           <VerifiedBadge verified={profile.verifiedCampus} size="lg" />
         </div>
         <p className="text-sm text-gray-400 dark:text-gray-500">@{profile.username}</p>
@@ -192,21 +242,21 @@ export default function ProfileHeader({
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+      <div className="mt-4 grid grid-cols-4 text-center rounded-2xl border border-gray-100 dark:border-white/10 bg-gray-50/60 dark:bg-white/5 py-3 divide-x divide-gray-100 dark:divide-white/10">
         <div>
-          <p className="text-[15px] font-bold text-gray-900 dark:text-gray-50">{profile.postsCount}</p>
+          <p className="text-base font-bold text-gray-900 dark:text-gray-50">{profile.postsCount}</p>
           <p className="text-[11px] text-gray-400 dark:text-gray-500">Posts</p>
         </div>
         <button type="button" onClick={onOpenFollowers} className="hover:opacity-70 transition-opacity duration-200">
-          <p className="text-[15px] font-bold text-gray-900 dark:text-gray-50">{profile.followers}</p>
+          <p className="text-base font-bold text-gray-900 dark:text-gray-50">{profile.followers}</p>
           <p className="text-[11px] text-gray-400 dark:text-gray-500">Followers</p>
         </button>
         <button type="button" onClick={onOpenFollowing} className="hover:opacity-70 transition-opacity duration-200">
-          <p className="text-[15px] font-bold text-gray-900 dark:text-gray-50">{profile.following}</p>
+          <p className="text-base font-bold text-gray-900 dark:text-gray-50">{profile.following}</p>
           <p className="text-[11px] text-gray-400 dark:text-gray-500">Following</p>
         </button>
         <div>
-          <p className="text-[15px] font-bold text-gray-900 dark:text-gray-50">{profile.communitiesCount ?? '—'}</p>
+          <p className="text-base font-bold text-gray-900 dark:text-gray-50">{profile.communitiesCount ?? '—'}</p>
           <p className="text-[11px] text-gray-400 dark:text-gray-500">Communities</p>
         </div>
       </div>
@@ -226,17 +276,12 @@ export default function ProfileHeader({
         </p>
       )}
 
+      {/* Own profile: Edit/Share live next to the avatar (above). */}
+      {!isOwnProfile && followError && (
+        <p role="alert" className="mt-3 text-xs text-red-600">{followError}</p>
+      )}
+      {!isOwnProfile && (
       <div className="mt-4 flex items-center gap-2">
-        {isOwnProfile ? (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="flex items-center justify-center gap-1.5 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2.5 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:text-gray-300 dark:hover:border-white/20 dark:hover:bg-white/5 transition-all duration-300"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            Edit Profile
-          </button>
-        ) : (
           <>
             <button
               type="button"
@@ -283,7 +328,6 @@ export default function ProfileHeader({
               {messageState === 'pending_incoming' && <span className="text-xs font-semibold whitespace-nowrap">Message Request</span>}
             </button>
           </>
-        )}
         <button
           type="button"
           onClick={onShare}
@@ -338,6 +382,7 @@ export default function ProfileHeader({
           </div>
         )}
       </div>
+      )}
 
       </div>
 

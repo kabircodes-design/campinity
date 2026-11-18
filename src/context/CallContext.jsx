@@ -1,4 +1,7 @@
-import { createContext, useContext, useMemo } from 'react'
+import { createContext, useContext, useEffect, useMemo } from 'react'
+import { onAuthStateChanged } from 'firebase/auth'
+import { auth } from '../firebase/firebase.js'
+import { refreshIceServers } from '../firebase/callService.js'
 import { useCall } from '../hooks/useCall.js'
 import { useGroupCall } from '../hooks/useGroupCall.js'
 import IncomingCallToast from '../components/IncomingCallToast.jsx'
@@ -41,6 +44,21 @@ const CallActionsContext = createContext(null)
  * header doesn't re-render on every duration tick either.
  */
 export function CallProvider({ children }) {
+  // Short-lived TURN credentials, fetched ahead of any call and refreshed
+  // well inside their 6h lifetime (no-op unless VITE_TURN_CREDENTIALS=function).
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) refreshIceServers()
+    })
+    const timer = window.setInterval(() => {
+      if (auth.currentUser) refreshIceServers({ force: true })
+    }, 4 * 60 * 60 * 1000)
+    return () => {
+      unsubscribe()
+      window.clearInterval(timer)
+    }
+  }, [])
+
   const call = useCall()
   const groupCall = useGroupCall()
   // Busy if EITHER a 1:1 or a group call is in progress — additive, not

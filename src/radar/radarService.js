@@ -3,7 +3,7 @@ import { getUserCommunityMemberships } from '../firebase/communityService.js'
 import { getBlockedUsers } from '../firebase/blockService.js'
 import { collection, getDocs, limit, query, where } from 'firebase/firestore'
 import { db } from '../firebase/firebase.js'
-import { findNearbyUserLocations } from './radarLocationService.js'
+import { fetchSecureNearby, findNearbyUserLocations, SECURE_RADAR } from './radarLocationService.js'
 
 /**
  * ROOT CAUSE (this pass, confirmed by reading the prior version
@@ -58,6 +58,10 @@ const SCORE_WEIGHTS = {
 async function computeCompatibility(currentProfile, currentUid, candidateUid, currentCommunityIds, currentInterests) {
   const data = await getUserProfile(candidateUid)
   if (!data) return null
+  // Radar visibility (users/{uid}.radarVisible, set from the Radar
+  // page's Visible/Hidden switch). Absent = visible, so nothing changes
+  // for anyone who never touched it; false = never shown to others.
+  if (data.radarVisible === false) return null
 
   let score = 0
   const reasons = []
@@ -197,7 +201,12 @@ export async function getRadarResults(currentUid, currentProfile, position) {
     getCampusPool(currentUid, collegeId),
     getBlockedUsers(currentUid).catch(() => []),
     getFollowingSet(currentUid).catch(() => new Set()),
-    position ? findNearbyUserLocations(currentUid, position.lat, position.lng).catch(() => []) : Promise.resolve([])
+    position
+      ? (SECURE_RADAR
+          ? fetchSecureNearby(position.lat, position.lng, position.accuracy)
+          : findNearbyUserLocations(currentUid, position.lat, position.lng)
+        ).catch(() => [])
+      : Promise.resolve([])
   ])
 
   const blockedUids = new Set(blockedList.map((b) => b.blockedUid))

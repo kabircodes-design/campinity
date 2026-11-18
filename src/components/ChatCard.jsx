@@ -5,7 +5,7 @@ import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
 import { auth } from '../firebase/firebase.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
-import { isOnline } from '../firebase/presenceService.js'
+import { usePresence } from '../hooks/usePresence.js'
 import { deleteChat, markChatRead, markChatUnread, toggleMuteChat } from '../firebase/chatService.js'
 import ChatActionSheet from './ChatActionSheet.jsx'
 import { useAuthorProfile } from '../hooks/useAuthorEnrichment.js'
@@ -53,7 +53,11 @@ export default function ChatCard({ chat, profile }) {
   const unreadCount = chat.unreadCount?.[uid] || 0
   const isUnread = unreadCount > 0
   const unreadLabel = unreadCount > 9 ? '9+' : String(unreadCount)
-  const online = !isGroup && isOnline(profile)
+  // Live, self-ageing presence (see usePresence) — a one-time profile
+  // fetch can't tell when someone comes online or leaves.
+  const online = usePresence(chat.otherUid, { enabled: !isGroup && Boolean(chat.otherUid) }).online
+  // Call-log previews are written by chatService as e.g. '📞 Missed voice call'.
+  const isMissedCall = /Missed (voice|video) call/i.test(chat.lastMessage || '')
 
   // Smart group preview — "Rahul: Hey, are we meeting today?" instead of
   // a bare message with no sender identity, which is the actual reason
@@ -135,7 +139,7 @@ export default function ChatCard({ chat, profile }) {
         onTouchEnd={clearLongPress}
         onTouchMove={clearLongPress}
         onContextMenu={handleContextMenu}
-        className="w-full flex items-center gap-3 pl-4 pr-11 py-3 text-left hover:bg-gray-50 transition-all duration-200"
+        className="w-full flex items-center gap-3 pl-4 pr-11 py-3 text-left hover:bg-gray-50 active:bg-gray-50 transition-all duration-200"
       >
         <div className="relative flex-shrink-0">
           {isGroup ? (
@@ -161,14 +165,14 @@ export default function ChatCard({ chat, profile }) {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <p className={`text-sm truncate ${isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'}`}>
+            <p className={`text-[15px] truncate ${isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'}`}>
               {displayName}
             </p>
             {isPinned && <Pin className="w-3 h-3 text-gray-300 flex-shrink-0" fill="currentColor" />}
             {isMuted && <VolumeX className="w-3 h-3 text-gray-300 flex-shrink-0" />}
           </div>
           {subtitle && <p className="text-[11px] text-gray-400 truncate">{subtitle}</p>}
-          <p className={`text-xs truncate ${isUnread ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
+          <p className={`mt-0.5 text-[13px] truncate ${isMissedCall ? 'text-red-500 font-medium' : isUnread ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
             {chat.isPendingSent ? (
               'Message Request Sent'
             ) : chat.lastMessage ? (
@@ -186,7 +190,7 @@ export default function ChatCard({ chat, profile }) {
           <span className="text-[11px] text-gray-400">{formatTimeAgo(chat.lastMessageAt)}</span>
           {isUnread && (
             <span
-              className="min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center"
+              className="min-w-[20px] h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center"
               aria-label={`${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}`}
             >
               {unreadLabel}

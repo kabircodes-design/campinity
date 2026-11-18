@@ -59,6 +59,37 @@ export const RTC_CONFIG = {
   iceCandidatePoolSize: 10
 }
 
+/**
+ * Short-lived TURN credentials (prepared; used only when built with
+ * VITE_TURN_CREDENTIALS=function and the getTurnCredentials Cloud
+ * Function is deployed with its Cloudflare secrets). Updates
+ * RTC_CONFIG.iceServers in place, so every RTCPeerConnection created
+ * afterwards (1:1 and group) uses them — no change to the call engine.
+ * Any failure keeps the existing STUN / VITE_TURN_* configuration.
+ */
+const TURN_FROM_FUNCTION = import.meta.env.VITE_TURN_CREDENTIALS === 'function'
+const STATIC_ICE_SERVERS = RTC_CONFIG.iceServers
+let turnFetchedAt = 0
+
+export async function refreshIceServers({ force = false } = {}) {
+  if (!TURN_FROM_FUNCTION) return false
+  if (!force && Date.now() - turnFetchedAt < 60 * 60 * 1000) return true
+  try {
+    const { getFunctions, httpsCallable } = await import('firebase/functions')
+    const result = await httpsCallable(getFunctions(), 'getTurnCredentials')()
+    const turn = Array.isArray(result.data?.iceServers) ? result.data.iceServers : []
+    if (turn.length === 0) return false
+    RTC_CONFIG.iceServers = [...STATIC_ICE_SERVERS, ...turn]
+    turnFetchedAt = Date.now()
+    return true
+  } catch {
+    // Keep credentials we already hold while they're still valid (6h TTL,
+    // e.g. after a rate-limit refusal); only drop expired ones.
+    if (Date.now() - turnFetchedAt >= 5.5 * 60 * 60 * 1000) RTC_CONFIG.iceServers = STATIC_ICE_SERVERS
+    return false
+  }
+}
+
 function callDoc(callId) {
   return doc(db, 'calls', callId)
 }

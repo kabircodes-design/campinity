@@ -11,7 +11,7 @@ import { Bell } from 'lucide-react'
  */
 export default function EmptyNotifications() {
   return (
-    <div className="mx-4 mt-4 px-6 py-16 text-center rounded-2xl bg-white dark:bg-[#11131a] border border-gray-100 dark:border-white/10 shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:shadow-none">
+    <div className="px-6 py-16 text-center">
       <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center mx-auto">
         <Bell className="w-6 h-6 text-blue-600 dark:text-blue-400" strokeWidth={1.7} />
       </div>

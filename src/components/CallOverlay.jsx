@@ -7,6 +7,7 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { applySinkId, useAudioOutputDevices } from '../hooks/useAudioOutputDevices.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSystemBarsOverride } from '../theme/systemBars.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 function formatDuration(totalSeconds) {
   const m = Math.floor(totalSeconds / 60)
@@ -128,6 +129,9 @@ export default function CallOverlay({ call }) {
 
   // Full-screen call UI is always dark; the minimized pill is not full-screen.
   useSystemBarsOverride('dark', callState !== 'idle' && !(minimized && !isEndedState))
+  // Android Back on a full-screen call minimises it (the call keeps
+  // running in the corner pill) instead of navigating the page beneath.
+  useBackToClose(callState !== 'idle' && callState !== 'incoming' && !minimized && !isEndedState, () => setMinimized(true))
 
   if (callState === 'idle') return null
 
@@ -191,7 +195,7 @@ export default function CallOverlay({ call }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[10000] bg-gray-900 flex flex-col items-center justify-center text-white">
+    <div className="fixed inset-0 z-[10000] bg-gradient-to-b from-[#0f1b33] via-[#0b1222] to-[#05070d] flex flex-col items-center justify-center text-white">
       {!isEndedState && (
         <button
           type="button"
@@ -236,24 +240,53 @@ export default function CallOverlay({ call }) {
           leak early. */}
       {!isVideo && <audio ref={remoteAudioRef} autoPlay />}
 
-      <div className="relative z-10 flex flex-col items-center px-6 text-center">
+      <div
+        className={`relative z-10 flex flex-col items-center px-6 text-center ${
+          isVideo && isActiveish && !remoteCameraOff ? 'self-stretch mt-[calc(4.5rem+var(--app-safe-top))] mb-auto' : ''
+        }`}
+      >
         {(!isVideo || !isActiveish || remoteCameraOff) && (
-          <Avatar
-            initials={getInitials(displayName)}
-            colorClass={getAvatarColor(otherUid)}
-            size="xl"
-            src={getProfileIdentityImage(otherProfile) || undefined}
-          />
+          <div className="relative">
+            {(isOutgoing || isConnecting) && (
+              <>
+                <span className="absolute inset-0 rounded-full bg-blue-400/25 animate-ping motion-reduce:animate-none" aria-hidden="true" />
+                <span className="absolute -inset-3 rounded-full border border-white/10" aria-hidden="true" />
+              </>
+            )}
+            <span className="relative block rounded-full ring-4 ring-white/10">
+              <Avatar
+                initials={getInitials(displayName)}
+                colorClass={getAvatarColor(otherUid)}
+                size="xl"
+                src={getProfileIdentityImage(otherProfile) || undefined}
+              />
+            </span>
+          </div>
         )}
-        <p className="mt-4 text-xl font-bold">{displayName}</p>
-        <p className="mt-1 text-sm text-white/70 flex items-center justify-center gap-1.5">
-          {isActive && remoteMuted && <MicOff className="w-3.5 h-3.5 text-white/50" />}
+        <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">{isVideo ? 'Video call' : 'Voice call'}</p>
+        <p className="mt-1 text-2xl font-bold drop-shadow">{displayName}</p>
+        <p
+          role="status"
+          aria-live="polite"
+          className={`mt-2 inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium backdrop-blur-sm ${
+            isReconnecting
+              ? 'bg-amber-400/15 text-amber-200'
+              : isEndedState
+                ? 'bg-rose-500/15 text-rose-200'
+                : isActive
+                  ? 'bg-emerald-400/15 text-emerald-200'
+                  : 'bg-white/10 text-white/80'
+          }`}
+        >
+          {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true" />}
+          {isReconnecting && <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" aria-hidden="true" />}
+          {isActive && remoteMuted && <MicOff className="w-3.5 h-3.5" aria-label="They are muted" />}
           {statusLabel}
         </p>
       </div>
 
       {isVideo && (
-        <div className="absolute bottom-28 right-4 w-28 h-40 rounded-2xl overflow-hidden bg-gray-800 border border-white/20 shadow-lg">
+        <div className="absolute right-4 bottom-[calc(9.5rem+var(--app-safe-bottom,env(safe-area-inset-bottom)))] w-28 h-40 rounded-2xl overflow-hidden bg-gray-800 border border-white/20 shadow-lg">
           {/* Same fix as the remote element: this video used to unmount
               entirely on cameraOff (or before isActive), which threw
               away the DOM node the srcObject effect (keyed only on
@@ -298,41 +331,50 @@ export default function CallOverlay({ call }) {
         </div>
       )}
 
-      <div className="absolute bottom-10 left-0 right-0 flex items-center justify-center gap-4">
+      <div className="absolute left-0 right-0 flex items-end justify-center gap-5 px-4" style={{ bottom: 'calc(2.5rem + var(--app-safe-bottom, env(safe-area-inset-bottom)))' }}>
         {isEndedState ? null : (
           <>
-            <button
-              type="button"
-              onClick={toggleMute}
-              aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
-              className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-95 transition-all duration-200 ${
-                muted ? 'bg-white text-gray-900' : 'bg-white/15 hover:bg-white/25 text-white'
-              }`}
-            >
-              {muted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            </button>
-            {isVideo && (
+            <div className="flex flex-col items-center">
               <button
                 type="button"
-                onClick={toggleCamera}
-                aria-label={cameraOff ? 'Turn camera on' : 'Turn camera off'}
+                onClick={toggleMute}
+                aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
                 className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-95 transition-all duration-200 ${
-                  cameraOff ? 'bg-white text-gray-900' : 'bg-white/15 hover:bg-white/25 text-white'
+                  muted ? 'bg-[#ffffff] text-[#0f172a]' : 'bg-white/15 hover:bg-white/25 text-white'
                 }`}
               >
-                {cameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+                {muted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
               </button>
+              <span className="mt-1.5 block text-[11px] text-white/70">{muted ? 'Unmute' : 'Mute'}</span>
+            </div>
+            {isVideo && (
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={toggleCamera}
+                  aria-label={cameraOff ? 'Turn camera on' : 'Turn camera off'}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-95 transition-all duration-200 ${
+                    cameraOff ? 'bg-[#ffffff] text-[#0f172a]' : 'bg-white/15 hover:bg-white/25 text-white'
+                  }`}
+                >
+                  {cameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+                </button>
+                <span className="mt-1.5 block text-[11px] text-white/70">{cameraOff ? 'Camera on' : 'Camera'}</span>
+              </div>
             )}
             {isVideo && isActiveish && !cameraOff && (
-              <button
-                type="button"
-                onClick={switchCamera}
-                disabled={switchingCamera}
-                aria-label="Switch camera"
-                className="w-12 h-12 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-white active:scale-95 disabled:opacity-50 transition-all duration-200"
-              >
-                <RefreshCw className={`w-5 h-5 ${switchingCamera ? 'animate-spin' : ''}`} />
-              </button>
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={switchCamera}
+                  disabled={switchingCamera}
+                  aria-label="Switch camera"
+                  className="w-12 h-12 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-white active:scale-95 disabled:opacity-50 transition-all duration-200"
+                >
+                  <RefreshCw className={`w-5 h-5 ${switchingCamera ? 'animate-spin' : ''}`} />
+                </button>
+                <span className="mt-1.5 block text-[11px] text-white/70">Flip</span>
+              </div>
             )}
             {/* Only rendered when the platform genuinely exposes more
                 than one real audio output — never a fake toggle. Tap
@@ -340,24 +382,30 @@ export default function CallOverlay({ call }) {
                 connected Bluetooth headset); its label is exactly what
                 the OS reports, nothing invented. */}
             {audioOutputSupported && audioOutputDevices.length > 1 && (
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={handleCycleAudioOutput}
+                  aria-label={`Audio output: ${audioOutputDevices[audioOutputIndex]?.label || 'switch'}`}
+                  title={audioOutputDevices[audioOutputIndex]?.label || 'Switch audio output'}
+                  className="w-12 h-12 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-white active:scale-95 transition-all duration-200"
+                >
+                  <Speaker className="w-5 h-5" />
+                </button>
+                <span className="mt-1.5 block text-[11px] text-white/70">Audio</span>
+              </div>
+            )}
+            <div className="flex flex-col items-center">
               <button
                 type="button"
-                onClick={handleCycleAudioOutput}
-                aria-label={`Audio output: ${audioOutputDevices[audioOutputIndex]?.label || 'switch'}`}
-                title={audioOutputDevices[audioOutputIndex]?.label || 'Switch audio output'}
-                className="w-12 h-12 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-white active:scale-95 transition-all duration-200"
+                onClick={endCall}
+                aria-label="End call"
+                className="w-14 h-14 rounded-full bg-rose-500 hover:bg-rose-600 flex items-center justify-center active:scale-95 transition-all duration-200"
               >
-                <Speaker className="w-5 h-5" />
+                <PhoneOff className="w-6 h-6" />
               </button>
-            )}
-            <button
-              type="button"
-              onClick={endCall}
-              aria-label="End call"
-              className="w-14 h-14 rounded-full bg-rose-500 hover:bg-rose-600 flex items-center justify-center active:scale-95 transition-all duration-200"
-            >
-              <PhoneOff className="w-6 h-6" />
-            </button>
+              <span className="mt-1.5 block text-[11px] text-white/70">End</span>
+            </div>
           </>
         )}
       </div>

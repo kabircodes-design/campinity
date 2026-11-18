@@ -1,7 +1,5 @@
-import { useParams } from 'react-router-dom'
 import ComingSoon from './ComingSoon.jsx'
 
 export default function ClubDetailPlaceholder() {
-  const { clubId } = useParams()
-  return <ComingSoon title="Club Details" subtitle={clubId} />
+  return <ComingSoon title="Club not available" message="This club page isn't available. It may have moved or been removed." />
 }

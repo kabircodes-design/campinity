@@ -43,6 +43,7 @@ export default function ProductDetailPage() {
   const [status, setStatus] = useState('loading') // 'loading' | 'success' | 'notfound' | 'error'
   const [saved, setSaved] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [reportOpen, setReportOpen] = useState(false)
   const { startConversation, busy: messaging, gateOpen, setGateOpen } = useStartConversation()
 
@@ -96,11 +97,13 @@ export default function ProductDetailPage() {
     if (!product || !isOwner || deleting) return
     if (!window.confirm('Remove this listing? This can\'t be undone.')) return
     setDeleting(true)
+    setDeleteError('')
     try {
       await deleteProduct(product.id)
       navigate('/marketplace')
     } catch (err) {
       console.error('Could not delete product:', err)
+      setDeleteError("Couldn't remove this listing. Check your connection and try again.")
       setDeleting(false)
     }
   }
@@ -214,6 +217,11 @@ export default function ProductDetailPage() {
                 >
                   <Trash2 className="w-4 h-4" /> {deleting ? 'Removing…' : 'Remove Listing'}
                 </button>
+              )}
+              {deleteError && (
+                <p role="alert" className="mt-2 text-center text-xs text-red-600">
+                  {deleteError}
+                </p>
               )}
             </div>
           </div>

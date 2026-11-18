@@ -1,68 +1,40 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Home, MessageCircle, Orbit, ShoppingBag, User } from 'lucide-react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { prefetchRoute } from '../routePrefetch.js'
 import { auth } from '../firebase/firebase.js'
 import { subscribeToUnreadChatsCount } from '../firebase/chatService.js'
-
-const navItems = [
-  { id: 'home', label: 'Home', icon: Home, to: '/home' },
-  { id: 'messages', label: 'Messages', icon: MessageCircle, to: '/messages' },
-  { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag, to: '/marketplace' },
-  { id: 'communities', label: 'Communities', icon: Orbit, to: '/communities' },
-  { id: 'profile', label: 'Profile', icon: User, to: '/profile' }
-]
-
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return undefined
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const handleChange = (event) => setReduced(event.matches)
-    media.addEventListener('change', handleChange)
-    return () => media.removeEventListener('change', handleChange)
-  }, [])
-  return reduced
-}
+import { CREATE_POST_PATH, MAIN_TABS, getMainTabIndex } from '../navigation/mainTabs.js'
+import { useCreateButtonVisibility } from '../navigation/useCreateButtonVisibility.js'
 
 /**
- * Bottom navigation with a "limelight" effect adapted from a 21st.dev
- * reference component — the BEHAVIOR was studied and rebuilt for this
- * project's actual stack (plain JS, Tailwind, no shadcn, no
- * TypeScript), not copied. What's kept from the original concept: a
- * glowing indicator measured against the active item's real DOM
- * position (offsetLeft + offsetWidth), sliding smoothly beneath
- * whichever tab is active.
+ * Mobile bottom navigation: the five main tabs (icon + label) from
+ * MAIN_TABS — the same list and order the swipe navigation uses — plus
+ * a floating Create (+) button centred just above the bar.
  *
- * What changed for this project specifically:
- *  - Active state comes from NavLink's real route match (useLocation),
- *    not local index state — this nav has always been route-driven,
- *    and the limelight effect layers on top of that instead of
- *    replacing it with its own click-tracked state.
- *  - Colors are 100% theme tokens (var(--theme-accent) etc.) — the
- *    reference used Tailwind's bg-primary/CSS variables from a shadcn
- *    setup this project doesn't have.
- *  - Icons are lucide-react, matching what this file already used
- *    before this change (not a new icon system).
- *  - "Create" is gone — see this feature's own chat explanation for
- *    why; this is now a genuine 5-item route-based nav
- *    (Home/Messages/Marketplace/Communities/Profile), no FAB-style
- *    center button.
+ * - Active state comes from the real route (useLocation), so a swipe, a
+ *   tap and Android's back button all light up the same item.
+ * - The + is an action, not a tab: it opens the existing Create Post
+ *   page and never shows a selected state.
+ * - Overlap: the + floats over the page, so it slides away while the
+ *   user scrolls down (reading) and comes back on scroll up, near the
+ *   top of a page, and on every route change
+ *   (useCreateButtonVisibility). The bar itself never moves, and pages
+ *   keep their existing bottom inset for the bar — no extra blank space.
+ * - Colours are theme tokens (var(--theme-accent) etc.), so Light and
+ *   Dark both keep their existing palettes.
+ * - Bottom padding covers the Android gesture area (safe-area inset).
  */
 export default function BottomNav() {
   const location = useLocation()
-  const reducedMotion = usePrefersReducedMotion()
-  const itemRefs = useRef([])
-  const [limelightStyle, setLimelightStyle] = useState({ left: 0, width: 0, opacity: 0 })
+  const navigate = useNavigate()
   const [unreadChats, setUnreadChats] = useState(0)
+  const createVisible = useCreateButtonVisibility()
 
-  // Self-contained on purpose — this component is mounted from 6
-  // different pages (AppShell plus 5 standalone renders), so a real
-  // subscription here (not a prop threaded through every one of those
-  // call sites) is the actually-maintainable fix. Cleaned up on every
-  // unmount/uid change like every other listener in this app.
+  // Self-contained on purpose — this component is mounted from several
+  // pages (AppShell plus standalone renders), so a real subscription
+  // here (not a prop threaded through every call site) is the
+  // maintainable option. Cleaned up on unmount like every other listener.
   useEffect(() => {
     const uid = auth.currentUser?.uid
     if (!uid) return undefined
@@ -70,81 +42,75 @@ export default function BottomNav() {
     return () => unsubscribe()
   }, [])
 
-  const activeIndex = navItems.findIndex((item) => location.pathname === item.to)
-
-  useLayoutEffect(() => {
-    const activeEl = itemRefs.current[activeIndex]
-    if (!activeEl) {
-      setLimelightStyle((prev) => ({ ...prev, opacity: 0 }))
-      return
-    }
-    const width = 28
-    setLimelightStyle({
-      left: activeEl.offsetLeft + activeEl.offsetWidth / 2 - width / 2,
-      width,
-      opacity: 1
-    })
-  }, [activeIndex])
+  const activeIndex = getMainTabIndex(location.pathname)
+  const unreadLabel = unreadChats > 9 ? '9+' : String(unreadChats)
 
   return (
     <nav
+      aria-label="Main"
       className="fixed bottom-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-[480px] lg:max-w-[520px] theme-bg-surface backdrop-blur-md border-t theme-border"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      style={{ paddingBottom: 'var(--app-safe-bottom, env(safe-area-inset-bottom))' }}
     >
-      <div className="relative grid grid-cols-5 items-center px-2 pt-2 pb-1.5">
-        {/* The limelight — a small glowing bar that slides beneath
-            whichever tab is active, plus a soft radial glow above it.
-            Positioned via real measured DOM offsets (see useLayoutEffect
-            above), not percentage math, so it lines up correctly
-            regardless of icon size differences or container padding.
-            GPU-accelerated (left animates via a CSS transition on the
-            `left` property here rather than transform — this bar is
-            only 3px tall and 28px wide, so the reflow cost of
-            animating `left` at this scale is negligible; using
-            transform would need a second measurement pass to convert
-            offsetLeft into a translateX delta for no real perf gain
-            at this size). */}
-        <span
-          className="absolute top-0 h-[3px] rounded-full pointer-events-none"
-          style={{
-            left: limelightStyle.left,
-            width: limelightStyle.width,
-            opacity: limelightStyle.opacity,
-            backgroundColor: 'var(--theme-accent)',
-            boxShadow: '0 0 12px 2px var(--theme-accent), 0 8px 16px -4px var(--theme-accent)',
-            transition: reducedMotion ? 'opacity 200ms ease' : 'left 380ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease'
-          }}
-          aria-hidden="true"
-        />
+      <button
+        type="button"
+        aria-label="Create post"
+        aria-hidden={createVisible ? undefined : 'true'}
+        tabIndex={createVisible ? 0 : -1}
+        data-visible={createVisible ? 'true' : 'false'}
+        onClick={() => navigate(CREATE_POST_PATH)}
+        onTouchStart={() => prefetchRoute(CREATE_POST_PATH)}
+        className={`absolute left-1/2 bottom-full mb-3 w-[52px] h-[52px] -ml-[26px] rounded-full flex items-center justify-center text-white transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none active:scale-95 ${
+          createVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-6 scale-75 pointer-events-none'
+        }`}
+        style={{
+          backgroundColor: 'var(--theme-accent)',
+          boxShadow: '0 8px 20px -6px var(--theme-accent), 0 2px 6px rgba(15, 23, 42, 0.18)'
+        }}
+      >
+        <Plus className="w-6 h-6" strokeWidth={2.4} />
+      </button>
 
-        {navItems.map((item, index) => {
+      <div className="grid grid-cols-5 items-stretch px-1 pt-1.5 pb-1">
+        {MAIN_TABS.map((item, index) => {
           const isActive = index === activeIndex
-          const showUnreadDot = item.id === 'messages' && unreadChats > 0
+          const showUnread = item.id === 'messages' && unreadChats > 0
           return (
             <NavLink
               key={item.id}
-              ref={(el) => (itemRefs.current[index] = el)}
               to={item.to}
-              aria-label={showUnreadDot ? `${item.label} — unread messages` : item.label}
+              aria-label={showUnread ? `${item.label} — ${unreadChats} unread` : item.label}
+              aria-current={isActive ? 'page' : undefined}
               onTouchStart={() => prefetchRoute(item.to)}
-              className="relative z-10 flex flex-col items-center justify-center py-1.5"
+              className="flex flex-col items-center justify-center gap-0.5 py-1 min-w-0"
+              style={{ color: isActive ? 'var(--theme-accent)' : 'var(--theme-textSecondary)' }}
             >
-              <span className="relative">
+              <span
+                className="relative flex items-center justify-center w-12 h-7 rounded-full transition-colors duration-200"
+                style={{
+                  backgroundColor: isActive ? 'color-mix(in srgb, var(--theme-accent) 13%, transparent)' : 'transparent'
+                }}
+              >
                 <item.icon
-                  className="w-6 h-6 transition-all duration-300"
+                  className="w-[22px] h-[22px] transition-opacity duration-200"
                   strokeWidth={isActive ? 2.2 : 1.8}
-                  style={{
-                    color: isActive ? 'var(--theme-accent)' : 'var(--theme-textSecondary)',
-                    opacity: isActive ? 1 : 0.65,
-                    filter: isActive ? 'drop-shadow(0 0 6px var(--theme-accent))' : 'none'
-                  }}
+                  style={{ opacity: isActive ? 1 : 0.75 }}
                 />
-                {showUnreadDot && (
+                {showUnread && (
                   <span
-                    className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#09090f]"
+                    className="absolute -top-1 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none flex items-center justify-center ring-2 ring-white dark:ring-[#09090f]"
                     aria-hidden="true"
-                  />
+                  >
+                    {unreadLabel}
+                  </span>
                 )}
+              </span>
+              {/* Five slots: a slot is 70px+ even at 360px, so 10px labels
+                  ("Communities" measured 61.7px on the device) fit whole. */}
+              <span
+                className={`max-w-full whitespace-nowrap text-[10px] leading-tight tracking-[-0.01em] ${isActive ? 'font-semibold' : 'font-medium'}`}
+                style={{ opacity: isActive ? 1 : 0.8 }}
+              >
+                {item.label}
               </span>
             </NavLink>
           )

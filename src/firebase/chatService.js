@@ -769,22 +769,47 @@ export async function setTypingState(chatId, uid, isTyping) {
  */
 export function subscribeToTypingState(chatId, currentUid, onData) {
   if (!chatId) return () => {}
-  return onSnapshot(
+  // The staleness check is re-applied every second, not only when a
+  // snapshot arrives — otherwise a typer whose app was killed (no
+  // delete ever lands, so no new snapshot either) stayed "typing…"
+  // forever. Senders refresh their doc every ~3s while typing.
+  let docs = []
+  let lastKey = ''
+  const emit = () => {
+    const now = Date.now()
+    const typingUids = docs
+      .filter((d) => d.id !== currentUid)
+      .filter((d) => d.typing === true && d.ms && now - d.ms < TYPING_STALE_MS)
+      .map((d) => d.id)
+    const key = typingUids.join(',')
+    if (key !== lastKey) {
+      lastKey = key
+      onData(typingUids)
+    }
+  }
+  const unsubscribe = onSnapshot(
     collection(db, 'chats', chatId, 'typing'),
     (snap) => {
-      const now = Date.now()
-      const typingUids = snap.docs
-        .filter((d) => d.id !== currentUid)
-        .filter((d) => {
-          const data = d.data()
-          const ms = data.updatedAt?.toMillis?.()
-          return data.typing === true && ms && now - ms < TYPING_STALE_MS
-        })
-        .map((d) => d.id)
-      onData(typingUids)
+      docs = snap.docs.map((d) => {
+        const data = d.data()
+        // Pending server timestamps read as null locally; treat our own
+        // just-written doc as "now" rather than dropping it.
+        const ms = data.updatedAt?.toMillis?.() ?? (snap.metadata.hasPendingWrites ? Date.now() : null)
+        return { id: d.id, typing: data.typing, ms }
+      })
+      emit()
     },
-    () => onData([])
+    () => {
+      docs = []
+      emit()
+    }
   )
+  onData([])
+  const timer = setInterval(emit, 1000)
+  return () => {
+    clearInterval(timer)
+    unsubscribe()
+  }
 }
 
 export async function editMessage(chatId, messageId, senderId, newText) {

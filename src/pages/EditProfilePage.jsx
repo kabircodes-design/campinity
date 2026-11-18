@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Camera, X, Sparkles, RefreshCw, Trash2 } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
@@ -117,6 +117,14 @@ export default function EditProfilePage() {
 
   const [errors, setErrors] = useState({})
   const [isSaving, setIsSaving] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
+
+  // Unsaved-changes guard: a snapshot of the editable fields taken once the
+  // profile has loaded; leaving with a different snapshot asks first.
+  const formSnapshot = JSON.stringify({ name, username, bio, collegeId: selectedCollege?.id || null, department, year, division, rollNumber, skills, interests })
+  const initialSnapshotRef = useRef(null)
+  const isDirty = initialSnapshotRef.current !== null && formSnapshot !== initialSnapshotRef.current
+  const requestLeave = () => (isDirty ? setConfirmLeave(true) : navigate('/profile'))
 
   useEffect(() => {
     let cancelled = false
@@ -166,6 +174,19 @@ export default function EditProfilePage() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!loading && !loadError && initialSnapshotRef.current === null) initialSnapshotRef.current = formSnapshot
+  }, [loading, loadError, formSnapshot])
+  useEffect(() => {
+    if (!isDirty) return undefined
+    const warn = (e) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [isDirty])
 
   const usernameCheck = useUsernameAvailability(username, originalUsername)
 
@@ -310,7 +331,7 @@ export default function EditProfilePage() {
             <button
               type="button"
               aria-label="Cancel"
-              onClick={() => navigate('/profile')}
+              onClick={requestLeave}
               className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -611,7 +632,7 @@ export default function EditProfilePage() {
           <div className="flex items-center gap-3 pt-2">
             <button
               type="button"
-              onClick={() => navigate('/profile')}
+              onClick={requestLeave}
               disabled={isSaving}
               className="flex-1 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold py-3 hover:border-gray-300 transition-all duration-300 disabled:opacity-50"
             >
@@ -636,6 +657,24 @@ export default function EditProfilePage() {
           setAvatarMode('avatar')
         }}
       />
+
+      {confirmLeave && (
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0" role="dialog" aria-modal="true" aria-labelledby="discard-title">
+          <button type="button" aria-label="Dismiss" tabIndex={-1} onClick={() => setConfirmLeave(false)} className="absolute inset-0 bg-black/40" />
+          <div className="relative w-full max-w-[360px] rounded-2xl bg-white p-5 shadow-xl">
+            <p id="discard-title" className="text-base font-bold text-gray-900">Discard your changes?</p>
+            <p className="mt-1.5 text-sm text-gray-500">You have edits that haven't been saved.</p>
+            <div className="mt-5 flex gap-2">
+              <button type="button" onClick={() => setConfirmLeave(false)} className="flex-1 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold py-2.5">
+                Keep editing
+              </button>
+              <button type="button" onClick={() => navigate('/profile')} className="flex-1 rounded-full bg-red-600 text-white text-sm font-semibold py-2.5 hover:bg-red-700">
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ProfilePhotoEditor
         open={photoEditorOpen}

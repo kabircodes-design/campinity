@@ -10,6 +10,7 @@ import { searchUsersForShare } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { createGroupChat } from '../firebase/chatService.js'
 import { useSystemBarsOverride } from '../theme/systemBars.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 const MIN_MEMBERS = 2 // + creator = 3 total, matching chatService.js's MIN_GROUP_MEMBERS
 
@@ -23,6 +24,8 @@ const MIN_MEMBERS = 2 // + creator = 3 total, matching chatService.js's MIN_GROU
  * path conventions I haven't verified for this project.
  */
 export default function CreateGroupFlow({ open, onClose }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   // Always-white full-screen flow (no dark variant): dark system-bar icons.
   useSystemBarsOverride('light', open)
   const navigate = useNavigate()

@@ -7,6 +7,17 @@ const USERS_COLLECTION = 'users'
 const USERNAME_PATTERN = /^[a-z0-9_]+$/
 const MIN_LENGTH = 3
 const MAX_LENGTH = 20
+// After a rename the old name stays reserved for this long as an ALIAS of
+// the same account (so old @mentions / links still resolve), then anyone
+// may claim it. Mirrors the 30-day check in firestore.rules (usernames).
+export const USERNAME_ALIAS_HOLD_MS = 30 * 24 * 60 * 60 * 1000
+
+const tsMs = (t) => (t && typeof t.toMillis === 'function' ? t.toMillis() : null)
+/** True if this reservation is a released alias whose hold has expired (free to claim). */
+export function isClaimableAlias(data, now = Date.now()) {
+  const released = tsMs(data?.releasedAt)
+  return Boolean(released) && now - released > USERNAME_ALIAS_HOLD_MS
+}
 
 /**
  * Normalizes raw user input into the canonical form used as the
@@ -63,9 +74,12 @@ export async function getUserIdByUsername(rawUsername) {
  * separately is what keeps the transaction from being called on every
  * keystroke.
  */
-export async function checkUsernameAvailable(normalized) {
+export async function checkUsernameAvailable(normalized, uid = null) {
   const snap = await getDoc(doc(db, USERNAMES_COLLECTION, normalized))
-  return !snap.exists()
+  if (!snap.exists()) return true
+  const data = snap.data()
+  // Your own previous name (alias) can be taken back; an expired alias is free.
+  return (uid && data.uid === uid) || isClaimableAlias(data)
 }
 
 /**
@@ -119,7 +133,7 @@ export async function reserveUsername({ uid, newUsername, oldUsername = '' }) {
   await runTransaction(db, async (transaction) => {
     const newSnap = await transaction.get(newRef)
 
-    if (newSnap.exists() && newSnap.data().uid !== uid) {
+    if (newSnap.exists() && newSnap.data().uid !== uid && !isClaimableAlias(newSnap.data())) {
       const err = new Error('Username already taken')
       err.code = 'username-taken'
       throw err
@@ -128,7 +142,10 @@ export async function reserveUsername({ uid, newUsername, oldUsername = '' }) {
     if (oldRef) {
       const oldSnap = await transaction.get(oldRef)
       if (oldSnap.exists() && oldSnap.data().uid === uid) {
-        transaction.delete(oldRef)
+        // Keep the old name as an alias of this account for 30 days instead of
+        // freeing it at once: old links and @mentions keep resolving, and nobody
+        // can impersonate the account by grabbing its previous name.
+        transaction.set(oldRef, { uid, createdAt: oldSnap.data().createdAt || serverTimestamp(), releasedAt: serverTimestamp(), aliasOf: normalizedNew })
       }
     }
 

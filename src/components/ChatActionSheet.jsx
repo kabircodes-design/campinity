@@ -1,4 +1,5 @@
 import { Bell, BellOff, CircleDot, MailOpen, Trash2, X } from 'lucide-react'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * Shared bottom-sheet (mobile) / centered card (desktop) for a chat
@@ -10,6 +11,8 @@ import { Bell, BellOff, CircleDot, MailOpen, Trash2, X } from 'lucide-react'
  * call.
  */
 export default function ChatActionSheet({ chat, isUnread, isMuted, onClose, onDelete, onToggleMute, onToggleRead }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(true, onClose)
   return (
     <div className="fixed inset-0 z-[9999] bg-black/40 flex items-end sm:items-center justify-center [animation:fadeIn_150ms_ease-out]">
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0" />

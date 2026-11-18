@@ -90,6 +90,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS = {
   follows: true,
   messages: true,
   communities: true,
+  announcements: true,
   calls: true
 }
 
@@ -515,15 +516,21 @@ export async function getNotifications(uid, { pageSize = 20, cursor = null } = {
 }
 
 /** Real-time feed for the actual Notifications page (NotificationsPage.jsx — I don't have this file; see this feature's chat summary for what to wire in). */
-export function subscribeToNotifications(uid, { pageSize = 30 } = {}, callback) {
+export function subscribeToNotifications(uid, { pageSize = 30 } = {}, callback, onError) {
   if (!uid) {
     callback([])
     return () => {}
   }
   const feedQuery = query(notificationsCollection(uid), orderBy('createdAt', 'desc'), limit(pageSize))
-  return onSnapshot(feedQuery, (snap) => {
-    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-  })
+  return onSnapshot(
+    feedQuery,
+    (snap) => {
+      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    },
+    // Optional — without it a failed listener (offline at start,
+    // permission error) left callers waiting forever.
+    (err) => onError?.(err)
+  )
 }
 
 export async function markNotificationRead(uid, notificationId) {
@@ -552,4 +559,11 @@ export async function markAllNotificationsRead(uid) {
     snap.docs.slice(i, i + 450).forEach((d) => batch.update(d.ref, { read: true }))
     await batch.commit()
   }
+}
+
+/** One notification of the signed-in user's own (owner-only by rules), or null if it no longer exists. */
+export async function getNotificationById(uid, notificationId) {
+  if (!uid || !notificationId) return null
+  const snap = await getDoc(doc(db, 'users', uid, 'notifications', notificationId))
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null
 }

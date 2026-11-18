@@ -80,14 +80,11 @@ export default function NotificationCard({ notification, onRead, onDelete }) {
           handleClick()
         }
       }}
-      className={`w-full flex items-start gap-3 px-4 py-3.5 text-left relative transition-all duration-200 active:scale-[0.99] hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer ${
-        !notification.read ? 'bg-blue-50/40 dark:bg-blue-500/10' : 'bg-white dark:bg-[#11131a]'
+      aria-label={`${notification.read ? '' : 'Unread: '}${lead} ${action}`}
+      className={`w-full flex items-start gap-3 px-4 lg:px-6 py-3 text-left relative transition-colors duration-200 active:bg-gray-100 dark:active:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer ${
+        !notification.read ? 'bg-blue-50/60 dark:bg-blue-500/10' : ''
       }`}
     >
-      {!notification.read && (
-        <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-blue-600" aria-hidden="true" />
-      )}
-
       <div className="relative flex-shrink-0">
         <Avatar
           initials={(lead || '?').slice(0, 1).toUpperCase()}
@@ -96,7 +93,7 @@ export default function NotificationCard({ notification, onRead, onDelete }) {
           src={notification.actorAvatar || undefined}
         />
         <span
-          className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full ${style.bg} flex items-center justify-center ring-2 ring-white dark:ring-[#11131a]`}
+          className={`absolute -bottom-0.5 -right-0.5 w-[22px] h-[22px] rounded-full ${style.bg} flex items-center justify-center ring-2 ring-white dark:ring-[#11131a]`}
           aria-hidden="true"
         >
           <Icon className="w-3 h-3 text-white" fill={style.fill ? 'currentColor' : 'none'} strokeWidth={2.2} />
@@ -104,26 +101,29 @@ export default function NotificationCard({ notification, onRead, onDelete }) {
       </div>
 
       <div className="flex-1 min-w-0 pt-0.5">
-        <p className="text-[13.5px] text-gray-900 dark:text-gray-50 leading-snug">
-          <span className="font-semibold">{lead}</span> <span className="text-gray-700 dark:text-gray-300">{action}</span>
+        <p className="text-[14px] text-gray-900 dark:text-gray-50 leading-snug break-words">
+          <span className="font-semibold">{lead}</span>{' '}
+          <span className={notification.read ? 'text-gray-600 dark:text-gray-400' : 'text-gray-800 dark:text-gray-200'}>{action}</span>
         </p>
         {preview && (
-          <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400 italic truncate">&ldquo;{preview}&rdquo;</p>
+          <p className="mt-1 text-[13px] text-gray-500 dark:text-gray-400 line-clamp-2 break-words">&ldquo;{preview}&rdquo;</p>
         )}
-        <div className="mt-1 flex items-center gap-2">
-          <span className="text-[11.5px] text-gray-400 dark:text-gray-500">{formatTimeAgo(notification.createdAt)}</span>
-          {!notification.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-600" aria-hidden="true" />}
-        </div>
+        <p className={`mt-1 text-[12px] ${notification.read ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400 font-semibold'}`}>
+          {formatTimeAgo(notification.createdAt)}
+        </p>
       </div>
 
-      <button
-        type="button"
-        aria-label="Delete notification"
-        onClick={handleDelete}
-        className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 dark:text-gray-600 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all duration-200"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
+      <div className="flex-shrink-0 flex flex-col items-center gap-1 pt-0.5">
+        <button
+          type="button"
+          aria-label="Delete notification"
+          onClick={handleDelete}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 dark:text-gray-600 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all duration-200"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+        {!notification.read && <span className="w-2.5 h-2.5 rounded-full bg-blue-600" aria-hidden="true" />}
+      </div>
     </div>
   )
 }

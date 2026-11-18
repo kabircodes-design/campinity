@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Download, FileText, X } from 'lucide-react'
 import { getChatMediaMessages } from '../firebase/chatService.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 function formatFileSize(bytes) {
   if (!bytes) return ''
@@ -11,6 +12,8 @@ function formatFileSize(bytes) {
 
 /** "Media/files/links" — group/chat menu. Real data via getChatMediaMessages, not a filter of whatever's already scrolled into view. */
 export default function ChatMediaModal({ chatId, onClose }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(true, onClose)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

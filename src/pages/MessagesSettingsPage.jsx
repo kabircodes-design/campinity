@@ -119,8 +119,8 @@ export default function MessagesSettingsPage() {
           <SettingsItem
             icon={MessageCircle}
             label="Read receipts"
-            description="Coming soon"
-            rightElement={<span className="text-[11px] font-semibold text-gray-300 dark:text-gray-600">Coming soon</span>}
+            description="Always on — people see when you've read their messages. Turning them off isn't available yet."
+            rightElement={<span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">On</span>}
           />
         </main>
       </div>

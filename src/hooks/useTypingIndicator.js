@@ -2,6 +2,10 @@ import { useEffect, useRef } from 'react'
 import { setTypingState } from '../firebase/chatService.js'
 
 const STOP_TYPING_DELAY_MS = 1800
+// While someone keeps typing, refresh the (single) typing doc this often
+// so readers, which now age entries out on a timer, keep seeing it.
+// One write per ~3s of continuous typing, never per keystroke.
+const TYPING_REFRESH_MS = 3000
 
 /**
  * Composer-side broadcast half of the typing indicator. Debounced by
@@ -17,6 +21,7 @@ const STOP_TYPING_DELAY_MS = 1800
 export function useTypingBroadcast(chatId, uid) {
   const isTypingRef = useRef(false)
   const timeoutRef = useRef(null)
+  const lastWriteRef = useRef(0)
 
   const stopTyping = () => {
     if (timeoutRef.current) {
@@ -31,8 +36,10 @@ export function useTypingBroadcast(chatId, uid) {
 
   const notifyTyping = () => {
     if (!chatId || !uid) return
-    if (!isTypingRef.current) {
+    const now = Date.now()
+    if (!isTypingRef.current || now - lastWriteRef.current > TYPING_REFRESH_MS) {
       isTypingRef.current = true
+      lastWriteRef.current = now
       setTypingState(chatId, uid, true)
     }
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
@@ -43,6 +50,17 @@ export function useTypingBroadcast(chatId, uid) {
   // effect's cleanup captures THIS render's chatId/uid closure, so
   // switching chatId (or unmounting entirely) clears typing state for
   // the conversation being left, not whatever chat is opened next.
+  // Backgrounding the app (or switching tabs) stops "typing…" at once
+  // instead of leaving it to time out.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') stopTyping()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, uid])
+
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)

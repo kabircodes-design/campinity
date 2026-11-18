@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart3, Check, Plus, Search, Sparkles, TrendingUp, Users } from 'lucide-react'
+import { AlertCircle, BarChart3, Check, Search, Sparkles, TrendingUp, Users, X } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
 import CommunityCard from '../components/CommunityCard.jsx'
-import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import {
   getCollegeCommunities,
@@ -18,10 +17,8 @@ import { useAuth } from '../context/AuthContext.jsx'
 
 // Real types, taken directly from CommunityCard.jsx's own typeLabels
 // — not invented. "All" is added as the default/unfiltered option.
-// 'official_club' deliberately excluded — Clubs has its own tab/route
-// now, and the Communities tab's base list already filters that type
-// out entirely (see clubFilter above), so a "Clubs" chip here would
-// only ever return zero results.
+// 'official_club' deliberately excluded — Clubs has its own segment,
+// and the Communities list already filters that type out (clubFilter).
 const TYPE_FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'study_group', label: 'Study' },
@@ -32,40 +29,67 @@ const TYPE_FILTERS = [
   { id: 'batch', label: 'Batch' }
 ]
 
+function SectionTitle({ children, count }) {
+  return (
+    <div className="mb-2.5 flex items-baseline justify-between gap-3">
+      <h2 className="text-[15px] font-bold text-gray-900 tracking-tight">{children}</h2>
+      {typeof count === 'number' && <span className="text-xs text-gray-400 flex-shrink-0">{count}</span>}
+    </div>
+  )
+}
+
+function CardSkeleton() {
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-3.5" aria-hidden="true">
+      <div className="flex items-center gap-3">
+        <div className="w-14 h-14 rounded-2xl bg-gray-100 animate-pulse" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3.5 w-2/3 rounded-full bg-gray-100 animate-pulse" />
+          <div className="h-3 w-1/3 rounded-full bg-gray-100 animate-pulse" />
+        </div>
+        <div className="w-16 h-8 rounded-full bg-gray-100 animate-pulse" />
+      </div>
+      <div className="mt-3 h-3 w-5/6 rounded-full bg-gray-100 animate-pulse" />
+    </div>
+  )
+}
+
+function StatePanel({ icon: Icon, tone = 'blue', title, body, action }) {
+  return (
+    <div className="py-12 px-6 text-center">
+      <div className={`mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ${tone === 'red' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+        <Icon className="w-6 h-6" />
+      </div>
+      <p className="mt-3 text-[15px] font-semibold text-gray-900">{title}</p>
+      {body && <p className="mt-1 text-sm text-gray-500 max-w-[280px] mx-auto leading-relaxed">{body}</p>}
+      {action}
+    </div>
+  )
+}
+
 /**
- * Full redesign to match the rest of the rebuilt app (Home, Lost &
- * Found, Messages, Marketplace) — clean white surfaces, blue accent,
- * no glassmorphism, no dark theme. This was the last page still on the
- * old purple/lavender `#f3f0fb` + ambient-glow-layer theme.
+ * Community / club discovery, rendered inside CommunitiesHubPage (which
+ * owns the page header and the create action).
  *
- * All data fetching/state (trending communities, membership states,
- * pending requests, debounced search) is unchanged from before this
- * pass — presentation only. "Trending on Campus" in the right rail is
- * the same already-fetched, membersCount-sorted list this page already
- * has (getTrendingCommunities orders by membersCount desc server-side)
- * — zero new query, zero fabricated activity metric.
+ * Data is unchanged from before the redesign: trending (membersCount
+ * desc), the viewer's memberships + pending requests, the college-scoped
+ * "For your campus" query, the server-side category query and the
+ * debounced name search. Nothing is fabricated: every section only
+ * renders when its real query returned something.
  *
- * `clubsOnly` (added for CommunitiesHubPage's [Communities][Clubs] tabs):
- * this is deliberately the SAME component and the SAME queries, not a
- * second parallel Clubs implementation — 'official_club' is already a
- * real, pre-existing entry in COMMUNITY_TYPES, so a club IS a community
- * of that type, not a different schema/entity. clubsOnly just filters
- * every already-fetched list down to that type client-side (no new
- * query, no new composite index — the trending/campus lists here are
- * already small, capped fetches) and swaps the page copy. Any bug fix
- * or feature added to community discovery here automatically applies to
- * Clubs too, rather than needing to be duplicated by hand.
+ * `clubsOnly`: the SAME component and queries, filtered client-side to
+ * type 'official_club' (a club is a community of that type), so any fix
+ * here applies to both segments.
  */
 export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
   const navigate = useNavigate()
-  // Communities and Clubs are two distinct product concepts now — the
-  // Communities tab filters OUT official_club entries (legacy clubs
-  // created before Clubs had its own tab/route must not keep showing up
-  // mixed into general community discovery), and the Clubs tab filters
-  // IN only that type. Same list, opposite ends of one condition.
   const clubFilter = (list) => list.filter((c) => (clubsOnly ? c.type === 'official_club' : c.type !== 'official_club'))
   const [communities, setCommunities] = useState([])
   const [membershipStates, setMembershipStates] = useState(new Map())
+  // Communities the viewer had already joined when the page loaded. They
+  // live in "Your communities"; ones joined from this screen stay where
+  // they are and flip to "Joined" instead of vanishing mid-tap.
+  const [joinedAtLoad, setJoinedAtLoad] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
@@ -98,6 +122,7 @@ export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
           if (!states.has(r.communityId)) states.set(r.communityId, 'pending')
         })
         setMembershipStates(states)
+        setJoinedAtLoad(new Set(memberships.map((m) => m.communityId)))
       })
       .catch((err) => {
         if (cancelled) return
@@ -113,13 +138,8 @@ export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
     }
   }, [reloadKey])
 
-  // "For Your Campus" — real, server-side, college-scoped query
-  // (getCollegeCommunities already existed, unused by this page until
-  // now). Separate effect keyed on profile?.collegeId rather than
-  // folded into the effect above: profile loads asynchronously from
-  // AuthContext and may not be ready on first mount, so this simply
-  // re-fires once it is, instead of the page needing to coordinate two
-  // different loading conditions in one effect.
+  // "For your campus" — real, server-side, college-scoped query. Keyed
+  // on profile?.collegeId because the profile loads asynchronously.
   useEffect(() => {
     if (!profile?.collegeId) {
       setCampusCommunities([])
@@ -138,11 +158,8 @@ export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
     }
   }, [profile?.collegeId])
 
-  // Category chips now query the real, unbounded, server-side
-  // searchCommunitiesByCategory() instead of client-filtering the
-  // capped 40-item trending list below — a study group ranked #55 by
-  // members was previously undiscoverable through this filter no
-  // matter what, since it would never be in that top-40 set at all.
+  // Category chips query the real, unbounded searchCommunitiesByCategory()
+  // rather than client-filtering the capped trending list.
   useEffect(() => {
     if (typeFilter === 'all') {
       setCategoryResults(null)
@@ -165,13 +182,12 @@ export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
     }
   }, [typeFilter])
 
-  // Search is local to this page — a real Firestore query
-  // (searchCommunitiesByName), completely separate from the app's
-  // global search, never touching it.
+  // Page-local name search (searchCommunitiesByName), debounced.
   useEffect(() => {
     const term = searchTerm.trim()
     if (!term) {
       setSearchResults(null)
+      setSearching(false)
       return undefined
     }
     setSearching(true)
@@ -189,11 +205,8 @@ export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
   }, [searchTerm])
 
   const filteredCommunities = useMemo(() => {
-    // Actively text-searching: keep filtering that (already small,
-    // already-fetched) result set client-side by type — introducing a
-    // second server query here would just race the name search for no
-    // benefit. Only when NOT text-searching does a type filter use the
-    // real category query above (categoryResults).
+    // While text-searching, the (small) result set is type-filtered
+    // client-side; otherwise a type filter uses the category query.
     if (searchResults !== null) {
       const base = clubFilter(searchResults)
       return typeFilter === 'all' ? base : base.filter((c) => c.type === typeFilter)
@@ -202,23 +215,35 @@ export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
     return clubFilter(communities)
   }, [communities, searchResults, typeFilter, categoryResults, clubsOnly])
 
-  // "Your Communities" is derived from the already-fetched trending
-  // list filtered by membership, NOT a second Firestore fetch — this
-  // means it only shows joined communities that also happen to appear
-  // in the trending set, a stated trade-off in exchange for not
-  // introducing an extra query just for this section.
-  const yourCommunities = useMemo(
-    () => clubFilter(communities).filter((c) => {
+  // "Your communities" — derived from the already-fetched trending list
+  // plus the campus list (no extra query), filtered by membership.
+  const yourCommunities = useMemo(() => {
+    const seen = new Set()
+    return clubFilter([...communities, ...campusCommunities]).filter((c) => {
+      if (seen.has(c.id)) return false
+      seen.add(c.id)
       const state = membershipStates.get(c.id)
       return state === 'owner' || state === 'member'
-    }),
-    [communities, membershipStates, clubsOnly]
-  )
+    })
+  }, [communities, campusCommunities, membershipStates, clubsOnly])
+
+  const isSearchingOrFiltering = Boolean(searchTerm.trim()) || typeFilter !== 'all'
+
   const discoverCommunities = useMemo(
-    () => filteredCommunities.filter((c) => !membershipStates.has(c.id) || membershipStates.get(c.id) === 'pending'),
-    [filteredCommunities, membershipStates]
+    () => (isSearchingOrFiltering ? filteredCommunities : filteredCommunities.filter((c) => !joinedAtLoad.has(c.id))),
+    [filteredCommunities, joinedAtLoad, isSearchingOrFiltering]
   )
   const trendingCommunities = useMemo(() => clubFilter(communities).slice(0, 5), [communities, clubsOnly])
+  const filteredCampusCommunities = useMemo(
+    () => clubFilter(campusCommunities).filter((c) => !joinedAtLoad.has(c.id)).slice(0, 6),
+    [campusCommunities, joinedAtLoad, clubsOnly]
+  )
+  const campusIds = useMemo(() => new Set(filteredCampusCommunities.map((c) => c.id)), [filteredCampusCommunities])
+  // Don't list the same community twice on the default view.
+  const popularCommunities = useMemo(
+    () => discoverCommunities.filter((c) => isSearchingOrFiltering || !campusIds.has(c.id)),
+    [discoverCommunities, campusIds, isSearchingOrFiltering]
+  )
 
   const quickStats = useMemo(
     () => [
@@ -229,288 +254,271 @@ export default function DiscoverCommunitiesPage({ clubsOnly = false } = {}) {
     [communities, yourCommunities, clubsOnly]
   )
 
-  const filteredCampusCommunities = useMemo(() => clubFilter(campusCommunities), [campusCommunities, clubsOnly])
-  const hasAnyBaseResults = clubFilter(communities).length > 0
+  const hasAnyBaseResults = clubFilter(communities).length > 0 || filteredCampusCommunities.length > 0
+  const noun = clubsOnly ? 'clubs' : 'communities'
+  const createPath = clubsOnly ? '/club/create' : '/community/create'
+  const openCommunity = (c) => navigate(c.type === 'official_club' ? `/club/${c.id}` : `/community/${c.id}`)
+  const updateState = (id, newState) => setMembershipStates((prev) => new Map(prev).set(id, newState))
+  const resultsLoading = searching || categoryLoading
 
-  const isSearchingOrFiltering = searchTerm.trim() || typeFilter !== 'all'
+  const renderCards = (list) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      {list.map((community) => (
+        <CommunityCard
+          key={community.id}
+          community={community}
+          membershipState={membershipStates.get(community.id) || null}
+          onStateChange={updateState}
+        />
+      ))}
+    </div>
+  )
 
   return (
     <div className="h-full lg:grid lg:gap-3 lg:[grid-template-columns:minmax(0,1fr)_minmax(260px,320px)] lg:overflow-hidden">
       <div className="h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden">
-          <div className="mx-auto max-w-[560px] lg:max-w-[820px] px-4 lg:px-6 pt-5 pb-24">
-            {/* Hero */}
-            <div
-              // ROOT-CAUSE FIX (dark-mode consistency): this hero used a
-              // raw inline gradient style + zero dark: classes anywhere
-              // in the card — invisible to the theme system entirely,
-              // always the light gradient/colors regardless of mode.
-              // Brought in line with SearchPage.jsx's own "Explore
-              // Campinity" hero (the already-correct reference): same
-              // gradient utility + dark stops, same opacity/color dark:
-              // pairs, nothing else about this card's layout changed.
-              className="relative overflow-hidden rounded-2xl lg:rounded-3xl px-5 py-5 lg:px-7 lg:py-6 mb-4 bg-gradient-to-br from-[#eaf3ff] via-[#dcecff] to-[#e7f7f7] dark:from-[#141a2e] dark:via-[#121629] dark:to-[#101f21]"
-            >
-              <div
-                className="absolute -top-10 -right-6 w-40 h-40 rounded-full opacity-60 dark:opacity-25 pointer-events-none"
-                style={{ background: 'radial-gradient(circle, rgba(59,155,255,0.35), transparent 70%)' }}
-                aria-hidden="true"
-              />
-              <div
-                className="absolute -bottom-12 right-10 w-32 h-32 rounded-full opacity-50 dark:opacity-20 pointer-events-none"
-                style={{ background: 'radial-gradient(circle, rgba(45,212,191,0.30), transparent 70%)' }}
-                aria-hidden="true"
-              />
+        <div className="mx-auto max-w-[560px] lg:max-w-[820px] px-4 lg:px-6 pt-3 pb-32 lg:pb-8">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder={`Search ${noun}...`}
+              aria-label={`Search ${noun}`}
+              enterKeyHint="search"
+              className="w-full rounded-2xl border border-gray-200 bg-gray-50 pl-10 pr-10 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-200 [&::-webkit-search-cancel-button]:hidden"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
 
-              <div className="relative flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-blue-700/70 dark:text-blue-300/80 uppercase">
-                    <Users className="w-3.5 h-3.5" /> {clubsOnly ? 'Clubs' : 'Communities'}
-                  </p>
-                  <h1 className="mt-1.5 text-2xl lg:text-[28px] font-bold text-gray-900 dark:text-gray-50 tracking-tight leading-tight max-w-sm">
-                    {clubsOnly ? 'Find your club.' : 'Find your people.'}
-                  </h1>
-                  <p className="mt-2 text-[13px] lg:text-sm text-gray-500 dark:text-gray-400 max-w-sm leading-relaxed">
-                    {clubsOnly
-                      ? 'Discover official campus clubs — join, follow their posts, and get involved.'
-                      : 'Discover communities, clubs and campus groups that feel like home.'}
-                  </p>
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      onClick={() => navigate(clubsOnly ? '/club/create' : '/community/create')}
-                      className="flex items-center gap-1.5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 active:scale-[0.98] transition-all duration-200"
-                    >
-                      <Plus className="w-4 h-4" /> {clubsOnly ? 'Create Club' : 'Create Community'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="relative hidden sm:flex flex-shrink-0 items-end gap-2 pb-1">
-                  <span className="w-11 h-11 rounded-2xl bg-white/70 dark:bg-white/10 border border-white dark:border-white/10 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm dark:shadow-none -rotate-6">
-                    <Users className="w-5 h-5" />
-                  </span>
-                  <span className="w-14 h-14 rounded-2xl bg-white/80 dark:bg-white/10 border border-white dark:border-white/10 flex items-center justify-center text-blue-700 dark:text-blue-300 shadow-md dark:shadow-none">
-                    <Sparkles className="w-6 h-6" />
-                  </span>
-                  <span className="w-11 h-11 rounded-2xl bg-white/70 dark:bg-white/10 border border-white dark:border-white/10 flex items-center justify-center text-teal-600 dark:text-teal-400 shadow-sm dark:shadow-none rotate-6">
-                    <TrendingUp className="w-5 h-5" />
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Search */}
-            <div className="relative mb-3">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder={clubsOnly ? 'Search clubs...' : 'Search communities...'}
-                aria-label={clubsOnly ? 'Search clubs' : 'Search communities'}
-                className="w-full rounded-2xl border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-200"
-              />
-            </div>
-
-            {/* Category filters — hidden in Clubs mode: every result here
-                is already type='official_club', a type chip row would be
-                redundant (there's no club sub-type to filter by yet). */}
-            {!clubsOnly && (
-              <div className="flex items-center gap-2 mb-4 overflow-x-auto scroll-hidden">
-                {TYPE_FILTERS.map((f) => (
+          {/* Category filters — Communities only (clubs have no sub-type). */}
+          {!clubsOnly && (
+            <div className="-mx-4 px-4 mt-3 flex items-center gap-2 overflow-x-auto scroll-hidden" role="tablist" aria-label="Community type">
+              {TYPE_FILTERS.map((f) => {
+                const isActive = typeFilter === f.id
+                return (
                   <button
                     key={f.id}
                     type="button"
+                    role="tab"
+                    aria-selected={isActive}
                     onClick={() => setTypeFilter(f.id)}
-                    className={`flex-shrink-0 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
-                      typeFilter === f.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    className={`flex-shrink-0 rounded-full text-[13px] font-semibold px-3.5 py-1.5 transition-all duration-200 ${
+                      isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                     }`}
                   >
                     {f.label}
                   </button>
-                ))}
-              </div>
-            )}
-
-            {loading ? (
-              <div className="py-16 flex justify-center">
-                <Loader size="md" tone="dark" />
-              </div>
-            ) : loadError ? (
-              <div className="py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">{loadError}</p>
-                <button
-                  type="button"
-                  onClick={() => setReloadKey((k) => k + 1)}
-                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
-                >
-                  Try Again
-                </button>
-              </div>
-            ) : !hasAnyBaseResults && !searchTerm ? (
-              <div className="py-16 text-center">
-                <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
-                  <Users className="w-5 h-5 text-blue-500" />
-                </div>
-                <p className="mt-3 text-sm font-semibold text-gray-900">{clubsOnly ? 'No clubs here yet' : 'No communities here yet'}</p>
-                <p className="mt-1 text-sm text-gray-400 max-w-[280px] mx-auto leading-relaxed">
-                  Be the first to bring people together.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => navigate(clubsOnly ? '/club/create' : '/community/create')}
-                  className="mt-5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
-                >
-                  {clubsOnly ? 'Create Club' : 'Create Community'}
-                </button>
-              </div>
-            ) : (
-              <>
-                {!isSearchingOrFiltering && yourCommunities.length > 0 && (
-                  <div className="mb-5">
-                    <p className="mb-2.5 text-sm font-bold text-gray-900">{clubsOnly ? 'Your Clubs' : 'Your Communities'}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {yourCommunities.map((community) => (
-                        <CommunityCard key={community.id} community={community} membershipState={membershipStates.get(community.id)} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {!isSearchingOrFiltering && filteredCampusCommunities.length > 0 && (
-                  <div className="mb-5">
-                    <p className="mb-2.5 text-sm font-bold text-gray-900">For Your Campus</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {filteredCampusCommunities.slice(0, 6).map((community) => (
-                        <CommunityCard
-                          key={community.id}
-                          community={community}
-                          membershipState={membershipStates.get(community.id) || null}
-                          onStateChange={(id, newState) =>
-                            setMembershipStates((prev) => new Map(prev).set(id, newState))
-                          }
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {searching || categoryLoading ? (
-                  <div className="py-10 flex justify-center">
-                    <Loader size="sm" tone="dark" />
-                  </div>
-                ) : discoverCommunities.length === 0 ? (
-                  <div className="py-16 text-center">
-                    <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
-                      <Search className="w-5 h-5 text-blue-500" />
-                    </div>
-                    <p className="mt-3 text-sm font-semibold text-gray-900">
-                      {isSearchingOrFiltering ? (clubsOnly ? 'No clubs found' : 'No communities found') : (clubsOnly ? 'No more clubs to discover' : 'No more communities to discover')}
-                    </p>
-                    <p className="mt-1 text-sm text-gray-400 max-w-[280px] mx-auto leading-relaxed">
-                      {isSearchingOrFiltering ? 'Try a different name or category.' : 'Check back soon, or start your own.'}
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    {!isSearchingOrFiltering ? (
-                      <p className="mb-2.5 text-sm font-bold text-gray-900">
-                        {yourCommunities.length > 0 || filteredCampusCommunities.length > 0
-                          ? (clubsOnly ? 'Popular Clubs' : 'Popular Communities')
-                          : (clubsOnly ? 'Discover Clubs' : 'Discover Communities')}
-                      </p>
-                    ) : typeFilter !== 'all' ? (
-                      <p className="mb-2.5 text-sm font-bold text-gray-900">{TYPE_FILTERS.find((f) => f.id === typeFilter)?.label}</p>
-                    ) : null}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {discoverCommunities.map((community) => (
-                        <CommunityCard
-                          key={community.id}
-                          community={community}
-                          membershipState={membershipStates.get(community.id) || null}
-                          onStateChange={(id, newState) =>
-                            setMembershipStates((prev) => new Map(prev).set(id, newState))
-                          }
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Right rail */}
-        <aside className="hidden lg:flex lg:flex-col w-72 flex-shrink-0 h-screen sticky top-0 overflow-y-auto px-4 py-5 gap-4">
-          <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
-            <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-3">
-              <BarChart3 className="w-4 h-4 text-blue-500" /> Quick Stats
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {/* ROOT-CAUSE FIXES (dark-mode consistency + overflow),
-                  matching Home's CampusPulse.jsx (the reference) exactly
-                  — see that file's own comment for the full reasoning. */}
-              {quickStats.map(({ key, icon: Icon, value, label, tint }) => (
-                <div key={key} className="min-w-0 rounded-xl bg-gray-50/70 dark:bg-white/5 px-2 py-3 text-center">
-                  <span className={`inline-flex w-7 h-7 rounded-lg items-center justify-center ${tint}`}>
-                    <Icon className="w-3.5 h-3.5" />
-                  </span>
-                  <p className="mt-1.5 text-base font-bold text-gray-900 leading-none">{value}</p>
-                  <p className="mt-1 text-[10px] text-gray-400 leading-tight break-words">{label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {trendingCommunities.length > 0 && (
-            <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
-              <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-3">
-                <TrendingUp className="w-4 h-4 text-blue-500" /> {clubsOnly ? 'Trending Clubs' : 'Trending on Campus'}
-              </p>
-              <div className="space-y-1.5">
-                {trendingCommunities.map((community, i) => (
-                  <button
-                    key={community.id}
-                    type="button"
-                    onClick={() => navigate(`/community/${community.id}`)}
-                    className="w-full flex items-center gap-2.5 text-left group rounded-xl px-2 py-1.5 -mx-2 hover:bg-gray-50 transition-all duration-200"
-                  >
-                    <span className="text-[11px] font-bold text-gray-300 w-3 flex-shrink-0">{i + 1}</span>
-                    <Avatar
-                      initials={getInitials(community.name)}
-                      colorClass={getAvatarColor(community.id)}
-                      size="sm"
-                      src={community.icon || undefined}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">
-                        {community.name}
-                      </p>
-                      <p className="text-xs text-gray-400">{community.membersCount} members</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
+                )
+              })}
             </div>
           )}
 
-          <div className="rounded-2xl p-4 text-white relative overflow-hidden" style={{ backgroundColor: '#1677ff' }}>
-            <p className="relative flex items-center gap-1.5 text-sm font-bold">
-              <Sparkles className="w-4 h-4" /> {clubsOnly ? 'Start your own club' : 'Start your own community'}
-            </p>
-            <p className="relative mt-1.5 text-xs text-blue-100 leading-relaxed">
-              Have a club, project or campus idea? Bring people together.
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate(clubsOnly ? '/club/create' : '/community/create')}
-              className="relative mt-3 w-full rounded-full bg-white text-blue-700 text-xs font-semibold py-2.5 hover:bg-blue-50 active:scale-[0.98] transition-all duration-200"
-            >
-              {clubsOnly ? 'Create Club →' : 'Create Community →'}
-            </button>
+          <div className="mt-5">
+            {loading ? (
+              <div className="space-y-2.5" aria-busy="true" aria-label={`Loading ${noun}`}>
+                <div className="h-4 w-32 rounded-full bg-gray-100 animate-pulse mb-3" />
+                <CardSkeleton />
+                <CardSkeleton />
+                <CardSkeleton />
+              </div>
+            ) : loadError ? (
+              <StatePanel
+                icon={AlertCircle}
+                tone="red"
+                title={loadError}
+                body="Check your connection and try again."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setReloadKey((k) => k + 1)}
+                    className="mt-4 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-200"
+                  >
+                    Try again
+                  </button>
+                }
+              />
+            ) : !hasAnyBaseResults && !isSearchingOrFiltering ? (
+              <StatePanel
+                icon={Users}
+                title={`No ${noun} here yet`}
+                body="Be the first to bring people together."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => navigate(createPath)}
+                    className="mt-5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-200"
+                  >
+                    {clubsOnly ? 'Create Club' : 'Create Community'}
+                  </button>
+                }
+              />
+            ) : isSearchingOrFiltering ? (
+              <section>
+                <SectionTitle count={resultsLoading ? undefined : popularCommunities.length}>
+                  {searchTerm.trim()
+                    ? `Results for “${searchTerm.trim()}”`
+                    : TYPE_FILTERS.find((f) => f.id === typeFilter)?.label}
+                </SectionTitle>
+                {resultsLoading ? (
+                  <div className="space-y-2.5" aria-busy="true">
+                    <CardSkeleton />
+                    <CardSkeleton />
+                  </div>
+                ) : popularCommunities.length === 0 ? (
+                  <StatePanel icon={Search} title={`No ${noun} found`} body="Try a different name or category." />
+                ) : (
+                  renderCards(popularCommunities)
+                )}
+              </section>
+            ) : (
+              <div className="space-y-6">
+                {yourCommunities.length > 0 && (
+                  <section>
+                    <SectionTitle count={yourCommunities.length}>{clubsOnly ? 'Your clubs' : 'Your communities'}</SectionTitle>
+                    <div className="-mx-4 px-4 flex gap-3 overflow-x-auto scroll-hidden pb-1">
+                      {yourCommunities.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => openCommunity(c)}
+                          className="w-[76px] flex-shrink-0 flex flex-col items-center text-center active:scale-95 transition-transform duration-150"
+                        >
+                          <span className="relative w-16 h-16 rounded-2xl overflow-hidden bg-blue-600 flex items-center justify-center ring-1 ring-black/5">
+                            {c.icon || c.coverImage ? (
+                              <img src={c.icon || c.coverImage} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-white text-lg font-bold">{getInitials(c.name)}</span>
+                            )}
+                          </span>
+                          <span className="mt-1.5 w-full text-[11px] font-semibold text-gray-900 leading-tight line-clamp-2">{c.name}</span>
+                          {membershipStates.get(c.id) === 'owner' && (
+                            <span className="text-[10px] font-medium text-blue-600">Owner</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {filteredCampusCommunities.length > 0 && (
+                  <section>
+                    <SectionTitle>{clubsOnly ? 'Clubs at your campus' : 'For your campus'}</SectionTitle>
+                    {renderCards(filteredCampusCommunities)}
+                  </section>
+                )}
+
+                {/* Skipped when everything left to discover is already
+                    listed under "For your campus" above. */}
+                {(popularCommunities.length > 0 || filteredCampusCommunities.length === 0) && (
+                <section>
+                  <SectionTitle count={popularCommunities.length || undefined}>
+                    {yourCommunities.length > 0 || filteredCampusCommunities.length > 0 ? `Popular ${noun}` : `Discover ${noun}`}
+                  </SectionTitle>
+                  {popularCommunities.length === 0 ? (
+                    <StatePanel
+                      icon={Sparkles}
+                      title={`You're all caught up`}
+                      body={`You've joined every popular ${clubsOnly ? 'club' : 'community'}. Check back soon, or start your own.`}
+                      action={
+                        <button
+                          type="button"
+                          onClick={() => navigate(createPath)}
+                          className="mt-4 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-200"
+                        >
+                          {clubsOnly ? 'Create Club' : 'Create Community'}
+                        </button>
+                      }
+                    />
+                  ) : (
+                    renderCards(popularCommunities)
+                  )}
+                </section>
+                )}
+              </div>
+            )}
           </div>
-        </aside>
+        </div>
+      </div>
+
+      {/* Right rail (desktop) */}
+      <aside className="hidden lg:flex lg:flex-col w-72 flex-shrink-0 h-screen sticky top-0 overflow-y-auto px-4 py-5 gap-4">
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
+          <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-3">
+            <BarChart3 className="w-4 h-4 text-blue-500" /> Quick Stats
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {quickStats.map(({ key, icon: Icon, value, label, tint }) => (
+              <div key={key} className="min-w-0 rounded-xl bg-gray-50/70 dark:bg-white/5 px-2 py-3 text-center">
+                <span className={`inline-flex w-7 h-7 rounded-lg items-center justify-center ${tint}`}>
+                  <Icon className="w-3.5 h-3.5" />
+                </span>
+                <p className="mt-1.5 text-base font-bold text-gray-900 leading-none">{value}</p>
+                <p className="mt-1 text-[10px] text-gray-400 leading-tight break-words">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {trendingCommunities.length > 0 && (
+          <div className="rounded-2xl border border-gray-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] p-4">
+            <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900 mb-3">
+              <TrendingUp className="w-4 h-4 text-blue-500" /> {clubsOnly ? 'Trending Clubs' : 'Trending on Campus'}
+            </p>
+            <div className="space-y-1.5">
+              {trendingCommunities.map((community, i) => (
+                <button
+                  key={community.id}
+                  type="button"
+                  onClick={() => openCommunity(community)}
+                  className="w-full flex items-center gap-2.5 text-left group rounded-xl px-2 py-1.5 -mx-2 hover:bg-gray-50 transition-all duration-200"
+                >
+                  <span className="text-[11px] font-bold text-gray-300 w-3 flex-shrink-0">{i + 1}</span>
+                  <Avatar
+                    initials={getInitials(community.name)}
+                    colorClass={getAvatarColor(community.id)}
+                    size="sm"
+                    src={community.icon || undefined}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">
+                      {community.name}
+                    </p>
+                    <p className="text-xs text-gray-400">{community.membersCount} members</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-2xl p-4 text-white relative overflow-hidden" style={{ backgroundColor: '#1677ff' }}>
+          <p className="relative flex items-center gap-1.5 text-sm font-bold">
+            <Sparkles className="w-4 h-4" /> {clubsOnly ? 'Start your own club' : 'Start your own community'}
+          </p>
+          <p className="relative mt-1.5 text-xs text-blue-100 leading-relaxed">
+            Have a club, project or campus idea? Bring people together.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate(createPath)}
+            className="relative mt-3 w-full rounded-full bg-white text-blue-700 text-xs font-semibold py-2.5 hover:bg-blue-50 active:scale-[0.98] transition-all duration-200"
+          >
+            {clubsOnly ? 'Create Club →' : 'Create Community →'}
+          </button>
+        </div>
+      </aside>
     </div>
   )
 }

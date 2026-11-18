@@ -11,6 +11,7 @@ import {
   toggleItemInCollection,
   createCollection
 } from './savedService.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * Same portal pattern as ShareBottomSheet.jsx, applied from the start
@@ -19,6 +20,8 @@ import {
  * the Sharing System bug fix, not re-learned the hard way here).
  */
 export default function SaveBottomSheet({ open, onClose, entityType, entityId, preview }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   const currentUid = auth.currentUser?.uid
 
   const [allSavedChecked, setAllSavedChecked] = useState(false)

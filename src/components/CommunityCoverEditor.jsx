@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import ImageCropper from '../avatar/ImageCropper.jsx'
 import { uploadCommunityAsset, updateCommunityDetails } from '../firebase/communityService.js'
 import { auth } from '../firebase/firebase.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024 // matches the existing communities/{id}/{filename} Storage rule's own 15MB limit
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -18,6 +19,8 @@ const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
  * for profile photos — rather than building a second cropper.
  */
 export default function CommunityCoverEditor({ open, onClose, communityId, kind, onSaved }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   const [stage, setStage] = useState('picker') // 'picker' | 'cropper' | 'error'
   const [rawImageUrl, setRawImageUrl] = useState('')
   const [errorMessage, setErrorMessage] = useState('')

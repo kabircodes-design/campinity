@@ -19,7 +19,7 @@ import { db } from '../firebase/firebase.js'
  * display now reads city/state (the real schema) instead of the old
  * fabricated `location` field.
  */
-export default function CollegeSearch({ id, label, value, onChange, error, disabled }) {
+export default function CollegeSearch({ id, label, value, onChange, error, disabled, placeholder = "Search your college...", hideAddLink = false }) {
   const [query_, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [results, setResults] = useState([])
@@ -123,7 +123,7 @@ export default function CollegeSearch({ id, label, value, onChange, error, disab
             }}
             onFocus={() => setOpen(true)}
             disabled={disabled}
-            placeholder="Search your college..."
+            placeholder={placeholder}
             className={`w-full rounded-xl border bg-gray-50 pl-9 pr-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all duration-300 ${
               error ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
             }`}
@@ -140,12 +140,14 @@ export default function CollegeSearch({ id, label, value, onChange, error, disab
           ) : results.length === 0 ? (
             <div className="px-4 py-6 text-center">
               <p className="text-sm text-gray-400">No colleges found.</p>
+              {!hideAddLink && (
               <Link
                 to="/college/add"
                 className="mt-1.5 inline-block text-xs font-semibold text-blue-600 hover:text-blue-700"
               >
                 Can't find your college? Add it
               </Link>
+              )}
             </div>
           ) : (
             results.map((college) => {

@@ -25,6 +25,7 @@ import { useMyVerification } from '../access/useMyVerification.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
 import { useSystemBarsOverride } from '../theme/systemBars.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 const STORY_DURATION_MS = 5000
 
@@ -51,6 +52,8 @@ const STORY_DURATION_MS = 5000
  * props, so it never needs its own notion of "which bubble opened me."
  */
 export default function StoryViewer({ groups, groupIndex, onClose, onChangeGroup, onDeleted, onViewed }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(true, onClose)
   const [index, setIndex] = useState(0)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)

@@ -3,19 +3,23 @@ import { createPortal } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
-  Bookmark,
   CalendarDays,
   Clock,
   FileText,
-  Flag,
-  Heart,
   MapPin,
   MessageCircle,
   MoreHorizontal,
   PackageSearch,
-  Share,
-  ShoppingBag
+  Pencil,
+  ShoppingBag,
+  Trash2,
+  Users
 } from 'lucide-react'
+import ShareBottomSheet from '../sharing/ShareBottomSheet.jsx'
+import SaveBottomSheet from '../saved/SaveBottomSheet.jsx'
+import ReportModal from '../components/ReportModal.jsx'
+import PostActionButton from '../components/post/PostActionButton.jsx'
+import { subscribeToIsItemSaved } from '../saved/savedService.js'
 import { getDisplayFileName } from '../utils/postFile.js'
 import Avatar from '../components/Avatar.jsx'
 import MentionText from '../components/MentionText.jsx'
@@ -23,7 +27,6 @@ import PostPoll from '../components/PostPoll.jsx'
 import CommentCard from '../components/CommentCard.jsx'
 import CommentComposer from '../components/CommentComposer.jsx'
 import CommentSkeleton from '../components/CommentSkeleton.jsx'
-import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { formatTimeAgo, getPostById } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
@@ -35,6 +38,7 @@ import { useMyVerification } from '../access/useMyVerification.js'
 import { useOpenDocument } from '../hooks/useOpenDocument.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * Complete replacement of the old flat comment section — no
@@ -91,6 +95,8 @@ export default function PostDetailPage() {
   const [canModerate, setCanModerate] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  useBackToClose(menuOpen, () => setMenuOpen(false))
+  useBackToClose(confirmingDelete, () => setConfirmingDelete(false))
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [profile, setProfile] = useState(null)
@@ -99,9 +105,20 @@ export default function PostDetailPage() {
 
   const [liked, setLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
-  const [saved, setSaved] = useState(false)
-  const [reported, setReported] = useState(false)
-  const [shareCopied, setShareCopied] = useState(false)
+  // Share / Save / Report used to be local-only state ("Copied" without
+  // copying, "Saved" without saving, "Reported" without reporting). They
+  // now use the same real sheets/modal PostCard.jsx uses.
+  const [isSaved, setIsSaved] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [imageStatus, setImageStatus] = useState('loading')
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid
+    if (!uid || !postId) return undefined
+    return subscribeToIsItemSaved(uid, 'post', postId, setIsSaved)
+  }, [postId])
 
   const [comments, setComments] = useState([])
   const [commentsLoading, setCommentsLoading] = useState(true)
@@ -223,27 +240,58 @@ export default function PostDetailPage() {
     }
   }, [postId])
 
+  const backButton = (
+    <button
+      type="button"
+      aria-label="Back"
+      onClick={() => navigate(-1)}
+      className="w-10 h-10 -ml-1 rounded-full flex items-center justify-center text-gray-700 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+    >
+      <ArrowLeft className="w-5 h-5" />
+    </button>
+  )
+
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <Loader size="lg" tone="dark" />
+      <div className="min-h-screen bg-white" aria-busy="true" aria-label="Loading post">
+        <div className="h-14 flex items-center px-3">{backButton}</div>
+        <div className="mx-auto max-w-[640px] px-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full bg-gray-100 animate-pulse" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3.5 w-40 rounded-full bg-gray-100 animate-pulse" />
+              <div className="h-3 w-24 rounded-full bg-gray-100 animate-pulse" />
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            <div className="h-3.5 w-full rounded-full bg-gray-100 animate-pulse" />
+            <div className="h-3.5 w-4/5 rounded-full bg-gray-100 animate-pulse" />
+          </div>
+          <div className="mt-4 aspect-[4/3] rounded-2xl bg-gray-100 animate-pulse" />
+        </div>
       </div>
     )
   }
 
   if (notFound || !post) {
     return (
-      <div className="h-full flex items-center justify-center px-6 text-center">
-        <div>
-          <p className="text-sm font-semibold text-gray-900">Post not found</p>
-          <p className="mt-1 text-sm text-gray-400">It may have been removed.</p>
-          <button
-            type="button"
-            onClick={() => navigate('/home')}
-            className="mt-4 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
-          >
-            Back to Home
-          </button>
+      <div className="min-h-screen bg-white flex flex-col">
+        <div className="h-14 flex items-center px-3">{backButton}</div>
+        <div className="flex-1 flex items-center justify-center px-6 text-center pb-24">
+          <div>
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center">
+              <FileText className="w-6 h-6" />
+            </div>
+            <p className="mt-3 text-[15px] font-semibold text-gray-900">This post isn't available</p>
+            <p className="mt-1 text-sm text-gray-500">It may have been deleted or expired.</p>
+            <button
+              type="button"
+              onClick={() => navigate('/home')}
+              className="mt-5 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-200"
+            >
+              Back to Home
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -271,9 +319,17 @@ export default function PostDetailPage() {
     }
   }
 
-  const handleShare = () => {
-    setShareCopied(true)
-    window.setTimeout(() => setShareCopied(false), 1500)
+  const handleShare = () => setShareOpen(true)
+  const postImage = post.imageUrl || post.imagePreviewUrl || null
+  const sheetPreview = {
+    title: post.text?.slice(0, 80) || 'Post',
+    subtitle: post.name,
+    username: post.username,
+    image: postImage
+  }
+  const goToAuthor = () => {
+    if (post.isAnonymous || !post.username) return
+    navigate(isOwner ? '/profile' : `/student/${post.username}`)
   }
 
   const currentUser = profile
@@ -323,308 +379,323 @@ export default function PostDetailPage() {
   }
 
   return (
-    <div className="h-screen lg:h-full flex flex-col overflow-hidden bg-gray-50">
-      <header className="flex-shrink-0 bg-white border-b border-gray-100">
-        <div className="h-14 flex items-center gap-2 px-3 lg:max-w-[640px] lg:mx-auto">
-          <button
-            type="button"
-            aria-label="Back"
-            onClick={() => navigate(-1)}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <span className="text-base font-bold tracking-tight text-gray-900">Post</span>
+    <div className="h-screen lg:h-full flex flex-col overflow-hidden bg-white lg:bg-gray-50">
+      <header className="flex-shrink-0 bg-white/95 backdrop-blur-md border-b border-gray-100">
+        <div className="h-14 flex items-center gap-1 px-3 lg:max-w-[640px] lg:mx-auto">
+          {backButton}
+          <span className="flex-1 text-[17px] font-bold tracking-tight text-gray-900">Post</span>
+          {isOwner && (
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="Post options"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((v) => !v)}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-200"
+              >
+                <MoreHorizontal className="w-5 h-5" />
+              </button>
+              {menuOpen && (
+                <>
+                  <button type="button" aria-label="Close menu" className="fixed inset-0 z-20 cursor-default" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-11 w-44 rounded-2xl border border-gray-100 bg-white shadow-lg py-1.5 z-30">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setEditText(post.text || '')
+                        setEditError('')
+                        setIsEditing(true)
+                      }}
+                      className="w-full flex items-center gap-2.5 text-left px-3.5 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Pencil className="w-4 h-4" /> Edit post
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setConfirmingDelete(true)
+                      }}
+                      className="w-full flex items-center gap-2.5 text-left px-3.5 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" /> Delete post
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white lg:my-4 lg:rounded-2xl lg:border lg:border-gray-100 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] min-h-full lg:min-h-0">
-        <main>
-          <div className="flex items-start gap-3 px-4 pt-4">
-            <Avatar initials={post.initials} colorClass={post.avatarColor} size="md" src={post.avatarUrl || undefined} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{post.name}</p>
-                  <p className="text-xs text-gray-400 truncate">
-                    {[post.department, post.year, post.college].filter(Boolean).join(' · ')}
-                  </p>
-                </div>
-                {isOwner && (
-                  <div className="relative flex-shrink-0">
-                    <button
-                      type="button"
-                      aria-label="Post options"
-                      onClick={() => setMenuOpen((v) => !v)}
-                      className="text-gray-300 hover:text-gray-500 transition-all duration-300"
-                    >
-                      <MoreHorizontal className="w-[18px] h-[18px]" />
-                    </button>
-                    {menuOpen && (
-                      <div className="absolute right-0 top-6 w-36 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-30">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuOpen(false)
-                            setEditText(post.text || '')
-                            setEditError('')
-                            setIsEditing(true)
-                          }}
-                          className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150"
-                        >
-                          Edit post
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuOpen(false)
-                            setConfirmingDelete(true)
-                          }}
-                          className="w-full text-left px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-all duration-150"
-                        >
-                          Delete post
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-1.5 flex items-center gap-2">
-                <span
-                  className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${config.color}`}
-                >
-                  {config.label}
-                </span>
-                <span className="text-[11px] text-gray-400">{post.time}</span>
-              </div>
-            </div>
-          </div>
-
-          {isEditing ? (
-            <div className="px-4 mt-3">
-              <textarea
-                value={editText}
-                onChange={(event) => setEditText(event.target.value)}
-                rows={4}
-                autoFocus
-                className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-[15px] text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-300"
-              />
-              {editError && <p className="mt-1.5 text-xs text-red-500">{editError}</p>}
-              <div className="mt-2 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditing(false)
-                    setEditError('')
-                  }}
-                  disabled={editSaving}
-                  className="rounded-full border border-gray-200 text-gray-700 text-xs font-semibold px-4 py-1.5 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveEdit}
-                  disabled={editSaving || !editText.trim()}
-                  className="rounded-full bg-blue-600 text-white text-xs font-semibold px-4 py-1.5 disabled:opacity-50"
-                >
-                  {editSaving ? 'Saving…' : 'Save'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            post.text && (
-              <p className="px-4 mt-3 text-[15px] text-gray-700 leading-relaxed whitespace-pre-wrap">
-                <MentionText text={post.text} />
-                {post.edited && <span className="ml-1.5 text-xs text-gray-400 font-normal">· Edited</span>}
-              </p>
-            )
-          )}
-
-          {post.imagePreviewUrl && (
-            <div className="mx-4 mt-3 rounded-xl overflow-hidden border border-gray-100">
-              <img src={post.imagePreviewUrl} alt="Post attachment" className="w-full max-h-80 object-cover" />
-            </div>
-          )}
-
-          {post.poll && <PostPoll postId={post.id} poll={post.poll} />}
-
-          {post.file && (
-            <>
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="mx-auto max-w-[640px] bg-white lg:my-4 lg:rounded-2xl lg:border lg:border-gray-100 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] min-h-full lg:min-h-0">
+          <main>
+            {post.communityId && post.communityName && (
               <button
                 type="button"
-                disabled={openingDocument}
-                onClick={() => {
-                  // UX-level pre-check only, same as PostCard.jsx — the
-                  // real authorization boundary is storage.rules' owner-
-                  // or-verified read rule, enforced on every
-                  // getDownloadURL() call inside useOpenDocument.
-                  if (verified === false && !isOwner) {
-                    setDocumentGateOpen(true)
-                    return
-                  }
-                  clearDocumentError()
-                  openDocument(post)
-                }}
-                className="mx-4 mt-3 w-[calc(100%-2rem)] flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-left hover:border-blue-100 disabled:opacity-60 transition-all duration-300"
+                onClick={() => navigate(`/community/${post.communityId}`)}
+                className="mx-4 mt-4 inline-flex items-center gap-1.5 rounded-full bg-blue-50 text-blue-600 text-xs font-semibold px-3 py-1"
               >
-                <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{getDisplayFileName(post.file)}</p>
-                  <p className="text-xs text-gray-400">{openingDocument ? 'Opening…' : `PDF${post.file.size ? ` · ${post.file.size}` : ''}`}</p>
-                  {verified === false && !isOwner && (
-                    <p className="text-[11px] text-blue-600 font-medium mt-0.5">🔒 Verified members · Verify to open →</p>
-                  )}
-                </div>
+                <Users className="w-3.5 h-3.5" /> Posted in {post.communityName}
               </button>
-              {documentError && (
-                <p role="alert" className="mx-4 mt-1.5 text-xs text-red-500">
-                  {documentError}
-                </p>
-              )}
-            </>
-          )}
+            )}
 
-          <VerificationGate open={documentGateOpen} onClose={() => setDocumentGateOpen(false)} feature={FEATURES.VIEW_CAMPUS_PDF} />
-
-          {post.event && (
-            <div className="mx-4 mt-3 rounded-xl overflow-hidden border border-gray-100">
-              <div className="h-28 bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center">
-                <CalendarDays className="w-8 h-8 text-white/80" />
-              </div>
-              <div className="p-3 bg-white">
-                <p className="text-sm font-semibold text-gray-900">{post.event.title}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {post.event.date}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5" />
-                    {post.event.location}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {post.marketplace && (
-            <div className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-gray-100 p-3">
-              <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                <ShoppingBag className="w-6 h-6 text-gray-400" />
-              </div>
+            {/* Author */}
+            <div className="flex items-center gap-3 px-4 pt-4">
+              <button type="button" onClick={goToAuthor} className="flex-shrink-0 rounded-full" aria-label={`Open ${post.name}'s profile`} disabled={post.isAnonymous || !post.username}>
+                <Avatar initials={post.initials} colorClass={post.avatarColor} size="md" src={post.avatarUrl || undefined} />
+              </button>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{post.marketplace.item}</p>
-                <p className="text-sm font-bold text-emerald-600 mt-0.5">{post.marketplace.price}</p>
+                <button type="button" onClick={goToAuthor} disabled={post.isAnonymous || !post.username} className="max-w-full text-left">
+                  <span className="block text-[15px] font-bold text-gray-900 truncate leading-tight">{post.name}</span>
+                </button>
+                <p className="mt-0.5 text-xs text-gray-500 truncate">
+                  {[post.username && !post.isAnonymous ? `@${post.username}` : null, post.time].filter(Boolean).join(' · ')}
+                  {post.edited && ' · Edited'}
+                </p>
               </div>
+              {config.label && config !== postTypeConfig.general && (
+                <span className={`flex-shrink-0 inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-full ${config.color}`}>
+                  {config.label}
+                </span>
+              )}
             </div>
-          )}
 
-          {post.lostFound && (
-            <div className="mx-4 mt-3 flex items-center gap-3 rounded-xl border border-pink-100 bg-pink-50/50 p-3">
-              <PackageSearch className="w-5 h-5 text-pink-500 flex-shrink-0" />
-              <p className="text-sm font-medium text-gray-900 min-w-0">
-                {post.lostFound.status} near {post.lostFound.location}
-              </p>
-            </div>
-          )}
-
-          <div className="flex items-center gap-5 px-4 py-3 mt-2 border-y border-gray-100">
-            <button
-              type="button"
-              onClick={toggleLike}
-              aria-pressed={liked}
-              className={`flex items-center gap-1.5 text-xs font-medium transition-all duration-300 ${
-                liked ? 'text-red-500' : 'text-gray-500 hover:text-blue-600'
-              }`}
-            >
-              <Heart className="w-[18px] h-[18px]" fill={liked ? 'currentColor' : 'none'} />
-              {likeCount}
-            </button>
-            <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-              <MessageCircle className="w-[18px] h-[18px]" />
-              {comments.length}
-            </span>
-            <button
-              type="button"
-              onClick={handleShare}
-              className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 transition-all duration-300"
-            >
-              <Share className="w-[18px] h-[18px]" />
-              {shareCopied ? 'Copied' : 'Share'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSaved((prev) => !prev)}
-              aria-pressed={saved}
-              className={`flex items-center gap-1.5 text-xs font-medium transition-all duration-300 ml-auto ${
-                saved ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
-              }`}
-            >
-              <Bookmark className="w-[18px] h-[18px]" fill={saved ? 'currentColor' : 'none'} />
-              {saved ? 'Saved' : 'Save'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setReported(true)}
-              disabled={reported}
-              className={`flex items-center gap-1.5 text-xs font-medium transition-all duration-300 ${
-                reported ? 'text-red-500' : 'text-gray-500 hover:text-red-500'
-              }`}
-            >
-              <Flag className="w-[18px] h-[18px]" />
-              {reported ? 'Reported' : 'Report'}
-            </button>
-          </div>
-
-          <section className="px-4 py-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Comments {comments.length > 0 && `(${comments.length})`}
-            </p>
-
-            {commentsLoading ? (
-              <CommentSkeleton />
-            ) : commentsError ? (
-              <div className="py-10 text-center">
-                <p className="text-sm font-semibold text-gray-900">Couldn't load comments</p>
-                <p className="mt-1 text-xs text-gray-400">{commentsError}</p>
-              </div>
-            ) : comments.length === 0 ? (
-              <div className="py-10 text-center">
-                <p className="text-2xl">💬</p>
-                <p className="mt-2 text-sm font-semibold text-gray-900">Start the conversation</p>
-                <p className="mt-0.5 text-xs text-gray-400">Be the first person to comment.</p>
+            {/* Text */}
+            {isEditing ? (
+              <div className="px-4 mt-3">
+                <textarea
+                  value={editText}
+                  onChange={(event) => setEditText(event.target.value)}
+                  rows={4}
+                  autoFocus
+                  aria-label="Edit post text"
+                  className="w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-[15px] text-gray-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all duration-200"
+                />
+                {editError && <p className="mt-1.5 text-xs text-red-500">{editError}</p>}
+                <div className="mt-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditing(false)
+                      setEditError('')
+                    }}
+                    disabled={editSaving}
+                    className="rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveEdit}
+                    disabled={editSaving || !editText.trim()}
+                    className="rounded-full bg-blue-600 text-white text-sm font-semibold px-4 py-2 disabled:opacity-50"
+                  >
+                    {editSaving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
               </div>
             ) : (
-              <div>
-                {comments.map((comment) => (
-                  <CommentCard
-                    key={comment.id}
-                    comment={comment}
-                    postId={postId}
-                    postOwnerUid={post.userId}
-                    currentUid={auth.currentUser?.uid}
-                    currentUser={currentUser}
-                    canModerate={canModerate}
-                    onDeleted={(id) => setComments((prev) => prev.filter((c) => c.id !== id))}
-                  />
-                ))}
+              post.text && (
+                <p className={`px-4 mt-3 text-gray-900 leading-relaxed whitespace-pre-wrap break-words ${postImage || post.text.length > 180 ? 'text-[15px]' : 'text-[17px]'}`}>
+                  <MentionText text={post.text} />
+                </p>
+              )
+            )}
+
+            {/* Image — shown whole (object-contain on a neutral backdrop)
+                so a tall or wide photo is never cropped. */}
+            {postImage && (
+              <div className="mt-3 lg:mx-4 lg:rounded-2xl overflow-hidden bg-gray-100 relative">
+                {imageStatus === 'error' ? (
+                  <div className="h-48 flex flex-col items-center justify-center text-gray-400 gap-1.5">
+                    <FileText className="w-6 h-6" />
+                    <span className="text-xs">Couldn't load this image</span>
+                    <button type="button" onClick={() => setImageStatus('loading')} className="text-xs font-semibold text-blue-600">
+                      Try again
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {imageStatus === 'loading' && <div className="absolute inset-0 animate-pulse bg-gray-100" aria-hidden="true" />}
+                    <img
+                      key={imageStatus === 'loading' ? 'retry' : 'img'}
+                      src={postImage}
+                      alt={post.text ? `Photo: ${post.text.slice(0, 80)}` : 'Post photo'}
+                      onLoad={() => setImageStatus('ready')}
+                      onError={() => setImageStatus('error')}
+                      onDoubleClick={() => !liked && toggleLike()}
+                      className={`w-full max-h-[75vh] min-h-[180px] object-contain transition-opacity duration-300 ${imageStatus === 'ready' ? 'opacity-100' : 'opacity-0'}`}
+                    />
+                  </>
+                )}
               </div>
             )}
-          </section>
-        </main>
+
+            {post.poll && <PostPoll postId={post.id} poll={post.poll} />}
+
+            {post.file && (
+              <>
+                <button
+                  type="button"
+                  disabled={openingDocument}
+                  onClick={() => {
+                    // UX-level pre-check only — the real authorization
+                    // boundary is storage.rules, enforced inside
+                    // useOpenDocument's getDownloadURL().
+                    if (verified === false && !isOwner) {
+                      setDocumentGateOpen(true)
+                      return
+                    }
+                    clearDocumentError()
+                    openDocument(post)
+                  }}
+                  className="mx-4 mt-3 w-[calc(100%-2rem)] flex items-center gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-3 text-left hover:border-blue-100 disabled:opacity-60 transition-all duration-200"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{getDisplayFileName(post.file)}</p>
+                    <p className="text-xs text-gray-500">{openingDocument ? 'Opening…' : `PDF${post.file.size ? ` · ${post.file.size}` : ''}`}</p>
+                    {verified === false && !isOwner && (
+                      <p className="text-[11px] text-blue-600 font-medium mt-0.5">🔒 Verified members · Verify to open →</p>
+                    )}
+                  </div>
+                </button>
+                {documentError && (
+                  <p role="alert" className="mx-4 mt-1.5 text-xs text-red-500">
+                    {documentError}
+                  </p>
+                )}
+              </>
+            )}
+
+            <VerificationGate open={documentGateOpen} onClose={() => setDocumentGateOpen(false)} feature={FEATURES.VIEW_CAMPUS_PDF} />
+
+            {post.event && (
+              <div className="mx-4 mt-3 rounded-2xl overflow-hidden border border-gray-100">
+                <div className="h-28 bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center">
+                  <CalendarDays className="w-8 h-8 text-white/80" />
+                </div>
+                <div className="p-3 bg-white">
+                  <p className="text-sm font-semibold text-gray-900">{post.event.title}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      {post.event.date}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5" />
+                      {post.event.location}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {post.marketplace && (
+              <div className="mx-4 mt-3 flex items-center gap-3 rounded-2xl border border-gray-100 p-3">
+                <div className="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <ShoppingBag className="w-6 h-6 text-gray-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{post.marketplace.item}</p>
+                  <p className="text-sm font-bold text-emerald-600 mt-0.5">{post.marketplace.price}</p>
+                </div>
+              </div>
+            )}
+
+            {post.lostFound && (
+              <div className="mx-4 mt-3 flex items-center gap-3 rounded-2xl border border-pink-100 bg-pink-50/50 p-3">
+                <PackageSearch className="w-5 h-5 text-pink-500 flex-shrink-0" />
+                <p className="text-sm font-medium text-gray-900 min-w-0">
+                  {post.lostFound.status} near {post.lostFound.location}
+                </p>
+              </div>
+            )}
+
+            {/* Counts + actions */}
+            <div className="px-4 pt-3 flex items-center gap-3 text-xs text-gray-500">
+              <span>
+                <span className="font-semibold text-gray-900">{likeCount}</span> {likeCount === 1 ? 'like' : 'likes'}
+              </span>
+              <span>
+                <span className="font-semibold text-gray-900">{comments.length}</span> {comments.length === 1 ? 'comment' : 'comments'}
+              </span>
+            </div>
+            <div className="mt-2 mx-2 flex items-center border-y border-gray-100 py-1">
+              <PostActionButton action="like" active={liked} label="Like" ariaLabel={liked ? 'Unlike' : 'Like'} onClick={toggleLike} className="flex-1 h-11" />
+              <PostActionButton
+                action="comment"
+                label="Comment"
+                onClick={() => document.getElementById('post-comment-composer')?.querySelector('textarea, input')?.focus()}
+                className="flex-1 h-11"
+              />
+              <PostActionButton action="share" label="Share" onClick={handleShare} className="flex-1 h-11" />
+              <PostActionButton action="save" active={isSaved} showLabel={false} label={isSaved ? 'Saved' : 'Save'} onClick={() => setSaveOpen(true)} className="w-11 h-11" />
+              {!isOwner && (
+                <PostActionButton action="report" showLabel={false} label="Report post" onClick={() => setReportOpen(true)} className="w-11 h-11" />
+              )}
+            </div>
+
+            {/* Comments */}
+            <section className="px-4 pt-4 pb-6" aria-label="Comments">
+              <h2 className="text-[15px] font-bold text-gray-900 mb-2">Comments</h2>
+
+              {commentsLoading ? (
+                <CommentSkeleton />
+              ) : commentsError ? (
+                <div className="py-10 text-center">
+                  <p className="text-sm font-semibold text-gray-900">Couldn't load comments</p>
+                  <p className="mt-1 text-xs text-gray-500">{commentsError}</p>
+                </div>
+              ) : comments.length === 0 ? (
+                <div className="py-10 text-center">
+                  <div className="mx-auto w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <MessageCircle className="w-5 h-5" />
+                  </div>
+                  <p className="mt-3 text-sm font-semibold text-gray-900">No comments yet</p>
+                  <p className="mt-0.5 text-xs text-gray-500">Start the conversation.</p>
+                </div>
+              ) : (
+                <div>
+                  {comments.map((comment) => (
+                    <CommentCard
+                      key={comment.id}
+                      comment={comment}
+                      postId={postId}
+                      postOwnerUid={post.userId}
+                      currentUid={auth.currentUser?.uid}
+                      currentUser={currentUser}
+                      canModerate={canModerate}
+                      onDeleted={(id) => setComments((prev) => prev.filter((c) => c.id !== id))}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </main>
         </div>
       </div>
 
-      <div className="flex-shrink-0 bg-white/95 backdrop-blur-md border-t border-gray-100 px-3 py-2.5 lg:px-0">
+      <div
+        id="post-comment-composer"
+        className="flex-shrink-0 bg-white/95 backdrop-blur-md border-t border-gray-100 px-3 pt-2.5 lg:px-0"
+        style={{ paddingBottom: 'calc(0.625rem + var(--app-safe-bottom, env(safe-area-inset-bottom)))' }}
+      >
         <div className="lg:max-w-[640px] lg:mx-auto">
           <CommentComposer currentUser={currentUser} onSubmit={handlePostComment} />
         </div>
       </div>
+
+      <ShareBottomSheet open={shareOpen} onClose={() => setShareOpen(false)} referenceType="post" referenceId={post.id} preview={sheetPreview} />
+      <SaveBottomSheet open={saveOpen} onClose={() => setSaveOpen(false)} entityType="post" entityId={post.id} preview={sheetPreview} />
+      {!isOwner && (
+        <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} targetType="post" targetId={post.id} targetOwnerUid={post.userId} />
+      )}
 
       {confirmingDelete &&
         createPortal(
@@ -646,7 +717,7 @@ export default function PostDetailPage() {
                   type="button"
                   onClick={() => setConfirmingDelete(false)}
                   disabled={deleting}
-                  className="flex-1 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold py-2.5 hover:border-gray-300 disabled:opacity-50 transition-all duration-300"
+                  className="flex-1 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold py-2.5 hover:border-gray-300 disabled:opacity-50 transition-all duration-200"
                 >
                   Cancel
                 </button>
@@ -654,7 +725,7 @@ export default function PostDetailPage() {
                   type="button"
                   onClick={handleDeletePost}
                   disabled={deleting}
-                  className="flex-1 rounded-full bg-red-600 text-white text-sm font-semibold py-2.5 hover:bg-red-700 disabled:opacity-50 transition-all duration-300"
+                  className="flex-1 rounded-full bg-red-600 text-white text-sm font-semibold py-2.5 hover:bg-red-700 disabled:opacity-50 transition-all duration-200"
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
                 </button>

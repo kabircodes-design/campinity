@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { checkUsernameAvailable, normalizeUsername, validateUsername } from '../firebase/usernameService.js'
+import { auth } from '../firebase/firebase.js'
 
 const DEBOUNCE_MS = 500
 
@@ -52,7 +53,7 @@ export function useUsernameAvailability(rawInput, currentUsername = '') {
     const requestId = requestIdRef.current
     const timer = window.setTimeout(async () => {
       try {
-        const available = await checkUsernameAvailable(normalized)
+        const available = await checkUsernameAvailable(normalized, auth.currentUser?.uid || null)
         if (requestIdRef.current !== requestId) return
         setStatus(available ? 'available' : 'taken')
         setMessage(available ? 'Available' : 'Username already taken')

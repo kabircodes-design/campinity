@@ -108,6 +108,19 @@
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Main-tab transitions (AppShell): the incoming tab slides in from the
+   side it sits on in the bottom nav. Short and subtle; the global
+   prefers-reduced-motion rule above shortens these like every other
+   animation. */
+@keyframes campinity-tab-in-next {
+  from { opacity: 0.4; transform: translateX(22%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes campinity-tab-in-prev {
+  from { opacity: 0.4; transform: translateX(-22%); }
+  to { opacity: 1; transform: translateX(0); }
+}
 @keyframes campinity-curtain-out {
   from { opacity: 1; transform: scale(1); }
   to { opacity: 0; transform: scale(1.03); }

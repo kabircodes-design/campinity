@@ -1,5 +1,5 @@
 import { addDoc, collection, doc, getCountFromServer, getDoc, getDocs, limit, orderBy, query, serverTimestamp, Timestamp, where } from 'firebase/firestore'
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { getDownloadURL, ref, uploadBytes, uploadBytesResumable } from 'firebase/storage'
 import { db, storage } from './firebase.js'
 import { normalizeHashtag } from '../utils/hashtags.js'
 import { enrichWithAuthors } from '../hooks/useAuthorEnrichment.js'
@@ -86,6 +86,12 @@ export function mapPostDoc(docSnap, currentUid) {
     createdAtMs: data.createdAt?.toMillis ? data.createdAt.toMillis() : 0,
     expiresAtMs: data.expiresAt?.toMillis ? data.expiresAt.toMillis() : null,
     text: data.text || '',
+    // Same two names postFeedShared.js (the Home feed mapper) exposes.
+    // PostCard renders `imageUrl`; this mapper used to set only
+    // `imagePreviewUrl`, so every surface built on it (Profile Posts
+    // list, community feeds, hashtag/search, Campus/Notes tabs) showed a
+    // photo post's caption but not its photo.
+    imageUrl: data.image || undefined,
     imagePreviewUrl: data.image || undefined,
     file: data.file || null,
     subject: data.subject || null,
@@ -273,10 +279,18 @@ export async function getPostById(postId, currentUid) {
  * URL. Path is namespaced per-user and timestamped so re-uploads never
  * collide.
  */
-export async function uploadPostImage(uid, file) {
+export async function uploadPostImage(uid, file, { onProgress } = {}) {
   const path = `postImages/${uid}/${Date.now()}-${file.name}`
   const fileRef = ref(storage, path)
-  await uploadBytes(fileRef, file)
+  if (!onProgress) {
+    await uploadBytes(fileRef, file)
+    return getDownloadURL(fileRef)
+  }
+  // Same path and Storage rules as before — only adds progress reporting.
+  await new Promise((resolve, reject) => {
+    const task = uploadBytesResumable(fileRef, file, { contentType: file.type || undefined })
+    task.on('state_changed', (snap) => snap.totalBytes && onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)), reject, resolve)
+  })
   return getDownloadURL(fileRef)
 }
 

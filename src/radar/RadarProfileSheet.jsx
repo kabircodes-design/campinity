@@ -10,12 +10,15 @@ import { matchTier } from './radarService.js'
 import { useStartConversation } from '../hooks/useStartConversation.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 const TIER_LABEL = { high: 'High match', medium: 'Medium match', low: 'Some overlap' }
 const TIER_COLOR = { high: 'text-emerald-600 bg-emerald-50', medium: 'text-blue-600 bg-blue-50', low: 'text-gray-500 bg-gray-100' }
 
 /** Same portal pattern as every other bottom sheet in this project — applied from the start, not re-learned. */
 export default function RadarProfileSheet({ match, onClose }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(Boolean(match), onClose)
   const navigate = useNavigate()
   const currentUid = auth.currentUser?.uid
   const { startConversation, busy: messageBusy, gateOpen, setGateOpen } = useStartConversation()

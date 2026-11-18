@@ -6,6 +6,7 @@ import { AVATAR_CATEGORIES, CAMPINITY_AVATARS } from './campinityAvatars.js'
 import { updateUserProfile } from '../firebase/profileService.js'
 import { auth } from '../firebase/firebase.js'
 import { getProfileIdentityImage } from './profileIdentity.js'
+import { useBackToClose } from '../navigation/overlayBackStack.js'
 
 /**
  * Preset Campinity Avatar picker — Phase 1, no AI generation (that
@@ -34,6 +35,8 @@ import { getProfileIdentityImage } from './profileIdentity.js'
  * safe and correct rather than relying on an implicit default.
  */
 export default function CampinityAvatarPicker({ open, onClose, profile, onSaved }) {
+  // Android Back closes this first (see navigation/overlayBackStack.js).
+  useBackToClose(open, onClose)
   const [activeCategory, setActiveCategory] = useState(AVATAR_CATEGORIES[0].key)
   const [selectedUrl, setSelectedUrl] = useState(profile?.campusAvatarUrl || null)
   const [saving, setSaving] = useState(false)

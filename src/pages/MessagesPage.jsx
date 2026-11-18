@@ -31,7 +31,8 @@ export default function MessagesPage() {
   const navigate = useNavigate()
   const [chats, setChats] = useState([])
   const [sentPendingChats, setSentPendingChats] = useState([])
-  const [incomingRequestCount, setIncomingRequestCount] = useState(0)
+  const [incomingRequests, setIncomingRequests] = useState([])
+  const [activeFilter, setActiveFilter] = useState('all')
   const [createGroupOpen, setCreateGroupOpen] = useState(false)
   const [profiles, setProfiles] = useState({})
   const [loading, setLoading] = useState(true)
@@ -49,7 +50,7 @@ export default function MessagesPage() {
   // every chats update rather than tracking "have I already fetched
   // this uid" itself.
   useEffect(() => {
-    const otherUids = [...chats, ...sentPendingChats].map((chat) => chat?.otherUid).filter(Boolean)
+    const otherUids = [...chats, ...sentPendingChats, ...incomingRequests].map((chat) => chat?.otherUid).filter(Boolean)
     if (otherUids.length === 0) return
     getProfilesByUids(otherUids).then((profileByUid) => {
       const next = {}
@@ -58,7 +59,7 @@ export default function MessagesPage() {
       })
       setProfiles((prev) => ({ ...prev, ...next }))
     })
-  }, [chats, sentPendingChats])
+  }, [chats, sentPendingChats, incomingRequests])
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
@@ -95,7 +96,7 @@ export default function MessagesPage() {
     const uid = auth.currentUser?.uid
     if (!uid) return undefined
     const unsubscribe = subscribeToMessageRequests(uid, (data) => {
-      setIncomingRequestCount(Array.isArray(data) ? data.length : 0)
+      setIncomingRequests(Array.isArray(data) ? data.filter(Boolean) : [])
     })
     return unsubscribe
   }, [])
@@ -109,9 +110,36 @@ export default function MessagesPage() {
     return bMs - aMs
   })
 
+  // All = every conversation in the list (including requests you sent);
+  // Messages = accepted conversations only; Requests = incoming
+  // requests (rendered by ChatListPanel from incomingRequests) plus the
+  // ones you sent that are still pending.
+  const currentUid = auth.currentUser?.uid
+  const filteredChats =
+    activeFilter === 'messages'
+      ? allChats.filter((chat) => !chat.isPendingSent)
+      : activeFilter === 'requests'
+        ? allChats.filter((chat) => chat.isPendingSent)
+        : allChats
+  const unreadChatCount = chats.filter((chat) => (chat.unreadCount?.[currentUid] || 0) > 0).length
+  const filters = [
+    { key: 'all', label: 'All', count: allChats.length },
+    { key: 'messages', label: 'Messages', count: unreadChatCount, highlight: true },
+    { key: 'requests', label: 'Requests', count: incomingRequests.length, highlight: true }
+  ]
+
   const normalizedSearch = chatSearchTerm.trim().toLowerCase()
+  const matchesSearch = (chat) => {
+    const p = profiles[chat.otherUid]
+    return (
+      (p?.displayName || '').toLowerCase().includes(normalizedSearch) ||
+      (p?.username || '').toLowerCase().includes(normalizedSearch) ||
+      (chat.lastMessage || '').toLowerCase().includes(normalizedSearch)
+    )
+  }
+  const visibleRequests = normalizedSearch ? incomingRequests.filter(matchesSearch) : incomingRequests
   const visibleChats = normalizedSearch
-    ? allChats.filter((chat) => {
+    ? filteredChats.filter((chat) => {
         if (chat.type === 'group') {
           return (chat.groupName || '').toLowerCase().includes(normalizedSearch)
         }
@@ -121,7 +149,7 @@ export default function MessagesPage() {
         const lastMessageMatch = (chat.lastMessage || '').toLowerCase().includes(normalizedSearch)
         return nameMatch || usernameMatch || lastMessageMatch
       })
-    : allChats
+    : filteredChats
 
   if (loading) {
     return (
@@ -133,30 +161,40 @@ export default function MessagesPage() {
 
   return (
     <>
-      <div className="h-screen lg:h-full flex flex-col overflow-hidden">
+      {/* Mobile: normal page scroll (a fixed-height, overflow-hidden
+          wrapper here used to clip any conversation below the fold).
+          Desktop keeps the fixed-height two-column layout. */}
+      <div className="min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-hidden">
         <div className="flex-1 flex lg:overflow-hidden min-h-0">
           <div className="w-full lg:w-[360px] lg:flex-shrink-0 lg:h-full lg:overflow-y-auto lg:border-r lg:border-gray-100 bg-white">
-            <div className="px-4 pt-4 pb-1 flex items-center justify-between">
-              <h1 className="text-lg font-bold text-gray-900 tracking-tight">Messages</h1>
+            <div className="px-4 pt-5 pb-1 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold text-gray-900 tracking-tight leading-tight">Messages</h1>
+                <p className="mt-0.5 text-[13px] text-gray-500">Stay connected with your campus</p>
+              </div>
               <button
                 type="button"
                 aria-label="New group"
                 onClick={() => setCreateGroupOpen(true)}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-blue-600 hover:bg-blue-50 transition-all duration-200"
+                className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-blue-600 text-white shadow-sm shadow-blue-600/30 hover:bg-blue-700 active:scale-95 transition-all duration-200"
               >
-                <MessageSquarePlus className="w-4.5 h-4.5" />
+                <MessageSquarePlus className="w-5 h-5" />
               </button>
             </div>
 
             <ChatListPanel
               error={error}
-              allChats={allChats}
+              allChats={filteredChats}
               visibleChats={visibleChats}
               profiles={profiles}
               searchTerm={chatSearchTerm}
               onSearchChange={setChatSearchTerm}
               onOpenRequests={() => navigate('/messages/requests')}
-              incomingRequestCount={incomingRequestCount}
+              incomingRequestCount={incomingRequests.length}
+              filters={filters}
+              activeFilter={activeFilter}
+              onFilterChange={setActiveFilter}
+              requests={activeFilter === 'requests' ? visibleRequests : []}
             />
           </div>
 

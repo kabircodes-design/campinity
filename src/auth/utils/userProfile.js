@@ -14,12 +14,18 @@ export async function getUserProfile(uid) {
  * prepared for future admin/moderator tooling per the Firestore structure
  * spec, even though only "student" is assignable from this app today.
  */
+// PRIVACY: `email` is deliberately NOT written here any more. users/{uid}
+// is readable by every signed-in user (profiles are public inside the app),
+// so storing it exposed every student's email address to everyone. Nothing
+// reads it from this document — sign-in, password reset and verification
+// all use Firebase Auth's own copy. Existing documents still carry the
+// field until the approved cleanup in SECURITY_ROLLOUT.md runs.
+// eslint-disable-next-line no-unused-vars
 export async function createInitialUserDoc(uid, email) {
   await setDoc(
     doc(db, 'users', uid),
     {
     uid,
-    email: email || '',
     role: 'student',
     verifiedCampus: false,
     verificationMethod: '',
