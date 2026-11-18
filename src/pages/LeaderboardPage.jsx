@@ -215,6 +215,7 @@ export default function LeaderboardPage() {
               key={m.id}
               type="button"
               onClick={() => setMetric(m.id)}
+                aria-pressed={metric === m.id}
               className={`flex-shrink-0 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
                 metric === m.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
@@ -232,6 +233,7 @@ export default function LeaderboardPage() {
                 key={s.id}
                 type="button"
                 onClick={() => setScope(s.id)}
+                aria-pressed={scope === s.id}
                 className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
                   scope === s.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}

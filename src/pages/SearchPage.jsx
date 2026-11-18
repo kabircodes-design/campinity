@@ -421,6 +421,7 @@ export default function SearchPage() {
                       key={tab.key}
                       type="button"
                       onClick={() => setActiveTab(tab.key)}
+                aria-pressed={activeTab === tab.key}
                       className={`flex-shrink-0 rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-300 ${
                         activeTab === tab.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-white/10 dark:text-gray-400 dark:hover:bg-white/15'
                       }`}
@@ -535,6 +536,7 @@ export default function SearchPage() {
                       key={tab.key}
                       type="button"
                       onClick={() => setActiveTab(tab.key)}
+                aria-pressed={activeTab === tab.key}
                       className={`rounded-full text-xs font-semibold px-4 py-2 transition-all duration-300 ${
                         activeTab === tab.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-white/10 dark:text-gray-400 dark:hover:bg-white/15'
                       }`}

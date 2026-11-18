@@ -359,6 +359,7 @@ export default function LostFoundPage() {
                     key={tab.key}
                     type="button"
                     onClick={() => setActiveTab(tab.key)}
+                aria-pressed={activeTab === tab.key}
                     className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-all duration-200 ${
                       isActive ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'
                     }`}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Search, Sparkles } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Bookmark, FolderPlus, Search, SearchX, Sparkles } from 'lucide-react'
+import { Card, EmptyState, primaryPill, secondaryPill } from '../components/ui/Premium.jsx'
 import { auth } from '../firebase/firebase.js'
 import { subscribeToCollections, getRecentlySavedItems, getAllSavedItems, createCollection, toggleItemInCollection } from './savedService.js'
 import { suggestCollections } from './suggestCollections.js'
@@ -117,247 +118,214 @@ export default function SavedLibraryPage() {
     }
   }
 
+  const TABS = [
+    { key: 'all', label: 'All' },
+    { key: 'recent', label: 'Recent' },
+    { key: 'collections', label: 'Collections' }
+  ]
+  const retry = <button type="button" onClick={() => setReloadKey((k) => k + 1)} className={secondaryPill}>Try again</button>
+  const gridSkeleton = (
+    <div className="grid grid-cols-3 gap-2" role="status" aria-label="Loading saved items">
+      {Array.from({ length: 6 }).map((_, i) => <div key={i} className="aspect-square rounded-2xl bg-gray-100 dark:bg-white/[0.06] animate-pulse" />)}
+    </div>
+  )
+  const nothingSaved = (
+    <EmptyState
+      icon={Bookmark}
+      title="Nothing saved yet"
+      body="Tap the bookmark on any post, note or event to keep it here."
+      action={<button type="button" onClick={() => navigate('/home')} className={primaryPill}>Explore your feed</button>}
+    />
+  )
+
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm pb-10">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+    <div className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
+      <div className="mx-auto max-w-[480px] lg:max-w-[560px] min-h-[100dvh] pb-[calc(env(safe-area-inset-bottom)+6rem)]">
+        <header className="sticky top-0 z-40 bg-gray-50/90 dark:bg-[#09090f]/90 backdrop-blur-md">
           <div className="h-14 flex items-center gap-2 px-3">
-            <button type="button" aria-label="Back" onClick={() => navigate(-1)} className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300">
+            <button type="button" aria-label="Back" onClick={() => navigate(-1)} className="w-10 h-10 rounded-full flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-white/10 active:scale-95 transition-all duration-200">
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900 flex-1">Saved</span>
-            <button
-              type="button"
-              onClick={() => setCreatingNew(true)}
-              className="flex-shrink-0 flex items-center gap-1 rounded-full bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 hover:bg-blue-700 transition-all duration-300"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              New
+            <h1 className="text-[17px] font-bold tracking-tight text-gray-900 dark:text-gray-50 flex-1">Saved</h1>
+            <button type="button" onClick={() => { setTab('collections'); setCreatingNew(true) }} className="flex-shrink-0 h-9 inline-flex items-center gap-1.5 rounded-full bg-blue-600 text-white text-[13px] font-semibold px-3.5 shadow-sm shadow-blue-600/20 hover:bg-blue-700 active:scale-95 transition-all duration-200">
+              <FolderPlus className="w-4 h-4" />
+              New collection
             </button>
           </div>
-          <div className="px-4 pb-3">
-            <div className="flex items-center gap-2 rounded-full bg-gray-100 px-3.5 py-2.5">
-              <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <div className="px-4 pb-3 space-y-3">
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
               <input
-                type="text"
+                type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search your saved library..."
-                className="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 outline-none"
+                placeholder="Search your saved library"
+                aria-label="Search your saved library"
+                className="w-full h-11 rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] pl-10 pr-4 text-[15px] text-gray-900 dark:text-gray-50 placeholder:text-gray-400 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all duration-200"
               />
             </div>
-          </div>
-          <nav className="flex items-center px-4 gap-5 border-t border-gray-50">
-            {[
-              { key: 'all', label: 'All Saved' },
-              { key: 'recent', label: 'Recently Saved' },
-              { key: 'collections', label: 'Collections' }
-            ].map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setTab(t.key)}
-                className={`py-2.5 text-[13px] font-semibold border-b-2 transition-all duration-300 ${
-                  tab === t.key ? 'text-blue-600 border-blue-600' : 'text-gray-400 border-transparent'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </nav>
-        </header>
-
-        {creatingNew && (
-          <div className="mx-4 mt-3 p-3 rounded-xl border border-gray-200 space-y-2">
-            <div className="flex items-center gap-2">
-              <input type="text" value={newEmoji} onChange={(e) => setNewEmoji(e.target.value.slice(0, 2))} placeholder="🎯" className="w-11 rounded-lg border border-gray-200 px-2 py-2 text-center text-sm outline-none focus:border-blue-500" />
-              <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Collection name" autoFocus className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCreatingNew(false)} className="flex-1 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold py-2">Cancel</button>
-              <button type="button" onClick={handleCreate} disabled={!newName.trim() || creating} className="flex-1 rounded-lg bg-blue-600 text-white text-xs font-semibold py-2 disabled:opacity-50">
-                {creating ? 'Creating...' : 'Create'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {tab === 'all' && suggestions.length > 0 && (
-          <div className="px-4 pt-4 space-y-2.5">
-            <p className="flex items-center gap-1.5 text-sm font-bold text-gray-900">
-              <Sparkles className="w-4 h-4 text-indigo-500" /> Suggested for you
-            </p>
-            {suggestions.map((s) => (
-              <div key={s.key} className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3.5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {s.emoji} {s.label}
-                    </p>
-                    <p className="text-xs text-gray-400">{s.count} items found</p>
-                  </div>
-                </div>
-                <div className="mt-2.5 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleAcceptSuggestion(s)}
-                    disabled={acceptingSuggestion === s.key}
-                    className="rounded-full bg-indigo-600 text-white text-xs font-semibold px-3.5 py-1.5 hover:bg-indigo-700 disabled:opacity-60 transition-all duration-200"
-                  >
-                    {acceptingSuggestion === s.key ? 'Creating...' : 'Create collection'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDismissedSuggestions((prev) => [...prev, s.key])}
-                    className="text-xs font-semibold text-gray-500 hover:text-gray-700"
-                  >
-                    Not now
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <main className="px-4 pt-4">
-          {tab === 'all' && (
-            <div className="flex items-center gap-2 mb-3">
-              {[
-                { key: 'all', label: 'All' },
-                { key: 'notes', label: 'Notes & PDFs' },
-                { key: 'posts', label: 'Posts' }
-              ].map((f) => (
+            <div className="flex rounded-full bg-gray-200/60 dark:bg-white/[0.06] p-1" role="tablist" aria-label="Saved sections">
+              {TABS.map((t) => (
                 <button
-                  key={f.key}
+                  key={t.key}
                   type="button"
-                  onClick={() => setTypeFilter(f.key)}
-                  className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
-                    typeFilter === f.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}
+                  role="tab"
+                  aria-selected={tab === t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`flex-1 h-9 rounded-full text-[13px] font-semibold transition-all duration-200 ${tab === t.key ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-gray-50 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'}`}
                 >
-                  {f.label}
+                  {t.label}
                 </button>
               ))}
             </div>
+          </div>
+        </header>
+
+        <div className="px-4 space-y-4">
+          {creatingNew && (
+            <Card className="p-4 animate-[fadeIn_180ms_ease]">
+              <p className="text-[14px] font-bold text-gray-900 dark:text-gray-50">New collection</p>
+              <div className="mt-3 flex items-end gap-2">
+                <div>
+                  <label htmlFor="new-collection-emoji" className="block text-[12px] font-semibold text-gray-500 dark:text-gray-400 mb-1">Icon</label>
+                  <input id="new-collection-emoji" type="text" value={newEmoji} onChange={(e) => setNewEmoji(e.target.value.slice(0, 2))} placeholder="🎯" className="w-12 h-11 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-center text-lg outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" />
+                </div>
+                <div className="flex-1">
+                  <label htmlFor="new-collection-name" className="block text-[12px] font-semibold text-gray-500 dark:text-gray-400 mb-1">Name</label>
+                  <input id="new-collection-name" type="text" value={newName} maxLength={40} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleCreate()} placeholder="e.g. Exam prep" autoFocus className="w-full h-11 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3.5 text-[15px] text-gray-900 dark:text-gray-50 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" />
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <button type="button" onClick={() => setCreatingNew(false)} className={`${secondaryPill} flex-1`}>Cancel</button>
+                <button type="button" onClick={handleCreate} disabled={!newName.trim() || creating} className={`${primaryPill} flex-1`}>
+                  {creating ? 'Creating…' : 'Create'}
+                </button>
+              </div>
+            </Card>
           )}
 
-          {tab === 'all' &&
-            (allLoading ? (
-              <div className="grid grid-cols-3 gap-1.5">
-                {Array.from({ length: 6 }).map((_, i) => <div key={i} className="aspect-square rounded-xl bg-gray-100 animate-pulse" />)}
-              </div>
-            ) : allError ? (
-              <div className="py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">{allError}</p>
-                <button
-                  type="button"
-                  onClick={() => setReloadKey((k) => k + 1)}
-                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
-                >
-                  Try Again
-                </button>
-              </div>
-            ) : allItems.length === 0 ? (
-              <EmptyState />
-            ) : (
-              (() => {
-                const filtered =
-                  typeFilter === 'all'
-                    ? allItems
-                    : allItems.filter((item) => {
-                        const title = (item.preview?.title || '').toLowerCase()
-                        const looksLikeNote = title.endsWith('.pdf') || /chapter|pyq|notes|important questions/.test(title)
-                        return typeFilter === 'notes' ? looksLikeNote : !looksLikeNote
-                      })
-                return filtered.length === 0 ? (
-                  <div className="py-16 text-center">
-                    <p className="text-sm font-semibold text-gray-900">Nothing here yet</p>
-                    <p className="mt-1 text-sm text-gray-400">Try a different filter.</p>
+          {tab === 'all' && suggestions.length > 0 && (
+            <section aria-label="Suggested collections" className="space-y-2.5">
+              <p className="flex items-center gap-1.5 text-[13px] font-bold text-gray-900 dark:text-gray-50">
+                <Sparkles className="w-4 h-4 text-indigo-500" aria-hidden="true" /> Suggested for you
+              </p>
+              {suggestions.map((s) => (
+                <Card key={s.key} className="p-4 bg-gradient-to-br from-indigo-50/80 to-white dark:from-indigo-500/10 dark:to-[#11131a] border-indigo-100 dark:border-indigo-500/20">
+                  <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-50">{s.emoji} {s.label}</p>
+                  <p className="text-[12.5px] text-gray-500 dark:text-gray-400">{s.count} saved items match</p>
+                  <div className="mt-3 flex items-center gap-2">
+                    <button type="button" onClick={() => handleAcceptSuggestion(s)} disabled={acceptingSuggestion === s.key} className="h-9 rounded-full bg-indigo-600 text-white text-[13px] font-semibold px-4 hover:bg-indigo-700 active:scale-95 disabled:opacity-60 transition-all duration-200">
+                      {acceptingSuggestion === s.key ? 'Creating…' : 'Create collection'}
+                    </button>
+                    <button type="button" onClick={() => setDismissedSuggestions((prev) => [...prev, s.key])} className="h-9 px-3 rounded-full text-[13px] font-semibold text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10">
+                      Not now
+                    </button>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {filtered.map((item) => <SavedItemCard key={item.id} item={item} currentUid={currentUid} />)}
-                  </div>
-                )
-              })()
-            ))}
+                </Card>
+              ))}
+            </section>
+          )}
 
-          {tab === 'recent' &&
-            (recentLoading ? (
-              <div className="grid grid-cols-3 gap-1.5">
-                {Array.from({ length: 6 }).map((_, i) => <div key={i} className="aspect-square rounded-xl bg-gray-100 animate-pulse" />)}
-              </div>
-            ) : recentError ? (
-              <div className="py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">{recentError}</p>
-                <button
-                  type="button"
-                  onClick={() => setReloadKey((k) => k + 1)}
-                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
-                >
-                  Try Again
-                </button>
-              </div>
-            ) : recentItems.length === 0 ? (
-              <EmptyState />
-            ) : (
-              <div className="grid grid-cols-3 gap-1.5">
-                {recentItems.map((item) => <SavedItemCard key={item.id} item={item} currentUid={currentUid} />)}
-              </div>
-            ))}
-
-          {tab === 'collections' &&
-            (collectionsLoading ? (
-              <div className="grid grid-cols-2 gap-3">
-                {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-32 rounded-2xl bg-gray-100 animate-pulse" />)}
-              </div>
-            ) : collectionsError ? (
-              <div className="py-16 text-center">
-                <p className="text-sm font-semibold text-gray-900">{collectionsError}</p>
-                <button
-                  type="button"
-                  onClick={() => setReloadKey((k) => k + 1)}
-                  className="mt-3 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-300"
-                >
-                  Try Again
-                </button>
-              </div>
-            ) : filteredCollections.length === 0 ? (
-              <p className="text-center text-sm text-gray-400 py-12">No collections yet — tap New to create one.</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {filteredCollections.map((coll) => (
+          <main>
+            {tab === 'all' && (
+              <div className="flex items-center gap-2 mb-3" role="group" aria-label="Filter saved items">
+                {[
+                  { key: 'all', label: 'All' },
+                  { key: 'notes', label: 'Notes & PDFs' },
+                  { key: 'posts', label: 'Posts' }
+                ].map((f) => (
                   <button
-                    key={coll.id}
+                    key={f.key}
                     type="button"
-                    onClick={() => navigate(`/saved/collection/${coll.id}`)}
-                    className="rounded-2xl border border-gray-100 overflow-hidden text-left hover:border-gray-200 transition-all duration-200"
+                    aria-pressed={typeFilter === f.key}
+                    onClick={() => setTypeFilter(f.key)}
+                    className={`h-9 rounded-full text-[13px] font-semibold px-4 active:scale-95 transition-all duration-200 ${typeFilter === f.key ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-white dark:bg-white/[0.06] border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:border-gray-300'}`}
                   >
-                    <div className="h-20 bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center text-2xl">
-                      {coll.coverImage ? <img src={coll.coverImage} alt="" className="w-full h-full object-cover" /> : coll.emoji || '📁'}
-                    </div>
-                    <div className="p-2.5">
-                      <p className="text-xs font-semibold text-gray-900 truncate">{coll.name}</p>
-                      <p className="text-[10px] text-gray-400">{coll.itemCount || 0} items</p>
-                    </div>
+                    {f.label}
                   </button>
                 ))}
               </div>
-            ))}
-        </main>
-      </div>
-    </div>
-  )
-}
+            )}
 
-function EmptyState() {
-  return (
-    <div className="py-16 text-center">
-      <p className="text-2xl">📚</p>
-      <p className="mt-2 text-sm font-semibold text-gray-900">Nothing Saved Yet</p>
-      <p className="mt-1 text-xs text-gray-400 max-w-[240px] mx-auto leading-relaxed">
-        Save your favourite posts, events and communities.
-      </p>
+            {tab === 'all' &&
+              (allLoading ? (
+                gridSkeleton
+              ) : allError ? (
+                <EmptyState icon={AlertCircle} title="Couldn't load your library" body={allError} action={retry} />
+              ) : allItems.length === 0 ? (
+                nothingSaved
+              ) : (
+                (() => {
+                  const filtered =
+                    typeFilter === 'all'
+                      ? allItems
+                      : allItems.filter((item) => {
+                          const title = (item.preview?.title || '').toLowerCase()
+                          const looksLikeNote = title.endsWith('.pdf') || /chapter|pyq|notes|important questions/.test(title)
+                          return typeFilter === 'notes' ? looksLikeNote : !looksLikeNote
+                        })
+                  return filtered.length === 0 ? (
+                    <EmptyState icon={SearchX} title="Nothing in this filter" body="Try a different filter." action={<button type="button" onClick={() => setTypeFilter('all')} className={secondaryPill}>Show all</button>} />
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {filtered.map((item) => <SavedItemCard key={item.id} item={item} currentUid={currentUid} />)}
+                    </div>
+                  )
+                })()
+              ))}
+
+            {tab === 'recent' &&
+              (recentLoading ? (
+                gridSkeleton
+              ) : recentError ? (
+                <EmptyState icon={AlertCircle} title="Couldn't load recent saves" body={recentError} action={retry} />
+              ) : recentItems.length === 0 ? (
+                nothingSaved
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {recentItems.map((item) => <SavedItemCard key={item.id} item={item} currentUid={currentUid} />)}
+                </div>
+              ))}
+
+            {tab === 'collections' &&
+              (collectionsLoading ? (
+                <div className="grid grid-cols-2 gap-3" role="status" aria-label="Loading collections">
+                  {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-36 rounded-3xl bg-gray-100 dark:bg-white/[0.06] animate-pulse" />)}
+                </div>
+              ) : collectionsError ? (
+                <EmptyState icon={AlertCircle} title="Couldn't load collections" body={collectionsError} action={retry} />
+              ) : filteredCollections.length === 0 ? (
+                creatingNew ? null : (
+                  <EmptyState
+                    icon={FolderPlus}
+                    title={searchTerm ? 'No collections match' : 'No collections yet'}
+                    body={searchTerm ? 'Try a different search.' : 'Group saved posts and notes — e.g. one per subject.'}
+                    action={!searchTerm && <button type="button" onClick={() => setCreatingNew(true)} className={primaryPill}>New collection</button>}
+                  />
+                )
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {filteredCollections.map((coll) => (
+                    <button
+                      key={coll.id}
+                      type="button"
+                      onClick={() => navigate(`/saved/collection/${coll.id}`)}
+                      className="rounded-3xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#11131a] overflow-hidden text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] transition-all duration-200"
+                    >
+                      <div className="h-24 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-500/10 dark:to-indigo-500/20 flex items-center justify-center text-3xl">
+                        {coll.coverImage ? <img src={coll.coverImage} alt="" className="w-full h-full object-cover" /> : coll.emoji || '📁'}
+                      </div>
+                      <div className="p-3">
+                        <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-50 truncate">{coll.name}</p>
+                        <p className="text-[12px] text-gray-500 dark:text-gray-400">{coll.itemCount || 0} {coll.itemCount === 1 ? 'item' : 'items'}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ))}
+          </main>
+        </div>
+      </div>
     </div>
   )
 }

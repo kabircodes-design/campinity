@@ -4,6 +4,7 @@ import { AlertCircle, ArrowLeft, Bell, CheckCheck, ChevronRight, Compass, Settin
 import NotificationCard from '../components/NotificationCard.jsx'
 import EmptyNotifications from '../components/EmptyNotifications.jsx'
 import NotificationSkeleton from '../components/NotificationSkeleton.jsx'
+import { EmptyState, secondaryPill } from '../components/ui/Premium.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import {
@@ -240,23 +241,23 @@ export default function NotificationsPage() {
   ]
 
   return (
-    <div className="min-h-screen lg:min-h-0 lg:h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-white lg:bg-gray-50">
+    <div className="min-h-[100dvh] lg:min-h-0 lg:h-full w-full max-w-[100vw] lg:max-w-none lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-white dark:bg-[#11131a] lg:bg-gray-50 dark:lg:bg-[#09090f]">
       <div className="lg:flex lg:items-start lg:gap-5 lg:px-6 lg:py-4 lg:max-w-[1180px] lg:mx-auto">
-        <div className="mx-auto max-w-[560px] lg:mx-0 lg:max-w-[680px] lg:flex-1 lg:min-w-0 bg-white lg:rounded-2xl lg:border lg:border-gray-100 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
-          <header className="px-4 lg:px-6 pt-4">
+        <div className="mx-auto max-w-[560px] lg:mx-0 lg:max-w-[680px] lg:flex-1 lg:min-w-0 bg-white dark:bg-[#11131a] lg:rounded-3xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+          <header className="sticky top-0 z-30 px-4 lg:px-6 pt-4 bg-white/90 dark:bg-[#11131a]/90 backdrop-blur-md lg:rounded-t-3xl">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-1 min-w-0">
                 <button
                   type="button"
                   aria-label="Back"
                   onClick={() => navigate(-1)}
-                  className="lg:hidden w-10 h-10 -ml-2 mt-[-2px] flex-shrink-0 rounded-full flex items-center justify-center text-gray-700 hover:bg-gray-100 active:scale-95 transition-all duration-200"
+                  className="lg:hidden w-10 h-10 -ml-2 mt-[-2px] flex-shrink-0 rounded-full flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div className="min-w-0">
-                  <h1 className="text-2xl font-bold text-gray-900 tracking-tight leading-tight">Notifications</h1>
-                  <p className="mt-0.5 text-[13px] text-gray-500">
+                  <h1 className="text-[26px] font-bold text-gray-900 dark:text-gray-50 tracking-tight leading-tight">Notifications</h1>
+                  <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400" aria-live="polite">
                     {loading ? 'Checking for updates…' : unreadCount > 0 ? `${unreadCount} unread ${unreadCount === 1 ? 'update' : 'updates'}` : 'You’re all caught up'}
                   </p>
                 </div>
@@ -265,14 +266,14 @@ export default function NotificationsPage() {
                 type="button"
                 aria-label="Notification settings"
                 onClick={() => navigate('/settings/notifications')}
-                className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all duration-200"
+                className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/15 active:scale-95 transition-all duration-200"
               >
                 <Settings2 className="w-5 h-5" />
               </button>
             </div>
 
             <div className="mt-4 pb-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2" role="tablist" aria-label="Filter notifications">
+              <div className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-white/[0.06] p-1" role="tablist" aria-label="Filter notifications">
                 {filters.map((f) => {
                   const isActive = filter === f.key
                   return (
@@ -282,13 +283,13 @@ export default function NotificationsPage() {
                       role="tab"
                       aria-selected={isActive}
                       onClick={() => setFilter(f.key)}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-all duration-200 ${
-                        isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      className={`inline-flex items-center gap-1.5 rounded-full px-4 h-9 text-[13px] font-semibold transition-all duration-200 ${
+                        isActive ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-gray-50 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                       }`}
                     >
                       {f.label}
                       {f.count > 0 && (
-                        <span className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${isActive ? 'bg-white/25 text-white' : 'bg-red-500 text-white'}`}>
+                        <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-blue-600 text-white">
                           {f.count > 99 ? '99+' : f.count}
                         </span>
                       )}
@@ -300,7 +301,7 @@ export default function NotificationsPage() {
                 <button
                   type="button"
                   onClick={markAllAsRead}
-                  className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold text-blue-600 hover:bg-blue-50 active:scale-95 transition-all duration-200"
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 h-9 text-[13px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 active:scale-95 transition-all duration-200"
                 >
                   <CheckCheck className="w-4 h-4" />
                   Mark all read
@@ -309,45 +310,41 @@ export default function NotificationsPage() {
             </div>
           </header>
 
-          <main className="pb-24 lg:pb-4 border-t border-gray-100">
+          <main className="pb-[calc(env(safe-area-inset-bottom)+6rem)] lg:pb-4 border-t border-gray-100 dark:border-white/10">
             {loading ? (
               <NotificationSkeleton />
             ) : error ? (
-              <div className="px-6 py-16 text-center">
-                <div className="mx-auto w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
-                  <AlertCircle className="w-6 h-6" />
-                </div>
-                <p className="mt-3 text-[15px] font-semibold text-gray-900">Couldn't load notifications</p>
-                <p className="mt-1 text-sm text-gray-500">Check your connection and try again.</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    firstLoadRef.current = true
-                    setReloadKey((k) => k + 1)
-                  }}
-                  className="mt-4 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-2 hover:border-gray-300 transition-all duration-200"
-                >
-                  Try again
-                </button>
-              </div>
+              <EmptyState
+                icon={AlertCircle}
+                title="Couldn't load notifications"
+                body="Check your connection and try again."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      firstLoadRef.current = true
+                      setReloadKey((k) => k + 1)
+                    }}
+                    className={secondaryPill}
+                  >
+                    Try again
+                  </button>
+                }
+              />
             ) : notifications.length === 0 ? (
               <EmptyNotifications />
             ) : visibleGroups.length === 0 ? (
-              <div className="px-6 py-14 text-center">
-                <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <CheckCheck className="w-6 h-6" />
-                </div>
-                <p className="mt-3 text-[15px] font-semibold text-gray-900">No unread notifications</p>
-                <p className="mt-1 text-sm text-gray-500">You’ve seen everything new.</p>
-                <button type="button" onClick={() => setFilter('all')} className="mt-4 text-sm font-semibold text-blue-600">
-                  Show all
-                </button>
-              </div>
+              <EmptyState
+                icon={CheckCheck}
+                title="No unread notifications"
+                body="You've seen everything new."
+                action={<button type="button" onClick={() => setFilter('all')} className={secondaryPill}>Show all</button>}
+              />
             ) : (
               <>
                 {visibleGroups.map(([label, items]) => (
                   <section key={label} aria-label={label}>
-                    <h2 className="px-4 lg:px-6 pt-4 pb-1.5 text-[13px] font-bold text-gray-900">{label}</h2>
+                    <h2 className="px-4 lg:px-6 pt-5 pb-2 text-[11.5px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">{label}</h2>
                     {items.map((notification) => (
                       <NotificationCard key={notification.id} notification={notification} onRead={markAsRead} onDelete={handleDeleteNotification} />
                     ))}
@@ -359,13 +356,13 @@ export default function NotificationsPage() {
                       type="button"
                       onClick={loadMore}
                       disabled={loadingMore}
-                      className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-700 hover:border-gray-300 disabled:opacity-60 transition-all duration-200"
+                      className={secondaryPill}
                     >
                       {loadingMore && <span className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden="true" />}
                       {loadingMore ? 'Loading…' : 'Load older notifications'}
                     </button>
                   ) : (
-                    <p className="text-xs text-gray-400">You've reached the end</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">You've reached the end</p>
                   )}
                 </div>
               </>

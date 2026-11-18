@@ -91,40 +91,61 @@ export default function BadgesPage() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-      <div className="mx-auto max-w-[560px] lg:max-w-[640px] bg-white min-h-screen lg:shadow-sm lg:border-x lg:border-gray-100 pb-24">
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+    <div className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
+      <div className="mx-auto max-w-[560px] lg:max-w-[640px] bg-white dark:bg-[#11131a] min-h-[100dvh] lg:shadow-sm lg:border-x lg:border-gray-100 dark:lg:border-white/10 pb-[calc(env(safe-area-inset-bottom)+6rem)]">
+        <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#11131a]/90 backdrop-blur-md border-b border-gray-100 dark:border-white/10">
           <div className="h-14 flex items-center gap-2 px-3">
             <button
               type="button"
               aria-label="Back"
               onClick={() => navigate(-1)}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all duration-300"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900">My Achievements</span>
+            <h1 className="text-[17px] font-bold tracking-tight text-gray-900 dark:text-gray-50">My achievements</h1>
           </div>
         </header>
 
         <main className="px-4 mt-5">
           {loading ? (
-            <div className="grid grid-cols-3 gap-3 animate-pulse">
+            <div className="grid grid-cols-3 gap-3 animate-pulse" role="status" aria-label="Loading achievements">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="h-24 bg-gray-100 rounded-2xl" />
               ))}
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
-                  <Trophy className="w-5 h-5 text-amber-500" />
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-gray-900">{earned.length} Earned</p>
-                  <p className="text-xs text-gray-400">out of {Object.keys(BADGES).length} Campinity badges</p>
-                </div>
-              </div>
+              {(() => {
+                const total = Object.keys(BADGES).length
+                const pct = total ? Math.round((earned.length / total) * 100) : 0
+                return (
+                  <section aria-label="Badge progress" className="relative overflow-hidden rounded-3xl p-5 bg-gradient-to-br from-amber-50 via-white to-orange-50 dark:from-amber-500/10 dark:via-[#11131a] dark:to-orange-500/10 border border-amber-100 dark:border-amber-500/20">
+                    <div className="absolute -top-10 -right-8 w-36 h-36 rounded-full bg-amber-300/20 blur-2xl pointer-events-none" aria-hidden="true" />
+                    <div className="relative flex items-center gap-3">
+                      <span className="w-12 h-12 rounded-2xl bg-white dark:bg-white/10 shadow-sm flex items-center justify-center" aria-hidden="true">
+                        <Trophy className="w-6 h-6 text-amber-500" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[22px] leading-tight font-bold tracking-tight text-gray-900 dark:text-gray-50">
+                          {earned.length} <span className="text-[15px] font-semibold text-gray-500 dark:text-gray-400">of {total} badges</span>
+                        </p>
+                        <p className="text-[12.5px] text-gray-600 dark:text-gray-300">
+                          {progress?.level ? `Level ${progress.level}` : 'Campinity badges'}
+                          {typeof progress?.xp === 'number' ? ` · ${progress.xp} XP` : ''}
+                        </p>
+                      </div>
+                      <span className="ml-auto text-[15px] font-bold tabular-nums text-amber-600 dark:text-amber-400">{pct}%</span>
+                    </div>
+                    <div className="relative mt-4 h-2.5 rounded-full bg-amber-100 dark:bg-white/10 overflow-hidden" role="progressbar" aria-valuenow={earned.length} aria-valuemin={0} aria-valuemax={total} aria-label="Badges earned">
+                      <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-[width] duration-700" style={{ width: `${Math.max(pct, earned.length ? 4 : 0)}%` }} />
+                    </div>
+                    <p className="relative mt-2 text-[12px] text-gray-500 dark:text-gray-400">
+                      {earned.length === total ? 'Every badge unlocked — legend!' : 'Keep posting, helping and showing up to unlock more.'}
+                    </p>
+                  </section>
+                )
+              })()}
 
               {/* Verified Campus Achievements — deliberately visually
                   distinct from Campinity-earned badges below (blue
@@ -133,7 +154,7 @@ export default function BadgesPage() {
                   Achievement and a Verified Campus Achievement." */}
               <section className="mt-7">
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Verified Campus Achievements</p>
+                  <h2 className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">Verified Campus Achievements</h2>
                   <button
                     type="button"
                     onClick={() => navigate('/achievements/add')}
@@ -184,7 +205,7 @@ export default function BadgesPage() {
 
               {submissions !== null && submissions.length > 0 && (
                 <section className="mt-6">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">My Submissions</p>
+                  <h2 className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">My Submissions</h2>
                   <div className="mt-2 space-y-2">
                     {submissions.map((s) => (
                       <div key={s.id} className="rounded-xl border border-gray-100 p-3.5">
@@ -206,7 +227,7 @@ export default function BadgesPage() {
 
               {earned.length > 0 && (
                 <section className="mt-6">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Earned</p>
+                  <h2 className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">Earned</h2>
                   <div className="mt-2 grid grid-cols-3 gap-3">
                     {earned.map(({ badgeId, earnedAt }) => {
                       const badge = BADGES[badgeId]
@@ -225,7 +246,7 @@ export default function BadgesPage() {
               )}
 
               <section className="mt-7">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Badges to Unlock</p>
+                <h2 className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">Badges to Unlock</h2>
                 {CATEGORY_ORDER.filter((cat) => lockedByCategory[cat]?.length).map((cat) => (
                   <div key={cat} className="mt-3">
                     <p className="text-xs font-semibold text-gray-500">{BADGE_CATEGORY_LABELS[cat]}</p>
