@@ -12,12 +12,14 @@
  *   list          enrolled devices (no keys printed)
  *   revoke        revoke one device and end its sessions
  *   revoke-all    revoke every device (lost/stolen phone, no other device)
+ *   rotate-password  change the admin password in place (devices stay enrolled)
  *
  * Usage
  *   node functions/scripts/admin-device-owner.cjs create-code --project=campinity-app --email=you@example.com --confirm=campinity-app
  *   node functions/scripts/admin-device-owner.cjs list --project=campinity-app
  *   node functions/scripts/admin-device-owner.cjs revoke --project=campinity-app --device=<id> --confirm=campinity-app
  *   node functions/scripts/admin-device-owner.cjs revoke-all --project=campinity-app --confirm=campinity-app
+ *   node functions/scripts/admin-device-owner.cjs rotate-password --project=campinity-app --confirm=campinity-app [--end-sessions]
  *   (add --emulator=127.0.0.1:8089 to run against a local Firestore emulator instead)
  *
  * --email / --uid binds the code to your Firebase account, so only that
@@ -35,6 +37,7 @@ const path = require('node:path')
 const FUNCTIONS_DIR = path.join(__dirname, '..', 'functions')
 const admin = require(path.join(FUNCTIONS_DIR, 'node_modules', 'firebase-admin'))
 const { createEnrollmentCodeRecord } = require(path.join(FUNCTIONS_DIR, 'adminDevice.js'))
+const { rotateAdminPassword, validateNewPassword, readHidden, MIN_LENGTH } = require('./adminPasswordRotation.cjs')
 
 function parseArgs(argv) {
   const [command, ...rest] = argv.slice(2)
@@ -89,8 +92,8 @@ const fmt = (ts) => (ts && ts.toDate ? ts.toDate().toISOString().replace('T', ' 
 
 async function main() {
   const opts = parseArgs(process.argv)
-  if (!['create-code', 'list', 'revoke', 'revoke-all'].includes(opts.command)) {
-    console.log('Commands: create-code | list | revoke --device=<id> | revoke-all   (see the header of this file)')
+  if (!['create-code', 'list', 'revoke', 'revoke-all', 'rotate-password'].includes(opts.command)) {
+    console.log('Commands: create-code | list | revoke --device=<id> | revoke-all | rotate-password [--end-sessions]   (see the header of this file)')
     process.exit(1)
   }
   const project = typeof opts.project === 'string' ? opts.project : null
@@ -98,6 +101,17 @@ async function main() {
   const writes = opts.command !== 'list'
   if (writes && opts.confirm !== project) throw new Error(`Refusing to write: add --confirm=${project} to confirm the target project.`)
   if (opts.emulator) process.env.FIRESTORE_EMULATOR_HOST = String(opts.emulator)
+  if (opts.command === 'rotate-password') {
+    if (Object.keys(opts).some((k) => /pass|secret/i.test(k))) throw new Error('Never pass a password on the command line. It is asked for interactively.')
+    // Ask BEFORE connecting, and refuse outright without a terminal.
+    console.log(`Rotating the admin password for ${project}${opts.emulator ? ' (EMULATOR)' : ''}. Typing is hidden. Minimum ${MIN_LENGTH} characters.`)
+    const first = await readHidden('New admin password: ')
+    const problem = validateNewPassword(first)
+    if (problem) throw new Error(problem)
+    const second = await readHidden('Repeat new admin password: ')
+    if (first !== second) throw new Error('The two entries did not match. Nothing was changed.')
+    opts.newPassword = first
+  }
 
   const creds = credentialFor(opts)
   admin.initializeApp(creds.credential ? { projectId: project, credential: creds.credential } : { projectId: project })
@@ -116,6 +130,14 @@ async function main() {
     db.collection('moderationActions').add({ adminUid: null, action, targetType: 'adminDevice', targetId: null, targetUid: null, reportId: null, reason: 'owner script', viaOwnerScript: true, createdAt: Timestamp.now(), ...extra })
 
   console.log(`Project: ${project}${opts.emulator ? ` (EMULATOR ${opts.emulator})` : ''}`)
+
+  if (opts.command === 'rotate-password') {
+    const { sessionsEnded } = await rotateAdminPassword(db, Timestamp, { newPassword: opts.newPassword, endSessions: opts['end-sessions'] === true })
+    opts.newPassword = null
+    console.log('Admin password rotated. Enrolled devices were not changed.')
+    console.log(opts['end-sessions'] ? `Ended ${sessionsEnded} active admin session(s); unlock again with the new password.` : 'Existing sessions stay valid until they expire (add --end-sessions to end them now).')
+    return
+  }
 
   if (opts.command === 'create-code') {
     let forUid = typeof opts.uid === 'string' ? opts.uid : null
