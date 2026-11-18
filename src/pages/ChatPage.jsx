@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import {
+import { MessageCircleOff,
   ArrowLeft,
   Bell,
   BellOff,
@@ -327,7 +327,10 @@ export default function ChatPage() {
     return groups
   }, [messages])
 
-  const loading = chatLoading || (messagesLoading && messages.length === 0)
+  // A known chat error (missing / no access / offline) wins over the
+  // messages spinner — for a chat you can't read, the messages listener never
+  // settles, which used to leave this page spinning forever.
+  const loading = !chatError && (chatLoading || (messagesLoading && messages.length === 0))
   const displayName = displayNameOf(otherProfile)
   const isGroup = chat?.type === 'group'
   const currentUid = auth.currentUser?.uid
@@ -424,14 +427,18 @@ export default function ChatPage() {
 
   if (chatError) {
     return (
-      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50">
-        <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white min-h-screen lg:shadow-sm flex items-center justify-center px-6 text-center">
-          <div>
-            <p className="text-sm font-semibold text-gray-900">{chatError}</p>
+      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
+        <div className="mx-auto max-w-[480px] lg:max-w-[520px] bg-white dark:bg-[#11131a] min-h-screen lg:shadow-sm flex items-center justify-center px-8 text-center">
+          <div role="alert" className="animate-[fadeIn_220ms_ease]">
+            <span className="mx-auto w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <MessageCircleOff className="w-6 h-6" strokeWidth={1.8} />
+            </span>
+            <p className="mt-4 text-[17px] font-bold tracking-tight text-gray-900 dark:text-gray-50">Conversation unavailable</p>
+            <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{chatError}</p>
             <button
               type="button"
               onClick={() => navigate('/messages')}
-              className="mt-4 rounded-full bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-blue-700 transition-all duration-300"
+              className="mt-6 h-11 rounded-full bg-blue-600 text-white text-sm font-semibold px-6 shadow-sm shadow-blue-600/20 hover:bg-blue-700 active:scale-[0.98] transition-all duration-200"
             >
               Back to Messages
             </button>

@@ -6,7 +6,7 @@ import { ArrowLeft } from 'lucide-react'
  * SecuritySettingsPage …): sticky header with back button, 480/640 px column,
  * light + dark surfaces. New settings pages use this so they stay identical.
  */
-export default function SettingsPageShell({ title, back = '/settings', children, footer }) {
+export default function SettingsPageShell({ title, description, back = '/settings', children, footer }) {
   const navigate = useNavigate()
   return (
     <div className="h-full w-full max-w-[100vw] lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
@@ -17,14 +17,17 @@ export default function SettingsPageShell({ title, back = '/settings', children,
               type="button"
               aria-label="Back"
               onClick={() => navigate(back)}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10 transition-all duration-300"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 active:scale-95 dark:text-gray-300 dark:hover:bg-white/10 transition-all duration-200"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">{title}</span>
+            <h1 className="text-[17px] font-bold tracking-tight text-gray-900 dark:text-gray-50">{title}</h1>
           </div>
         </header>
-        <main className="py-2 pb-10">{children}</main>
+        <main className="py-2 pb-[calc(env(safe-area-inset-bottom)+6rem)] animate-[fadeIn_200ms_ease]">
+          {description && <p className="px-4 pt-3 pb-1 text-[13.5px] leading-relaxed text-gray-500 dark:text-gray-400">{description}</p>}
+          {children}
+        </main>
         {footer}
       </div>
     </div>
@@ -32,7 +35,7 @@ export default function SettingsPageShell({ title, back = '/settings', children,
 }
 
 export function SectionLabel({ children }) {
-  return <p className="px-4 pt-4 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">{children}</p>
+  return <h2 className="px-4 pt-5 pb-2 text-[11.5px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.08em]">{children}</h2>
 }
 
 export function Notice({ tone = 'info', children }) {
@@ -43,13 +46,14 @@ export function Notice({ tone = 'info', children }) {
     error: 'bg-red-50 border border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400'
   }[tone]
   return (
-    <p role={tone === 'error' ? 'alert' : 'status'} className={`mx-4 mt-3 rounded-xl px-4 py-3 text-[13px] font-medium leading-relaxed ${cls}`}>
+    <p role={tone === 'error' ? 'alert' : 'status'} className={`mx-4 mt-3 rounded-2xl px-4 py-3 text-[13px] font-medium leading-relaxed animate-[fadeIn_200ms_ease] ${cls}`}>
       {children}
     </p>
   )
 }
 
+// Same field + button language as Edit Profile.
 export const fieldCls =
-  'w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3.5 py-3 text-[15px] text-gray-900 dark:text-gray-50 placeholder:text-gray-400 dark:placeholder:text-gray-500 outline-none focus:border-blue-500 transition-colors duration-150'
+  'w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3.5 py-3 text-[15px] text-gray-900 dark:text-gray-50 placeholder:text-gray-400 dark:placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:focus:border-blue-400 disabled:opacity-60 transition-all duration-200'
 export const primaryBtn =
-  'w-full rounded-xl bg-blue-600 text-white text-[15px] font-semibold py-3 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150'
+  'w-full h-12 rounded-full bg-blue-600 text-white text-[15px] font-semibold shadow-sm shadow-blue-600/20 hover:bg-blue-700 active:scale-[0.98] disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none dark:disabled:bg-white/10 dark:disabled:text-gray-500 disabled:cursor-not-allowed transition-all duration-200 inline-flex items-center justify-center gap-2'
