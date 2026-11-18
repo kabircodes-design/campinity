@@ -136,7 +136,10 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
     return unsubscribe
   }, [isOwner, post.id])
 
-  const goToProfile = () => navigate(`/student/${post.username}`)
+  // Deleted/suspended/anonymous authors have no username: nothing to open.
+  const goToProfile = () => {
+    if (post.username) navigate(`/student/${post.username}`)
+  }
   const goToPost = () => navigate(`/post/${post.id}`)
   const goToCommunity = (event) => {
     event.stopPropagation()
@@ -271,10 +274,11 @@ export default function PostCard({ post, onDeleted = () => {}, canModerate = fal
                 <span className="truncate min-w-0">{post.name}</span>
                 <VerifiedBadge verified={post.verified} size="sm" />
               </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
-                {post.department}
-                {post.year && ` · ${post.year}`} · {post.college}
-              </p>
+              {(() => {
+                // Only real parts, joined — no orphan " · " when a field is missing.
+                const meta = [post.username && `@${post.username}`, post.department, post.year, post.college].filter(Boolean).join(' · ')
+                return meta ? <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{meta}</p> : null
+              })()}
             </button>
             <div className="relative flex-shrink-0">
                 <button

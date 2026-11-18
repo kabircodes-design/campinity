@@ -309,7 +309,7 @@ export default function ProfilePage() {
             the fixed-width right rail. Same pattern HomePage.jsx's own
             outer AppShell-column already uses successfully. */}
         <div className="lg:grid lg:items-start lg:gap-5 lg:px-6 lg:py-4 lg:[grid-template-columns:minmax(0,1fr)_300px]">
-          <div className="mx-auto max-w-[480px] lg:mx-0 lg:max-w-none lg:min-w-0 bg-white dark:bg-[#11131a] min-h-full lg:min-h-0 lg:rounded-2xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
+          <div className="mx-auto max-w-[480px] lg:mx-0 lg:max-w-none lg:min-w-0 bg-white dark:bg-[#11131a] min-h-[100dvh] lg:min-h-0 lg:rounded-2xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
             <ProfileHeader
               profile={displayProfile}
               isOwnProfile

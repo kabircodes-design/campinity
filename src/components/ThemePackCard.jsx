@@ -35,22 +35,25 @@ export default function ThemePackCard({ theme, active, onSelect }) {
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-1.5">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-base flex-shrink-0" aria-hidden="true">
+      <div className="flex items-start justify-between gap-1.5">
+        <div className="flex items-start gap-1.5 min-w-0">
+          <span className="text-base flex-shrink-0 leading-5" aria-hidden="true">
             {theme.icon}
           </span>
-          <p className="text-sm font-semibold theme-text-primary truncate">{theme.name}</p>
+          <div className="min-w-0">
+            {/* Name gets the full width; the status sits under it (was truncated to "R…" beside the badge). */}
+            <p className="text-sm font-semibold theme-text-primary leading-5 line-clamp-2">{theme.name}</p>
+            {theme.locked && (
+              <span className="mt-1 inline-block rounded-full bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400 text-[10px] font-semibold px-2 py-0.5">
+                Coming soon
+              </span>
+            )}
+          </div>
         </div>
 
         {active && !theme.locked && (
-          <span className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 animate-[scaleIn_200ms_ease-out]">
+          <span className="w-4 h-4 mt-0.5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 animate-[scaleIn_200ms_ease-out]">
             <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
-          </span>
-        )}
-        {theme.locked && (
-          <span className="flex-shrink-0 rounded-full bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400 text-[10px] font-semibold px-2 py-0.5">
-            Coming Soon
           </span>
         )}
       </div>

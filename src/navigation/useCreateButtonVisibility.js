@@ -9,6 +9,19 @@ export const SCROLL_DELTA_THRESHOLD = 8
 export const TOP_ZONE = 64
 
 /**
+ * Screens where "create a post" is the natural next action. Everywhere
+ * else the floating + used to sit on top of form fields, settings rows and
+ * pages that already have their own primary action (Marketplace "Sell",
+ * Messages compose, Lost & Found "Report"), so it is not shown there.
+ */
+export const CREATE_BUTTON_ROUTES = ['/home', '/communities', '/profile']
+export const isCreateButtonRoute = (pathname) => {
+  let p = String(pathname || '')
+  while (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1)
+  return CREATE_BUTTON_ROUTES.includes(p)
+}
+
+/**
  * Pure rule for the floating Create (+) button, Instagram / Material
  * "hide on scroll" style:
  *  - scrolling down (reading): hide, so it never sits on top of feed or
@@ -40,6 +53,7 @@ function readScrollTop(target) {
 export function useCreateButtonVisibility() {
   const [visible, setVisible] = useState(true)
   const { pathname } = useLocation()
+  const allowedHere = isCreateButtonRoute(pathname)
   const lastTop = useRef(new WeakMap())
   // Accumulates movement in one direction, so a slow scroll (a few px
   // per event) still crosses the threshold.
@@ -79,5 +93,5 @@ export function useCreateButtonVisibility() {
     return () => window.removeEventListener('scroll', onScroll, { capture: true })
   }, [])
 
-  return visible
+  return allowedHere && visible
 }
