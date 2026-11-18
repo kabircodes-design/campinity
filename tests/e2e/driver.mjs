@@ -61,10 +61,16 @@ const check = (flow, step, ok, detail = '') => { results.push({ flow, step, ok: 
 const flows = process.argv.slice(2)
 
 async function login(email = 'alice@e2e.test') {
+  // Start signed out: a reused Chrome profile may still hold a session from a previous run.
+  await send('Page.navigate', { url: 'about:blank' })
+  await sleep(1000)
+  await send('Storage.clearDataForOrigin', { origin: new URL(BASE).origin, storageTypes: 'all' })
   await go('/login')
   await h(`(__e2e.setValue(document.querySelector('input[type=email]'), '${email}'), __e2e.setValue(document.querySelector('input[type=password]'), 'e2e-password-1'), 1)`)
   await h(`__e2e.click('Log in')`)
-  return waitFor(`location.pathname === '/home' && __e2e.text().includes('Search Campinity')`, 20000)
+  const ok = await waitFor(`location.pathname === '/home' && __e2e.text().includes('Search Campinity')`, 30000)
+  if (!ok) console.log('  (after login: ' + (await ev(`location.pathname + ' | ' + document.body.innerText.slice(0, 160)`)) + ')')
+  return ok
 }
 
 if (flows.includes('login')) {
@@ -79,7 +85,8 @@ if (flows.includes('identity')) {
 }
 if (flows.includes('chat')) {
   await go('/student/bob_d')
-  check('chat', 'open Bob\'s profile', await waitFor(`__e2e.text().includes('Bob Dsouza')`))
+  const bobOk = await waitFor(`__e2e.text().includes('Bob Dsouza')`, 25000)
+  check('chat', 'open Bob\'s profile', bobOk, bobOk ? '' : await ev(`location.pathname + ' | ' + document.body.innerText.slice(0, 160)`))
   // First contact shows "Message"; with a pending request it shows "Request sent" (opens the same chat).
   const which = await waitFor(`(() => { const b = [...document.querySelectorAll('button')].find((x) => ['Message', 'Request sent'].includes((x.getAttribute('aria-label') || x.textContent).trim())); return b ? (b.getAttribute('aria-label') || b.textContent).trim() : false })()`)
   check('chat', 'tap Message / Request sent', which && (await h(`__e2e.click(${JSON.stringify(which)})`)) === 'ok', which)

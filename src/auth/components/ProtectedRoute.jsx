@@ -177,7 +177,7 @@ export default function ProtectedRoute({ stage, children }) {
   // is why `loading` went back to true and this component's own
   // spinner flashed on every page change. Now `loading` only matters
   // once, at initial app load.
-  const { user, profile, loading } = useAuth()
+  const { user, profile, loading, profileSettled } = useAuth()
   // Only actually calls the checkAdminStatus Cloud Function for the
   // stage that reads its result — see useIsAdmin.js's own comment for
   // why this was previously firing on every single protected route.
@@ -213,6 +213,15 @@ export default function ProtectedRoute({ stage, children }) {
 
   if (!user.emailVerified) {
     return <Navigate to="/verify-email" replace />
+  }
+
+  // Same cache-first race RootRoute documents: on a cold load (web refresh,
+  // deep link, Android resume) Firestore can deliver an empty from-cache
+  // profile before the server copy. Don't route a finished account into
+  // onboarding off that; wait for the server-confirmed profile (bounded by
+  // useAuthUser's safety-net timeout). Completed profiles never wait.
+  if (stage !== 'admin-entry' && !profile?.profileCompleted && profileSettled === false) {
+    return <FullScreenLoader />
   }
 
   if (stage === 'onboarding') {

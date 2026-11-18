@@ -135,6 +135,9 @@ export function subscribeToIncomingGroupCalls(uid, onData) {
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter((c) => c.status === 'ringing' || c.status === 'active')
     onData(calls)
+  }, (err) => {
+    console.warn('[groupCalls] incoming listener failed', err?.code || err)
+    onData([])
   })
 }
 

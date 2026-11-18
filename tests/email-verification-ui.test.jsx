@@ -344,4 +344,18 @@ describe('route protection', () => {
     renderAt('/verify-email', guarded('verify-email'))
     expect(where()).toBe('/home')
   })
+  test('a finished account is never routed into onboarding off an unconfirmed (from-cache) empty profile', () => {
+    authState.value = { user: { emailVerified: true }, profile: null, loading: false, profileSettled: false }
+    renderAt('/student/bob', guarded('home'), '/student/bob')
+    expect(screen.queryByTestId('where')).toBeNull() // still on the guarded route (loader), not redirected
+    expect(screen.queryByText('inside')).toBeNull()
+    cleanup()
+    authState.value = { user: { emailVerified: true }, profile: null, loading: false, profileSettled: true }
+    renderAt('/student/bob', guarded('home'), '/student/bob')
+    expect(where()).toBe('/campus-verification')
+    cleanup()
+    authState.value = { user: { emailVerified: true }, profile: { profileCompleted: true }, loading: false, profileSettled: false }
+    renderAt('/student/bob', guarded('home'), '/student/bob')
+    expect(screen.getByText('inside')).toBeTruthy()
+  })
 })

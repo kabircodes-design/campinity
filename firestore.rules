@@ -726,13 +726,24 @@ service cloud.firestore {
     // below is independently re-checked against the real chat roster,
     // so a spoofed array can't grant access to anything).
     match /groupCalls/{callId} {
-      allow read: if isSignedIn() &&
-        request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants;
+      // The incoming-ring listener (subscribeToIncomingGroupCalls) is a
+      // LIST query on participantUids array-contains me. A list query can
+      // only be allowed by a rule provable from the query itself, so the
+      // roster get() below alone denied it every time (group calls never
+      // rang in-app). participantUids is now validated at create time to
+      // be a subset of the real chat roster, so it is safe to read by.
+      allow read: if isSignedIn() && (
+        request.auth.uid in resource.data.participantUids ||
+        request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants
+      );
 
       allow create: if isSignedIn() && notSuspended() &&
         request.auth.uid == request.resource.data.hostUid &&
         request.auth.uid in get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.participants &&
-        get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.get('type', 'direct') == 'group';
+        get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.get('type', 'direct') == 'group' &&
+        request.resource.data.participantUids is list &&
+        request.resource.data.participantUids.size() <= 256 &&
+        get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.participants.hasAll(request.resource.data.participantUids);
 
       // Only status (+ its timestamps) may ever change here, only by a
       // real member, and only moving forward — ringing->active/ended,

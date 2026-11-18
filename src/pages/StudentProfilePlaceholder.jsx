@@ -90,8 +90,8 @@ export default function StudentProfilePlaceholder() {
         const [postsData, postCountData, followingState, mutuals, chatStatus] = await Promise.all([
           getUserPosts(data.uid, currentUid).catch(() => []),
           getUserPostCount(data.uid).catch(() => null),
-          currentUid ? checkIsFollowing(currentUid, data.uid) : false,
-          currentUid ? getMutualFollowers(currentUid, data.uid) : [],
+          currentUid ? checkIsFollowing(currentUid, data.uid).catch(() => false) : false,
+          currentUid ? getMutualFollowers(currentUid, data.uid).catch(() => []) : [],
           currentUid ? getExistingChatStatus(currentUid, data.uid).catch(() => null) : null
         ])
         if (cancelled) return
