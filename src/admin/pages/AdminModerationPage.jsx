@@ -4,6 +4,13 @@ import { useAdminSession } from '../hooks/useAdminSession.jsx'
 import { callAdmin } from '../services/adminCallable.js'
 import AdminToast from '../components/AdminToast.jsx'
 
+// Reporter as a readable name (the server sends reporter {displayName, username}); never a raw UID or an empty label.
+const reporterLabel = (r) => {
+  const p = r && r.reporter
+  if (p && (p.displayName || p.username)) return [p.displayName, p.username ? `@${p.username}` : ''].filter(Boolean).join(' · ')
+  return r && r.reporterUid ? 'a student (profile unavailable)' : 'an unknown reporter'
+}
+
 const STATUS_TABS = ['pending', 'resolved', 'dismissed']
 
 /**
@@ -111,7 +118,7 @@ export default function AdminModerationPage() {
                   <span className="text-[10px] text-gray-400 capitalize">{r.status}</span>
                 </div>
                 <p className="mt-1 text-sm font-semibold text-gray-900">{r.reason}</p>
-                <p className="text-xs text-gray-400">reported by {r.reporterUid}</p>
+                <p className="text-xs text-gray-400">reported by {reporterLabel(r)}</p>
                 {r.details && <p className="mt-1.5 text-xs text-gray-500 line-clamp-2">{r.details}</p>}
               </button>
             ))}
@@ -135,7 +142,7 @@ export default function AdminModerationPage() {
             <p className="mt-2 text-xs font-semibold text-gray-400 uppercase">Target</p>
             <p className="text-sm text-gray-900">{selected.targetType} · {selected.targetId}</p>
             <p className="mt-2 text-xs font-semibold text-gray-400 uppercase">Reported by</p>
-            <p className="text-sm text-gray-900">{selected.reporterUid}</p>
+            <p className="text-sm text-gray-900">{reporterLabel(selected)}</p>
 
             {confirmingAction ? (
               <div className="mt-4 rounded-xl bg-red-50 border border-red-200 p-3.5">

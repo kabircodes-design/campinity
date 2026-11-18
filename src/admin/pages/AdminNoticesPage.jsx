@@ -441,7 +441,7 @@ export default function AdminNoticesPage() {
                 <li key={n.id} className="px-4 py-3.5 flex items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-[14px] font-semibold text-gray-900 truncate">{n.title}</p>
+                      <p className="text-[14px] font-semibold text-gray-900 line-clamp-2 sm:truncate break-words">{n.title}</p>
                       {n.pinned && <Badge tone="blue"><Pin className="w-3 h-3" /> Pinned</Badge>}
                       {n.priority !== 'normal' && <Badge tone={n.priority === 'urgent' ? 'rose' : 'amber'}>{n.priority}</Badge>}
                       {scheduled && <Badge tone="purple">Scheduled {fmtDateTime(n.publishAtMs)}</Badge>}

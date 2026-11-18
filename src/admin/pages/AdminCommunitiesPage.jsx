@@ -65,17 +65,17 @@ export default function AdminCommunitiesPage() {
                 onClick={() => setSelected(c)}
                 className="text-left flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-3.5 hover:border-gray-200 hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] transition-all duration-200"
               >
-                <div className="w-11 h-11 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 flex items-center justify-center">
-                  {c.icon || c.coverImage ? (
-                    <img src={c.icon || c.coverImage} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <Users className="w-4.5 h-4.5 text-gray-300" />
+                <div className="relative w-11 h-11 rounded-xl overflow-hidden bg-blue-50 text-blue-600 flex-shrink-0 flex items-center justify-center text-[15px] font-bold">
+                  {/* Initial behind the image: shown if there's no image or it fails to load (deleted file). */}
+                  <span aria-hidden="true">{(c.name || '?').trim().charAt(0).toUpperCase()}</span>
+                  {(c.icon || c.coverImage) && (
+                    <img src={c.icon || c.coverImage} alt="" className="absolute inset-0 w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none' }} />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
                   <p className="text-xs text-gray-400 truncate capitalize">
-                    {c.type} · {c.membersCount || 0} member{c.membersCount === 1 ? '' : 's'}
+                    {String(c.type || 'community').replace(/_/g, ' ')} · {c.membersCount || 0} member{c.membersCount === 1 ? '' : 's'}
                   </p>
                 </div>
               </button>

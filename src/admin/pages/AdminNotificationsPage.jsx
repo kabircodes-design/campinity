@@ -5,6 +5,7 @@ import { callAdmin } from '../services/adminCallable.js'
 import AdminToast from '../components/AdminToast.jsx'
 import { ConfirmDialog } from '../components/ui.jsx'
 import { listRecentAnnouncementsForAdmin } from '../../firebase/announcementService.js'
+import CollegeSearch from '../../components/CollegeSearch.jsx'
 
 const PRIORITIES = [
   { key: 'normal', label: 'Normal' },
@@ -31,6 +32,8 @@ export default function AdminNotificationsPage() {
   const [title, setTitle] = useState('')
   const [targetUsername, setTargetUsername] = useState('')
   const [collegeId, setCollegeId] = useState('')
+  const [college, setCollege] = useState(null)
+  const collegeLabel = college?.name || collegeId.trim()
   const [priority, setPriority] = useState('normal')
   const [pinned, setPinned] = useState(false)
   const [sending, setSending] = useState(false)
@@ -82,6 +85,7 @@ export default function AdminNotificationsPage() {
       setTitle('')
       setTargetUsername('')
       setCollegeId('')
+      setCollege(null)
       setPinned(false)
       if (data?.announcementId) setReloadKey((k) => k + 1)
     } catch (err) {
@@ -137,15 +141,17 @@ export default function AdminNotificationsPage() {
 
         {!targetUsername.trim() && (
           <>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 mt-4">
-              College ID (optional — leave blank for every college)
-            </label>
-            <input
-              type="text"
-              value={collegeId}
-              onChange={(e) => setCollegeId(e.target.value)}
-              placeholder="collegeId"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-200"
+            <p className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 mt-4">College (optional — leave empty for every college)</p>
+            {/* Search by name instead of typing a raw college ID. */}
+            <CollegeSearch
+              id="notification-college"
+              value={college}
+              onChange={(c) => {
+                setCollege(c || null)
+                setCollegeId(c?.id || '')
+              }}
+              placeholder="Find a campus…"
+              hideAddLink
             />
 
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 mt-4">
@@ -213,7 +219,7 @@ export default function AdminNotificationsPage() {
             : targetUsername.trim()
               ? `Send to @${targetUsername.trim()}`
               : collegeId.trim()
-                ? `Send to college "${collegeId.trim()}"`
+                ? `Send to ${collegeLabel}`
                 : 'Send to everyone'}
         </button>
       </div>
@@ -226,7 +232,7 @@ export default function AdminNotificationsPage() {
               {targetUsername.trim()
                 ? `Send this to @${targetUsername.trim()}?`
                 : collegeId.trim()
-                  ? `Send this to every student at college "${collegeId.trim()}"?`
+                  ? `Send this to every student at ${collegeLabel}?`
                   : 'Send this to every student on Campinity?'}
             </p>
             <p className="mt-2 rounded-xl bg-gray-50 px-3 py-2.5 text-sm text-gray-700">{trimmedMessage}</p>
