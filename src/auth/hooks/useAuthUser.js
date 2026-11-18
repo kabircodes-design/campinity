@@ -4,6 +4,7 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '../../firebase/firebase.js'
 import { HEARTBEAT_INTERVAL_MS, touchPresence } from '../../firebase/presenceService.js'
 import { primeAuthorCache } from '../../hooks/useAuthorEnrichment.js'
+import { syncAccountLocalData } from '../utils/accountLocalData.js'
 
 // Safety-net ceiling for profileSettled (see below) — bounds how long a
 // genuinely offline cold start with no cached profile data can hold the
@@ -59,6 +60,9 @@ export function useAuthUser() {
     let settleTimeout = null
 
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      // Before anything renders for this user: drop the previous account's
+      // local drafts/search history/flags (sign-out or a different account).
+      syncAccountLocalData(firebaseUser?.uid || null)
       setUser(firebaseUser)
 
       // Tear down any listener bound to the previous user's document
