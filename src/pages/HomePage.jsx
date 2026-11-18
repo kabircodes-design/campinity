@@ -35,6 +35,8 @@ const feedTabs = [
   { label: 'Notes', key: 'notes' }
 ]
 
+const FEED_TIMEOUT_MS = 20000
+
 export default function HomePage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(feedTabs[0].key)
@@ -75,6 +77,7 @@ export default function HomePage() {
   const [viewedStoryIds, setViewedStoryIds] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [feedReloadKey, setFeedReloadKey] = useState(0)
   const [contentPreferences, setContentPreferences] = useState([])
 
   useEffect(() => {
@@ -93,9 +96,18 @@ export default function HomePage() {
     // both stories queries resolved too. Posts now drive `loading`
     // alone; stories load independently below and populate the tray
     // progressively whenever they're ready, never blocking the feed.
+    setError('')
     const loadPosts = async () => {
+      let timer
       try {
-        const postsData = await getFeedPosts(uid)
+        // Never leave Home on a full-screen spinner if the network stalls:
+        // after FEED_TIMEOUT_MS show the page with a retryable error instead.
+        const postsData = await Promise.race([
+          getFeedPosts(uid),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error("Couldn't load your feed. Check your connection and try again.")), FEED_TIMEOUT_MS)
+          })
+        ])
         if (!cancelled) {
           const now = Date.now()
           const activePosts = postsData.filter((p) => !p.expiresAtMs || p.expiresAtMs > now)
@@ -103,6 +115,8 @@ export default function HomePage() {
         }
       } catch (err) {
         if (!cancelled) setError(err?.message || 'Could not load the feed.')
+      } finally {
+        clearTimeout(timer)
       }
     }
 
@@ -113,7 +127,7 @@ export default function HomePage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [feedReloadKey])
 
   useEffect(() => {
     let cancelled = false
@@ -569,8 +583,15 @@ export default function HomePage() {
               </>
             )
           ) : error ? (
-            <div className="px-6 py-16 text-center">
+            <div className="px-6 py-16 text-center" role="alert">
               <p className="text-sm text-gray-400 dark:text-gray-500">{error}</p>
+              <button
+                type="button"
+                onClick={() => setFeedReloadKey((k) => k + 1)}
+                className="mt-4 rounded-full border border-gray-200 dark:border-white/15 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-200 hover:border-gray-300"
+              >
+                Try again
+              </button>
             </div>
           ) : visiblePosts.length === 0 ? (
             <div className="px-6 py-16 text-center">

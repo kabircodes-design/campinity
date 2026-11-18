@@ -118,7 +118,10 @@ if (flows.includes('product')) {
   await shot('product-form')
   const submit = await h(`(() => { const b = [...document.querySelectorAll('button[type=submit], button')].reverse().find(x => /list|publish|post|sell/i.test(x.textContent.trim()) && !x.disabled); if (!b) return 'NO SUBMIT'; b.click(); return b.textContent.trim() })()`)
   check('product', 'submit listing', !String(submit).startsWith('NO'), submit)
-  const landed = await waitFor(`/^\\/marketplace\\/(?!create)/.test(location.pathname) || (location.pathname === '/marketplace' && __e2e.text().includes('E2E Scientific Calculator'))`, 30000)
+  const t0 = Date.now()
+  // The Storage EMULATOR occasionally takes >30s to acknowledge an upload (see release notes); allow 90s and report the time.
+  const landed = await waitFor(`/^\\/marketplace\\/(?!create)/.test(location.pathname) || (location.pathname === '/marketplace' && __e2e.text().includes('E2E Scientific Calculator'))`, 90000)
+  console.log(`  (publish took ${((Date.now() - t0) / 1000).toFixed(1)}s)`)
   check('product', 'listing created', landed, await h(`location.pathname + ' | ' + __e2e.text().slice(0,200).replace(/\\s+/g,' ')`))
   if (!(await h(`/^\\/marketplace\\/(?!create)/.test(location.pathname)`))) { await go('/marketplace'); await h(`(() => { const a = [...document.querySelectorAll('a,button')].find(x => x.textContent.includes('E2E Scientific Calculator')); a && a.click(); return 1 })()`); await sleep(2500) }
   check('product', 'product detail shows the listing', await waitFor(`__e2e.text().includes('E2E Scientific Calculator') && /450/.test(__e2e.text())`), await h(`location.pathname`))

@@ -15,6 +15,8 @@ import { normalizeUserDoc } from '../../identity/identity.js'
 // engages for a connected user — it only exists so a user with zero
 // connectivity on first launch doesn't get stuck forever.
 const PROFILE_SETTLE_TIMEOUT_MS = 4000
+// Profile-listener retries after an error (400ms, 800ms, 1.6s, 3.2s).
+const PROFILE_LISTENER_RETRIES = 4
 
 /**
  * Provides { user, profile, loading, profileSettled } for the currently
@@ -59,6 +61,8 @@ export function useAuthUser() {
   useEffect(() => {
     let unsubscribeProfile = null
     let settleTimeout = null
+    let retryTimer = null
+    let authGeneration = 0
 
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       // Before anything renders for this user: drop the previous account's
@@ -76,6 +80,11 @@ export function useAuthUser() {
         window.clearTimeout(settleTimeout)
         settleTimeout = null
       }
+      if (retryTimer) {
+        window.clearTimeout(retryTimer)
+        retryTimer = null
+      }
+      authGeneration++
 
       if (!firebaseUser) {
         setProfile(null)
@@ -87,6 +96,8 @@ export function useAuthUser() {
       setProfileSettled(false)
       settleTimeout = window.setTimeout(() => setProfileSettled(true), PROFILE_SETTLE_TIMEOUT_MS)
 
+      const generation = ++authGeneration
+      const subscribeProfile = (attempt) => {
       unsubscribeProfile = onSnapshot(
         doc(db, 'users', firebaseUser.uid),
         (snap) => {
@@ -111,18 +122,41 @@ export function useAuthUser() {
           // show the old one until I hard-refresh."
           primeAuthorCache(firebaseUser.uid, data)
         },
-        () => {
+        (err) => {
+          // A listener that errors is dead for good. Right after sign-in the
+          // first attempt can fail transiently (e.g. Firestore hasn't got the
+          // new auth token yet); giving up here left profile = null, which
+          // routed fully onboarded accounts into Campus Verification until a
+          // reload. Retry a few times with backoff before giving up.
+          if (generation !== authGeneration) return
+          if (attempt < PROFILE_LISTENER_RETRIES) {
+            console.warn('[auth] profile listener failed, retrying', err?.code || err)
+            // Don't let the offline safety-net "settle" with a null profile
+            // mid-retry; the final failure below settles it instead.
+            if (settleTimeout) {
+              window.clearTimeout(settleTimeout)
+              settleTimeout = null
+            }
+            retryTimer = window.setTimeout(() => {
+              if (generation === authGeneration) subscribeProfile(attempt + 1)
+            }, 400 * 2 ** attempt)
+            return
+          }
           setProfile(null)
           setLoading(false)
           setProfileSettled(true)
         }
       )
+      }
+      subscribeProfile(0)
     })
 
     return () => {
+      authGeneration++
       unsubscribeAuth()
       if (unsubscribeProfile) unsubscribeProfile()
       if (settleTimeout) window.clearTimeout(settleTimeout)
+      if (retryTimer) window.clearTimeout(retryTimer)
     }
   }, [])
 
