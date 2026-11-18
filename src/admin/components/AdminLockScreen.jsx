@@ -111,9 +111,13 @@ export default function AdminLockScreen({ onSignOut, accountLabel }) {
     setError('')
     if (code.replace(/[^0-9a-z]/gi, '').length !== 12) return setError('Enter the 12-character enrollment code.')
     if (!password) return setError('Enter your admin password.')
+    // Clear the field immediately: the password never sits in a visible
+    // (accessibility-readable) input while the request is in flight.
+    const secret = password
+    setPassword('')
     setSubmitting(true)
     try {
-      const res = await enrollThisDevice({ password, enrollmentCode: code, label: label.trim() || 'My device' })
+      const res = await enrollThisDevice({ password: secret, enrollmentCode: code, label: label.trim() || 'My device' })
       if (!res.ok) {
         setPassword('')
         return setError('Incorrect password.')
@@ -130,9 +134,11 @@ export default function AdminLockScreen({ onSignOut, accountLabel }) {
     setError('')
     setDeviceDenied(false)
     if (!password) return setError('Enter your admin password.')
+    const secret = password
+    setPassword('')
     setSubmitting(true)
     try {
-      const res = await adminLogin({ password, deviceId: device.deviceId })
+      const res = await adminLogin({ password: secret, deviceId: device.deviceId })
       if (!res.ok) {
         setPassword('')
         return setError('Incorrect password.')
