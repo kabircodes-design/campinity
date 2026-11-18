@@ -1,0 +1,10 @@
+{
+  "appId": "com.campinity.admin",
+  "appName": "CAMPINITY ADMIN",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  }
+}

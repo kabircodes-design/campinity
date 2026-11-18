@@ -1,0 +1,10 @@
+{
+  "name": "campinity-admin-app",
+  "private": true,
+  "description": "CAMPINITY ADMIN — private Android admin app. Uses the repo root's node_modules; do not npm install here.",
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.2"
+  }
+}

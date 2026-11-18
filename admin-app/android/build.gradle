@@ -1,0 +1,38 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath 'com.google.gms:google-services:4.4.4'
+
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
+    }
+}
+
+apply from: "variables.gradle"
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Capacitor library modules live in the shared repo-root node_modules. Build
+// them into THIS project's build folder, so the admin app never writes into
+// (or locks) the build output the public Campinity app uses.
+subprojects { p ->
+    if (p.projectDir.absolutePath.contains('node_modules')) {
+        p.layout.buildDirectory.set(rootProject.layout.projectDirectory.dir('build/shared-libs/' + p.name))
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- CAMPINITY ADMIN: dark tile, distinct from the public app's white icon. -->
+    <color name="ic_launcher_background">#0B1020</color>
+    <color name="admin_splash_background">#0B1020</color>
+</resources>
