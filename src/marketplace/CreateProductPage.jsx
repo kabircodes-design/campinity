@@ -146,38 +146,43 @@ export default function CreateProductPage() {
           <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={handleImageChange} />
 
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Name</p>
+            <label htmlFor="product-name" className="block text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Name</label>
             <input
+              id="product-name"
               type="text"
+              maxLength={80}
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Oversized Campus Hoodie"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-200"
+              className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3.5 py-3 text-[15px] text-gray-900 dark:text-gray-50 placeholder:text-gray-400 dark:placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all duration-200"
             />
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Price (₹)</p>
+            <label htmlFor="product-price" className="block text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Price (₹)</label>
             <input
+              id="product-price"
               type="number"
+              inputMode="numeric"
               min="0"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               placeholder="799"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-200"
+              className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3.5 py-3 text-[15px] text-gray-900 dark:text-gray-50 placeholder:text-gray-400 dark:placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all duration-200"
             />
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Category</p>
-            <div className="flex flex-wrap gap-2">
+            <p id="product-category-label" className="block text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Category</p>
+            <div role="group" aria-labelledby="product-category-label" className="flex flex-wrap gap-2">
               {CATEGORIES.map((cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setCategory(cat)}
-                  className={`rounded-full text-xs font-semibold px-3.5 py-1.5 transition-all duration-200 ${
-                    category === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  aria-pressed={category === cat}
+                  className={`h-9 rounded-full text-[13px] font-semibold px-4 active:scale-95 transition-all duration-200 ${
+                    category === cat ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/15'
                   }`}
                 >
                   {cat}
@@ -187,13 +192,15 @@ export default function CreateProductPage() {
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Description</p>
+            <label htmlFor="product-description" className="block text-[13px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Description</label>
             <textarea
+              id="product-description"
+              maxLength={1000}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               placeholder="Tell students about this product..."
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all duration-200 resize-none"
+              className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3.5 py-3 text-[15px] text-gray-900 dark:text-gray-50 placeholder:text-gray-400 dark:placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all duration-200 resize-none"
             />
           </div>
 

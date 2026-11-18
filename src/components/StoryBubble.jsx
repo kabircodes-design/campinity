@@ -26,7 +26,7 @@ import StoryComposer from './StoryComposer.jsx'
  * HomePage.jsx now owns that single shared viewer, and this component
  * is just its trigger via the onOpen callback.
  */
-export default function StoryBubble({ story, seen = false, onOpen }) {
+export default function StoryBubble({ story, seen = false, onOpen, onStoryCreated }) {
   const [composerOpen, setComposerOpen] = useState(false)
 
   const hasActiveStory = !story.isMore && story.stories?.length > 0
@@ -81,7 +81,9 @@ export default function StoryBubble({ story, seen = false, onOpen }) {
             }
           >
             <Avatar
-              initials={getInitials(story.label || story.initials)}
+              // The person's own initials first — the label of the add bubble is
+              // "Your Story", which used to render as "YS".
+              initials={story.initials || getInitials(story.label)}
               colorClass={story.colorClass || getAvatarColor(story.userId || story.id)}
               size="fill"
               src={story.avatar || undefined}
@@ -104,7 +106,12 @@ export default function StoryBubble({ story, seen = false, onOpen }) {
       </button>
 
       {composerOpen && (
-        <StoryComposer onClose={() => setComposerOpen(false)} onCreated={() => window.location.reload()} />
+        <StoryComposer
+          onClose={() => setComposerOpen(false)}
+          // Refresh the story row in place; a full page reload restarts the
+          // whole Android app. Reload only as a fallback for other callers.
+          onCreated={() => (onStoryCreated ? onStoryCreated() : window.location.reload())}
+        />
       )}
     </>
   )

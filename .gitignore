@@ -5,3 +5,7 @@ dist
 
 .env
 .env.*
+# Local e2e (Firebase emulator) artefacts
+tests/e2e/out/
+tests/e2e/*.log
+firestore-debug.log

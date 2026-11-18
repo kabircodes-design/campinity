@@ -70,6 +70,8 @@ export default function HomePage() {
   const [posts, setPosts] = useState([])
   const [stories, setStories] = useState([])
   const [storiesLoading, setStoriesLoading] = useState(true)
+  // Bumped after posting a story so the tray re-fetches in place.
+  const [storiesVersion, setStoriesVersion] = useState(0)
   const [viewedStoryIds, setViewedStoryIds] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -138,7 +140,7 @@ export default function HomePage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [storiesVersion])
 
   // Campus-feed scoping pass: the 'campus' tab used the exact same
   // unfiltered getFeedPosts() query as everywhere else in the app — it
@@ -409,7 +411,7 @@ export default function HomePage() {
           <div className="flex items-start gap-3.5 overflow-x-auto scroll-hidden">
             {/* "Your Story" never waits on the stories fetch — it only
                 needs `profile`, already loaded by the time Home renders. */}
-            <StoryBubble story={storyBubbles[0]} seen={false} onOpen={() => setOpenGroupIndex(viewableGroups.findIndex((g) => g.id === storyBubbles[0].id))} />
+            <StoryBubble story={storyBubbles[0]} seen={false} onStoryCreated={() => setStoriesVersion((v) => v + 1)} onOpen={() => setOpenGroupIndex(viewableGroups.findIndex((g) => g.id === storyBubbles[0].id))} />
 
             {storiesLoading ? (
               // Lightweight skeleton (Part 13) — everyone else's

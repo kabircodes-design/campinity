@@ -1,7 +1,8 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { connectAuthEmulator, getAuth, GoogleAuthProvider } from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { connectStorageEmulator, getStorage } from "firebase/storage";
+import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -46,6 +47,18 @@ console.log('[Firebase Config Check]', {
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-export const googleProvider = new GoogleAuthProvider(); 
+export const googleProvider = new GoogleAuthProvider();
+
+// LOCAL TEST ENVIRONMENT ONLY — Firebase Emulator Suite (tests/e2e/).
+// Active only in a dev build (never in `vite build` output) AND only when
+// VITE_USE_FIREBASE_EMULATORS=true, so production can never point here.
+if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+  const host = import.meta.env.VITE_EMULATOR_HOST || '127.0.0.1';
+  connectAuthEmulator(auth, `http://${host}:9199`, { disableWarnings: true });
+  connectFirestoreEmulator(db, host, 8189);
+  connectStorageEmulator(storage, host, 9299);
+  connectFunctionsEmulator(getFunctions(app), host, 5101);
+  console.warn('[Campinity] Using LOCAL Firebase emulators (test environment).');
+}
 
 export default app;
