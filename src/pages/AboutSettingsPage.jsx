@@ -1,38 +1,51 @@
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { BookOpen, FileText, LifeBuoy, ShieldCheck, Sparkles } from 'lucide-react'
 import Logo from '../components/Logo.jsx'
+import SettingsPageShell from '../components/settings/SettingsPageShell.jsx'
+import { Card, ListRow, RowGroup } from '../components/ui/Premium.jsx'
 
-/** Real content, not a placeholder — App.jsx's /settings/about route previously rendered <ComingSoon>. */
+const builtOn = (() => {
+  try {
+    return new Date(__BUILD_TIME__).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  } catch {
+    return ''
+  }
+})()
+
+/** Real content: version/build come from vite.config.js defines. */
 export default function AboutSettingsPage() {
   const navigate = useNavigate()
-
   return (
-    <div className="h-full w-full max-w-[100vw] lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
-      <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white dark:bg-[#11131a] min-h-[100dvh] lg:min-h-0 lg:my-4 lg:rounded-2xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
-        <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#11131a]/95 backdrop-blur-md border-b border-gray-100 dark:border-white/10 lg:rounded-t-2xl">
-          <div className="h-14 flex items-center gap-2 px-3">
-            <button
-              type="button"
-              aria-label="Back"
-              onClick={() => navigate('/settings')}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10 transition-all duration-300"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">About Campinity</span>
-          </div>
-        </header>
-
-        <main className="px-4 py-8 text-center">
-          <Logo className="w-14 h-14 mx-auto" />
-          <p className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-50">Campinity</p>
-          <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Version {__APP_VERSION__}</p>
-          <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">Built {new Date(__BUILD_TIME__).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-          <p className="mt-4 text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto leading-relaxed">
+    <SettingsPageShell title="About Campinity">
+      <div className="px-4 space-y-5 pt-2">
+        <Card className="relative overflow-hidden px-6 py-8 text-center bg-gradient-to-b from-blue-50 to-white dark:from-blue-500/10 dark:to-[#11131a]">
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-56 h-56 rounded-full bg-blue-400/15 blur-3xl pointer-events-none" aria-hidden="true" />
+          <Logo className="relative w-16 h-16 mx-auto drop-shadow-sm" />
+          <h2 className="relative mt-4 text-[22px] font-bold tracking-tight text-gray-900 dark:text-gray-50">Campinity</h2>
+          <p className="relative mt-1 text-sm text-gray-600 dark:text-gray-300 max-w-xs mx-auto leading-relaxed">
             Your campus, one place — feeds, notes, communities and people, all in one login.
           </p>
-        </main>
+          <div className="relative mt-5 inline-flex items-center gap-2 rounded-full bg-white/80 dark:bg-white/10 border border-gray-100 dark:border-white/10 px-3.5 py-1.5 text-[12.5px] text-gray-600 dark:text-gray-300">
+            <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+            <span>
+              Version <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-50">{__APP_VERSION__}</span>
+              {builtOn && <span> · Built {builtOn}</span>}
+            </span>
+          </div>
+        </Card>
+
+        <RowGroup label="Policies">
+          <ListRow icon={BookOpen} tone="blue" title="Community guidelines" description="How we keep Campinity kind and safe" onClick={() => navigate('/settings/legal/guidelines')} />
+          <ListRow icon={ShieldCheck} tone="emerald" title="Privacy (summary)" description="What we collect and why" onClick={() => navigate('/settings/legal/privacy')} />
+          <ListRow icon={FileText} tone="violet" title="Terms (summary)" description="The main rules for using Campinity" onClick={() => navigate('/settings/legal/terms')} />
+        </RowGroup>
+
+        <RowGroup label="Support">
+          <ListRow icon={LifeBuoy} tone="amber" title="Help & support" description="FAQs and report a problem" onClick={() => navigate('/settings/help')} />
+        </RowGroup>
+
+        <p className="text-center text-[12px] text-gray-400 dark:text-gray-500 pb-2">Made for students, by students.</p>
       </div>
-    </div>
+    </SettingsPageShell>
   )
 }

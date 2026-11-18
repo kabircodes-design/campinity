@@ -1,54 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Activity, ArrowLeft, Check, ChevronRight, Star, UserX } from 'lucide-react'
+import { Activity, Globe2, Star, UserCheck, UserX } from 'lucide-react'
 import Loader from '../auth/components/Loader.jsx'
 import { auth } from '../firebase/firebase.js'
 import { getUserProfile, updateUserProfile } from '../firebase/profileService.js'
 import { setActivityStatusVisible } from '../firebase/presenceService.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import SettingsPageShell, { Notice } from '../components/settings/SettingsPageShell.jsx'
+import { Card, IconTile, ListRow, RowGroup, Switch, Toast } from '../components/ui/Premium.jsx'
 
 const MESSAGE_OPTIONS = [
-  { value: 'everyone', label: 'Everyone', description: 'Any signed-in student can send you a message request' },
-  { value: 'following', label: 'People you follow', description: "Only people you follow can message you" }
+  { value: 'everyone', label: 'Everyone', description: 'Any signed-in student can send you a message request', icon: Globe2 },
+  { value: 'following', label: 'People you follow', description: 'Only people you follow can message you', icon: UserCheck }
 ]
 
 /**
- * The real Privacy page — App.jsx's /settings/privacy route previously
- * rendered <ComingSoon>. "Who can message me" is real, enforced
- * server-of-truth via chatService.js's assertMessagingAllowed (see
- * that file), not a display-only preference — persisted on the
- * existing users/{uid} document as `messagePrivacy`, no new
- * collection. Blocked Users lives on its own page already (more
- * detail than a toggle needs); this links to it rather than
- * duplicating that list here.
+ * Real privacy settings. "Who can message me" is enforced by
+ * chatService.assertMessagingAllowed (users/{uid}.messagePrivacy), and
+ * activity status by presenceService — not display-only preferences.
  */
 export default function PrivacySettingsPage() {
   const navigate = useNavigate()
   const currentUid = auth.currentUser?.uid
-
   const [messagePrivacy, setMessagePrivacy] = useState('everyone')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState({ message: '', tone: 'neutral' })
+  const toastTimer = useRef(null)
   const { profile: liveProfile } = useAuth()
   const activityVisible = liveProfile ? liveProfile.activityStatusVisible !== false : null
   const [activitySaving, setActivitySaving] = useState(false)
 
-  const toggleActivityStatus = async () => {
-    if (!currentUid || activitySaving || activityVisible === null) return
-    setActivitySaving(true)
-    try {
-      await setActivityStatusVisible(currentUid, !activityVisible)
-      setToast(!activityVisible ? 'Activity status is visible' : 'Activity status hidden')
-      window.setTimeout(() => setToast(''), 1800)
-    } catch (err) {
-      setToast(err?.message || "Couldn't update this setting.")
-      window.setTimeout(() => setToast(''), 2200)
-    } finally {
-      setActivitySaving(false)
-    }
+  const flash = (message, tone = 'neutral') => {
+    setToast({ message, tone })
+    window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast({ message: '', tone: 'neutral' }), tone === 'error' ? 2600 : 1700)
   }
+  useEffect(() => () => window.clearTimeout(toastTimer.current), [])
 
   useEffect(() => {
     if (!currentUid) {
@@ -62,6 +51,19 @@ export default function PrivacySettingsPage() {
       .finally(() => setLoading(false))
   }, [currentUid])
 
+  const toggleActivityStatus = async () => {
+    if (!currentUid || activitySaving || activityVisible === null) return
+    setActivitySaving(true)
+    try {
+      await setActivityStatusVisible(currentUid, !activityVisible)
+      flash(!activityVisible ? 'Activity status is visible' : 'Activity status hidden')
+    } catch (err) {
+      flash(err?.message || "Couldn't update this setting.", 'error')
+    } finally {
+      setActivitySaving(false)
+    }
+  }
+
   const handleSelect = async (value) => {
     if (!currentUid || saving || value === messagePrivacy) return
     setSaving(true)
@@ -69,137 +71,74 @@ export default function PrivacySettingsPage() {
     setMessagePrivacy(value)
     try {
       await updateUserProfile(currentUid, { messagePrivacy: value })
-      setToast('Privacy updated')
-      window.setTimeout(() => setToast(''), 1800)
+      flash('Privacy updated')
     } catch (err) {
       setMessagePrivacy(previous)
-      setToast(err?.message || "Couldn't update this setting.")
-      window.setTimeout(() => setToast(''), 2200)
+      flash(err?.message || "Couldn't update this setting.", 'error')
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <div className="h-full w-full max-w-[100vw] lg:overflow-y-auto lg:min-w-0 overflow-x-hidden bg-gray-50 dark:bg-[#09090f]">
-      <div className="mx-auto max-w-[480px] lg:max-w-[640px] bg-white dark:bg-[#11131a] min-h-[100dvh] lg:min-h-0 lg:my-4 lg:rounded-2xl lg:border lg:border-gray-100 dark:lg:border-white/10 lg:shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:lg:shadow-none">
-        <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#11131a]/95 backdrop-blur-md border-b border-gray-100 dark:border-white/10 lg:rounded-t-2xl">
-          <div className="h-14 flex items-center gap-2 px-3">
-            <button
-              type="button"
-              aria-label="Back"
-              onClick={() => navigate('/settings')}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10 transition-all duration-300"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-50">Privacy</span>
-          </div>
-        </header>
-
-        <main className="px-4 py-4">
-          {loading ? (
-            <div className="py-16 flex justify-center">
-              <Loader size="md" tone="dark" />
-            </div>
-          ) : error ? (
-            <p className="py-16 text-center text-sm text-gray-400 dark:text-gray-500">{error}</p>
-          ) : (
-            <>
-              <p className="px-1 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Who can message me</p>
-              <div className="rounded-2xl border border-gray-100 divide-y divide-gray-100 dark:border-white/10 dark:divide-white/10 overflow-hidden">
-                {MESSAGE_OPTIONS.map((option) => (
+    <SettingsPageShell title="Privacy" description="Control who can reach you and what others can see.">
+      {loading ? (
+        <div className="py-16 flex justify-center" role="status" aria-label="Loading privacy settings">
+          <Loader size="md" tone="dark" />
+        </div>
+      ) : error ? (
+        <Notice tone="error">{error}</Notice>
+      ) : (
+        <div className="px-4 pt-2 space-y-5">
+          <div>
+            <h2 id="who-can-message" className="px-1 pb-2 text-[11.5px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.08em]">Who can message me</h2>
+            <Card as="div" role="radiogroup" aria-labelledby="who-can-message" className="overflow-hidden divide-y divide-gray-100 dark:divide-white/10">
+              {MESSAGE_OPTIONS.map((option) => {
+                const on = messagePrivacy === option.value
+                return (
                   <button
                     key={option.value}
                     type="button"
+                    role="radio"
+                    aria-checked={on}
                     onClick={() => handleSelect(option.value)}
                     disabled={saving}
-                    aria-pressed={messagePrivacy === option.value}
-                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-gray-50 dark:hover:bg-white/5 transition-all duration-200 disabled:opacity-60"
+                    className={`w-full flex items-center gap-3 px-4 py-3.5 min-h-[64px] text-left transition-colors duration-150 disabled:opacity-60 ${on ? 'bg-blue-50/60 dark:bg-blue-500/10' : 'hover:bg-gray-50 dark:hover:bg-white/[0.03]'}`}
                   >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-50">{option.label}</p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{option.description}</p>
-                    </div>
-                    {messagePrivacy === option.value && (
-                      <span className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                        <Check className="w-3 h-3 text-white" strokeWidth={3} />
-                      </span>
-                    )}
+                    <IconTile icon={option.icon} tone={on ? 'blue' : 'slate'} />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[14.5px] font-semibold text-gray-900 dark:text-gray-50">{option.label}</span>
+                      <span className="block text-[12.5px] text-gray-500 dark:text-gray-400 leading-snug">{option.description}</span>
+                    </span>
+                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${on ? 'border-blue-600' : 'border-gray-300 dark:border-white/20'}`} aria-hidden="true">
+                      {on && <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                    </span>
                   </button>
-                ))}
+                )
+              })}
+            </Card>
+          </div>
+
+          <RowGroup label="Activity status">
+            <div className="flex items-center gap-3 pl-4 pr-2 py-2 min-h-[72px]">
+              <IconTile icon={Activity} tone="emerald" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[14.5px] font-semibold text-gray-900 dark:text-gray-50">Show activity status</p>
+                <p className="text-[12.5px] text-gray-500 dark:text-gray-400 leading-snug">
+                  Let people see when you're active. If you turn this off, you won't see theirs either.
+                </p>
               </div>
+              <Switch checked={activityVisible === true} label="Show activity status" disabled={activityVisible === null || activitySaving} onChange={toggleActivityStatus} />
+            </div>
+          </RowGroup>
 
-              <p className="px-1 pt-6 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Activity status</p>
-              <div className="rounded-2xl border border-gray-100 dark:border-white/10 px-4 py-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
-                    <Activity className="w-[18px] h-[18px]" strokeWidth={1.8} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-50">Show activity status</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">
-                      Let people see when you're active or were last active. If you turn this off, you won't see theirs either.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={activityVisible === true}
-                    aria-label="Show activity status"
-                    disabled={activityVisible === null || activitySaving}
-                    onClick={toggleActivityStatus}
-                    className={`relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-200 disabled:opacity-60 ${activityVisible ? 'bg-blue-600' : 'bg-gray-300'}`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full shadow transition-transform duration-200 ${activityVisible ? 'translate-x-5' : ''}`}
-                      style={{ backgroundColor: '#ffffff' }}
-                    />
-                  </button>
-                </div>
-              </div>
-
-              <p className="px-1 pt-6 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Blocking</p>
-              <button
-                type="button"
-                onClick={() => navigate('/settings/blocked-users')}
-                className="w-full flex items-center gap-3 rounded-2xl border border-gray-100 px-4 py-3.5 text-left hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5 transition-all duration-200"
-              >
-                <div className="w-9 h-9 rounded-xl bg-red-50 text-red-500 dark:bg-red-500/15 dark:text-red-400 flex items-center justify-center flex-shrink-0">
-                  <UserX className="w-[18px] h-[18px]" strokeWidth={1.8} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-50">Blocked users</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Manage accounts you've blocked</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-              </button>
-
-              <p className="px-1 pt-6 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Stories</p>
-              <button
-                type="button"
-                onClick={() => navigate('/settings/close-friends')}
-                className="w-full flex items-center gap-3 rounded-2xl border border-gray-100 px-4 py-3.5 text-left hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5 transition-all duration-200"
-              >
-                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 dark:bg-amber-500/15 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
-                  <Star className="w-[18px] h-[18px]" strokeWidth={1.8} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-50">Close Friends</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Manage who sees your Close Friends stories</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-              </button>
-            </>
-          )}
-        </main>
-      </div>
-
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[999] rounded-full bg-gray-900 text-white text-xs font-semibold px-4 py-2.5 shadow-lg">
-          {toast}
+          <RowGroup label="People">
+            <ListRow icon={UserX} tone="rose" title="Blocked users" description="Manage accounts you've blocked" onClick={() => navigate('/settings/blocked-users')} />
+            <ListRow icon={Star} tone="amber" title="Close Friends" description="Who sees your Close Friends stories" onClick={() => navigate('/settings/close-friends')} />
+          </RowGroup>
         </div>
       )}
-    </div>
+      <Toast message={toast.message} tone={toast.tone} />
+    </SettingsPageShell>
   )
 }
