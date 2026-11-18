@@ -477,25 +477,19 @@ async function hashSecret(value, salt) {
  * function — the actual, real security boundary for this new
  * architecture, replacing platformAdmins' role for this feature.
  */
-async function requireValidAdminSession(sessionToken) {
-  if (!sessionToken || typeof sessionToken !== 'string') {
-    throw new HttpsError('unauthenticated', 'Admin session required.')
+async function requireValidAdminSession(sessionToken, request) {
+  // Device-bound since API v2: verifies the session AND a fresh signature
+  // from the enrolled device's key over this exact request (adminDevice.js).
+  return deviceAuth().requireValidAdminSession(sessionToken, request)
+}
+
+let deviceAuthInstance = null
+function deviceAuth() {
+  if (!deviceAuthInstance) {
+    const { makeAdminDeviceAuth } = require('./adminDevice.js')
+    deviceAuthInstance = makeAdminDeviceAuth({ db, admin, HttpsError, logAdminAction, hashSecret, adminConfigDoc })
   }
-  const snap = await adminTokenDoc(sessionToken).get()
-  if (!snap.exists) {
-    throw new HttpsError('unauthenticated', 'Admin session is invalid. Please log in again.')
-  }
-  const data = snap.data()
-  if (!data.expiresAt || data.expiresAt.toMillis() < Date.now()) {
-    await adminTokenDoc(sessionToken).delete().catch(() => {})
-    throw new HttpsError('unauthenticated', 'Admin session has expired. Please log in again.')
-  }
-  // Returned (not just validated) so every privileged action below can
-  // attribute itself to a real Firebase uid in the audit log — the
-  // session doc's own createdByUid, set once at adminLogin time — the
-  // two existing callers (adminResolveReport/adminListReports) simply
-  // don't use the return value, unaffected by this change.
-  return data
+  return deviceAuthInstance
 }
 
 /**
@@ -513,14 +507,8 @@ exports.checkAdminPasswordExists = onCall({ region: 'us-central1' }, async (requ
     return { exists: snap.exists }
   } catch (err) {
     console.error('[checkAdminPasswordExists] unexpected error', { message: err?.message, code: err?.code })
-    // TEMPORARY DEBUG: the real error was previously visible only in
-    // server-side logs (console.error above), never reaching the
-    // browser — the client only ever saw a generic 'internal'
-    // message. Including the real code/message directly in what's
-    // thrown here so it surfaces in the browser console via
-    // AdminLockScreen.jsx's existing error logging. Revert to a
-    // generic message once the root cause is found and fixed.
-    throw new HttpsError('internal', `DEBUG [checkAdminPasswordExists]: ${err?.code || 'no-code'} — ${err?.message || 'no message'}`)
+    // Generic message: internal error details stay in server logs (above).
+    throw new HttpsError('internal', 'Could not check the admin setup. Please try again.')
   }
 })
 
@@ -587,62 +575,18 @@ exports.setAdminPassword = onCall({ region: 'us-central1' }, async (request) => 
  * short-lived session token. This token, not any Firebase role, is
  * what every subsequent privileged admin action actually requires.
  */
-exports.adminLogin = onCall({ region: 'us-central1' }, async (request) => {
-  const uid = request.auth?.uid
-  if (!uid) {
-    throw new HttpsError('unauthenticated', 'You need to be signed in.')
-  }
-
-  const { password } = request.data || {}
-  if (!password || typeof password !== 'string') {
-    throw new HttpsError('invalid-argument', 'Missing password.')
-  }
-
-  try {
-    const configSnap = await adminConfigDoc().get()
-    if (!configSnap.exists) {
-      throw new HttpsError('failed-precondition', 'No admin password has been set up yet.')
-    }
-    const { hash, salt } = configSnap.data()
-    const attemptHash = await hashSecret(password, salt)
-
-    const crypto = require('crypto')
-    const a = Buffer.from(hash, 'hex')
-    const b = Buffer.from(attemptHash, 'hex')
-    const match = a.length === b.length && crypto.timingSafeEqual(a, b)
-
-    if (!match) {
-      return { ok: false }
-    }
-
-    const sessionToken = crypto.randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + ADMIN_SESSION_TTL_MS)
-    await adminTokenDoc(sessionToken).set({
-      createdByUid: uid,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      expiresAt: admin.firestore.Timestamp.fromDate(expiresAt)
-    })
-
-    return { ok: true, sessionToken }
-  } catch (err) {
-    if (err instanceof HttpsError) throw err
-    console.error('[adminLogin] unexpected error', { uid, message: err?.message, code: err?.code })
-    throw new HttpsError('internal', 'Could not verify the password. Please try again.')
-  }
-})
+exports.adminLogin = onCall({ region: 'us-central1' }, (request) => deviceAuth().login(request))
 
 /**
- * adminLogout — explicit session invalidation, used by the dashboard's
- * "Lock Panel"/"Sign Out" action so a shared/borrowed browser can't
- * keep using an old in-memory token after the admin intends to leave.
+ * Step 2 of admin sign-in: the enrolled device signs the single-use
+ * challenge from adminLogin; only then is a session issued.
  */
-exports.adminLogout = onCall({ region: 'us-central1' }, async (request) => {
-  const { sessionToken } = request.data || {}
-  if (sessionToken && typeof sessionToken === 'string') {
-    await adminTokenDoc(sessionToken).delete().catch(() => {})
-  }
-  return { ok: true }
-})
+exports.adminLoginFinish = onCall({ region: 'us-central1' }, (request) => deviceAuth().loginFinish(request))
+
+/**
+ * adminLogout — explicit session invalidation (session stored hashed).
+ */
+exports.adminLogout = onCall({ region: 'us-central1' }, (request) => deviceAuth().logout(request))
 
 /**
  * adminResolveReport — the first real privileged admin action built
@@ -660,7 +604,7 @@ exports.adminLogout = onCall({ region: 'us-central1' }, async (request) => {
  */
 exports.adminResolveReport = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, reportId, status, moderationAction } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
 
   if (!reportId || !['resolved', 'dismissed'].includes(status)) {
     throw new HttpsError('invalid-argument', 'Missing reportId or invalid status.')
@@ -681,6 +625,15 @@ exports.adminResolveReport = onCall({ region: 'us-central1' }, async (request) =
       reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
       moderationAction: moderationAction || status,
       reviewedByAdminSession: true // marks this as reviewed via the admin-session path, not a platformAdmins uid, for audit clarity
+    })
+    // Previously the one admin mutation with no audit entry.
+    await logAdminAction({
+      adminUid: session.createdByUid,
+      action: status === 'resolved' ? 'report_resolved' : 'report_dismissed',
+      targetType: 'report',
+      targetId: reportId,
+      targetUid: reportSnap.data().targetOwnerUid || null,
+      reason: moderationAction || null
     })
 
     return { ok: true }
@@ -704,20 +657,39 @@ exports.adminResolveReport = onCall({ region: 'us-central1' }, async (request) =
  * pivot was for.
  */
 exports.adminListReports = onCall({ region: 'us-central1' }, async (request) => {
-  const { sessionToken, status, pageSize } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  const { sessionToken, status, pageSize, cursor } = request.data || {}
+  await requireValidAdminSession(sessionToken, request)
 
   const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
 
   try {
-    const snap = await db()
+    let q = db()
       .collection('reports')
       .where('status', '==', status || 'pending')
       .orderBy('createdAt', 'desc')
       .limit(limitCount)
-      .get()
+    // Cursor = id of the last report on the previous page (read-only pagination).
+    if (typeof cursor === 'string' && cursor) {
+      const after = await db().collection('reports').doc(cursor).get()
+      if (after.exists) q = q.startAfter(after)
+    }
+    const snap = await q.get()
 
-    return { reports: snap.docs.map((d) => ({ id: d.id, ...d.data() })) }
+    // Names (not emails) of reporters and reported owners, so moderators
+    // don't have to work from raw UIDs. Read-only batched lookup.
+    const uids = [...new Set(snap.docs.flatMap((d) => [d.data().reporterUid, d.data().targetOwnerUid]).filter((u) => typeof u === 'string' && u))]
+    const people = uids.length ? await db().getAll(...uids.map((u) => db().collection('users').doc(u))) : []
+    const nameOf = new Map(people.filter((u) => u.exists).map((u) => [u.id, { displayName: u.data().displayName || '', username: u.data().username || '' }]))
+
+    return {
+      reports: snap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        reporter: nameOf.get(d.data().reporterUid) || null,
+        targetOwner: nameOf.get(d.data().targetOwnerUid) || null
+      })),
+      nextCursor: snap.size === limitCount ? snap.docs[snap.docs.length - 1].id : null
+    }
   } catch (err) {
     console.error('[adminListReports] unexpected error', { status, message: err?.message, code: err?.code })
     throw new HttpsError('internal', 'Could not load reports. Please try again.')
@@ -893,7 +865,7 @@ async function applyModerationReputationPenalty(uid, status) {
  */
 exports.adminGetOverviewCounts = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  await requireValidAdminSession(sessionToken, request)
 
   const countOf = async (path, field, value) => {
     let ref = db().collection(path)
@@ -970,9 +942,14 @@ exports.adminGetOverviewCounts = onCall({ region: 'us-central1' }, async (reques
  */
 exports.adminListVerificationRequests = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, pageSize } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  await requireValidAdminSession(sessionToken, request)
   const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
 
+  // READ-ONLY. This used to auto-approve (write) any pending request whose
+  // user was already verified, every time the list was opened. A list
+  // request must never change a verification record: such requests are
+  // now returned flagged (alreadyVerified) and resolved only by an
+  // explicit adminReviewVerificationRequest decision.
   try {
     const snap = await db()
       .collection('verificationRequests')
@@ -981,65 +958,27 @@ exports.adminListVerificationRequests = onCall({ region: 'us-central1' }, async 
       .limit(limitCount)
       .get()
 
-    const staleRequestIds = []
-    const requests = (
-      await Promise.all(
-        snap.docs.map(async (d) => {
-          const data = d.data()
-          const [userSnap, collegeSnap] = await Promise.all([
-            db().collection('users').doc(data.uid).get().catch(() => null),
-            data.collegeId ? db().collection('colleges').doc(data.collegeId).get().catch(() => null) : Promise.resolve(null)
-          ])
-          const userData = userSnap && userSnap.exists ? userSnap.data() : null
-
-          if (userData?.verifiedCampus === true) {
-            staleRequestIds.push(d.id)
-            return null
-          }
-
-          return {
-            id: d.id,
-            uid: data.uid,
-            collegeId: data.collegeId || null,
-            documentPath: data.documentPath,
-            createdAt: data.createdAt,
-            displayName: userData?.displayName || userData?.fullName || 'Unknown user',
-            username: userData?.username || '',
-            collegeName: collegeSnap && collegeSnap.exists ? collegeSnap.data().name : ''
-          }
-        })
-      )
-    ).filter(Boolean)
-
-    if (staleRequestIds.length > 0) {
-      const batch = db().batch()
-      staleRequestIds.forEach((id) => {
-        batch.update(db().collection('verificationRequests').doc(id), {
-          status: 'approved',
-          reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
-          reviewedByAdminSession: true,
-          autoResolvedReason: 'user_already_verified'
-        })
+    const requests = await Promise.all(
+      snap.docs.map(async (d) => {
+        const data = d.data()
+        const [userSnap, collegeSnap] = await Promise.all([
+          db().collection('users').doc(data.uid).get().catch(() => null),
+          data.collegeId ? db().collection('colleges').doc(data.collegeId).get().catch(() => null) : Promise.resolve(null)
+        ])
+        const userData = userSnap && userSnap.exists ? userSnap.data() : null
+        return {
+          id: d.id,
+          uid: data.uid,
+          collegeId: data.collegeId || null,
+          documentPath: data.documentPath,
+          createdAt: data.createdAt,
+          displayName: userData?.displayName || userData?.fullName || 'Unknown user',
+          username: userData?.username || '',
+          collegeName: collegeSnap && collegeSnap.exists ? collegeSnap.data().name : '',
+          alreadyVerified: userData?.verifiedCampus === true
+        }
       })
-      await batch.commit().catch((err) => {
-        // Never let this cleanup write block the actual list response —
-        // the request was already excluded above either way, so the
-        // admin sees a correct queue this load even if the correction
-        // write itself retries on a later one.
-        console.error('[adminListVerificationRequests] stale-request cleanup failed', { message: err?.message })
-      })
-      await Promise.all(
-        staleRequestIds.map((id) =>
-          logAdminAction({
-            adminUid: session.createdByUid,
-            action: 'verification_auto_resolved',
-            targetType: 'verificationRequest',
-            targetId: id,
-            reason: 'user_already_verified'
-          })
-        )
-      )
-    }
+    )
 
     return { requests }
   } catch (err) {
@@ -1079,7 +1018,7 @@ exports.adminListVerificationRequests = onCall({ region: 'us-central1' }, async 
  */
 exports.adminGetVerificationDocumentUrl = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, documentPath } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  await requireValidAdminSession(sessionToken, request)
   if (!documentPath || typeof documentPath !== 'string') {
     throw new HttpsError('invalid-argument', 'Missing document path.')
   }
@@ -1111,7 +1050,7 @@ exports.adminGetVerificationDocumentUrl = onCall({ region: 'us-central1' }, asyn
 
 exports.adminReviewVerificationRequest = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, requestId, decision, reason } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   if (!requestId || !['approved', 'rejected'].includes(decision)) {
     throw new HttpsError('invalid-argument', 'Missing requestId or invalid decision.')
   }
@@ -1206,7 +1145,7 @@ async function sendSystemNotification(uid, data) {
 
 exports.adminListAchievementSubmissions = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, status, pageSize } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  await requireValidAdminSession(sessionToken, request)
   const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
   const statusFilter = ['pending', 'approved', 'rejected'].includes(status) ? status : 'pending'
 
@@ -1258,7 +1197,7 @@ exports.adminListAchievementSubmissions = onCall({ region: 'us-central1' }, asyn
 
 exports.adminReviewAchievementSubmission = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, uid, submissionId, decision, reason } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   if (!uid || !submissionId || !['approved', 'rejected'].includes(decision)) {
     throw new HttpsError('invalid-argument', 'Missing uid/submissionId or invalid decision.')
   }
@@ -1370,7 +1309,7 @@ function parseLocationServer(location) {
 
 exports.adminListCollegeRequests = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, pageSize } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  await requireValidAdminSession(sessionToken, request)
   const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
 
   try {
@@ -1384,7 +1323,7 @@ exports.adminListCollegeRequests = onCall({ region: 'us-central1' }, async (requ
 
 exports.adminReviewCollegeRequest = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, requestId, decision } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   if (!requestId || !['approved', 'rejected'].includes(decision)) {
     throw new HttpsError('invalid-argument', 'Missing requestId or invalid decision.')
   }
@@ -1449,7 +1388,7 @@ exports.adminReviewCollegeRequest = onCall({ region: 'us-central1' }, async (req
  */
 exports.adminSetUserVerification = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, uid, verified } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   if (!uid || typeof verified !== 'boolean') {
     throw new HttpsError('invalid-argument', 'Missing uid or verified flag.')
   }
@@ -1522,7 +1461,7 @@ exports.adminSetUserVerification = onCall({ region: 'us-central1' }, async (requ
  */
 exports.adminModerateContent = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, reportId, moderationAction, targetType, targetId, targetOwnerUid, parentPostId } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   const VALID_ACTIONS = ['resolved', 'dismissed', 'content_removed', 'restricted', 'suspended']
   if (!reportId || !VALID_ACTIONS.includes(moderationAction)) {
     throw new HttpsError('invalid-argument', 'Missing reportId or invalid action.')
@@ -1592,7 +1531,7 @@ exports.adminModerateContent = onCall({ region: 'us-central1' }, async (request)
  */
 exports.adminListLostFound = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, status, pageSize } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  await requireValidAdminSession(sessionToken, request)
   const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
 
   try {
@@ -1611,7 +1550,7 @@ exports.adminListLostFound = onCall({ region: 'us-central1' }, async (request) =
 
 exports.adminModerateLostFoundItem = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, itemId, action } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   if (!itemId || !['remove', 'restore'].includes(action)) {
     throw new HttpsError('invalid-argument', 'Missing itemId or invalid action.')
   }
@@ -1652,7 +1591,7 @@ exports.adminModerateLostFoundItem = onCall({ region: 'us-central1' }, async (re
  */
 exports.adminListMarketplaceProducts = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, pageSize } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  await requireValidAdminSession(sessionToken, request)
   const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
 
   try {
@@ -1666,7 +1605,7 @@ exports.adminListMarketplaceProducts = onCall({ region: 'us-central1' }, async (
 
 exports.adminModerateProduct = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, productId, action } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   if (!productId || !['hide', 'unhide'].includes(action)) {
     throw new HttpsError('invalid-argument', 'Missing productId or invalid action.')
   }
@@ -1704,7 +1643,7 @@ exports.adminModerateProduct = onCall({ region: 'us-central1' }, async (request)
  */
 exports.adminSetUserModerationStatus = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, uid, status } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   const VALID_STATUSES = ['active', 'restricted', 'suspended']
   if (!uid || !VALID_STATUSES.includes(status)) {
     throw new HttpsError('invalid-argument', 'Missing uid or invalid status.')
@@ -1756,7 +1695,7 @@ exports.adminSetUserModerationStatus = onCall({ region: 'us-central1' }, async (
  */
 exports.adminListCommunities = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, pageSize } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  await requireValidAdminSession(sessionToken, request)
   const limitCount = Math.min(Math.max(Number(pageSize) || 30, 1), 100)
 
   try {
@@ -1771,7 +1710,7 @@ exports.adminListCommunities = onCall({ region: 'us-central1' }, async (request)
 /** Members of one community, newest first, enriched with displayName/username the same way adminListVerificationRequests enriches its queue. */
 exports.adminListCommunityMembers = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, communityId, pageSize } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  await requireValidAdminSession(sessionToken, request)
   if (!communityId) throw new HttpsError('invalid-argument', 'Missing communityId.')
   const limitCount = Math.min(Math.max(Number(pageSize) || 50, 1), 200)
 
@@ -1806,7 +1745,7 @@ exports.adminListCommunityMembers = onCall({ region: 'us-central1' }, async (req
 
 exports.adminModerateCommunityMember = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, communityId, targetUid, action } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   const VALID_ACTIONS = ['remove', 'ban', 'unban']
   if (!communityId || !targetUid || !VALID_ACTIONS.includes(action)) {
     throw new HttpsError('invalid-argument', 'Missing communityId/targetUid or invalid action.')
@@ -1898,7 +1837,7 @@ exports.adminModerateCommunityMember = onCall({ region: 'us-central1' }, async (
  */
 exports.adminSendNotification = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, message, targetUsername, collegeId, title, pinned, priority, expiresAt } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   const trimmed = (message || '').trim()
   if (!trimmed) throw new HttpsError('invalid-argument', 'Message is required.')
   if (trimmed.length > 280) throw new HttpsError('invalid-argument', 'Message must be 280 characters or fewer.')
@@ -1976,7 +1915,7 @@ exports.adminSendNotification = onCall({ region: 'us-central1' }, async (request
 /** Toggle pin on a campus announcement — same admin-session pattern as every other admin write here. */
 exports.adminSetAnnouncementPinned = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, announcementId, pinned } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   if (!announcementId) throw new HttpsError('invalid-argument', 'Missing announcementId.')
 
   try {
@@ -2001,7 +1940,7 @@ exports.adminSetAnnouncementPinned = onCall({ region: 'us-central1' }, async (re
 /** Remove a campus announcement — the notifications already sent are unaffected, only the persisted "Campus Notice" record is deleted. */
 exports.adminDeleteAnnouncement = onCall({ region: 'us-central1' }, async (request) => {
   const { sessionToken, announcementId } = request.data || {}
-  const session = await requireValidAdminSession(sessionToken)
+  const session = await requireValidAdminSession(sessionToken, request)
   if (!announcementId) throw new HttpsError('invalid-argument', 'Missing announcementId.')
 
   try {
@@ -2022,13 +1961,21 @@ exports.adminDeleteAnnouncement = onCall({ region: 'us-central1' }, async (reque
 
 /** adminListAuditLog — read side of logAdminAction() above, the actual "Audit Log" admin section. */
 exports.adminListAuditLog = onCall({ region: 'us-central1' }, async (request) => {
-  const { sessionToken, pageSize } = request.data || {}
-  await requireValidAdminSession(sessionToken)
+  const { sessionToken, pageSize, cursor } = request.data || {}
+  await requireValidAdminSession(sessionToken, request)
   const limitCount = Math.min(Math.max(Number(pageSize) || 50, 1), 200)
 
   try {
-    const snap = await db().collection('moderationActions').orderBy('createdAt', 'desc').limit(limitCount).get()
-    return { entries: snap.docs.map((d) => ({ id: d.id, ...d.data() })) }
+    let q = db().collection('moderationActions').orderBy('createdAt', 'desc').limit(limitCount)
+    if (typeof cursor === 'string' && cursor) {
+      const after = await db().collection('moderationActions').doc(cursor).get()
+      if (after.exists) q = q.startAfter(after)
+    }
+    const snap = await q.get()
+    return {
+      entries: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      nextCursor: snap.size === limitCount ? snap.docs[snap.docs.length - 1].id : null
+    }
   } catch (err) {
     console.error('[adminListAuditLog] unexpected error', { message: err?.message })
     throw new HttpsError('internal', 'Could not load the audit log. Please try again.')
@@ -2071,6 +2018,7 @@ const EMAIL_VERIFICATION_TOKEN_TTL_MS = 20 * 60 * 1000 // 20 minutes — within 
 const EMAIL_VERIFICATION_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
 const EMAIL_VERIFICATION_RATE_LIMIT_MAX = 3 // matches the brief's suggested "max 3 per 15 minutes per user"
 const EMAIL_VERIFICATION_STALE_CLAIM_MS = 2 * 60 * 1000 // see claimEmailVerificationToken below
+const EMAIL_VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000 // minimum gap between two successful sends
 // APP_BASE_URL is a plain (non-secret) env var, NOT Secret Manager — set
 // it via functions/functions/.env.<projectId> if it should ever differ
 // from this default in production. functions/functions/.env.local (used
@@ -2113,24 +2061,37 @@ function hashVerificationToken(rawToken) {
  * budget is used up; otherwise increments (or starts a fresh window).
  */
 async function enforceEmailVerificationRateLimit(uid) {
+  // Reserves one send from the budget (max 3 per 15 min, and at least 60 s
+  // after the last successful send). Returns release(), which gives the
+  // reservation back if the send then fails — a provider outage must never
+  // burn the user's budget and hide the real error behind "too many".
   const rateRef = emailVerificationRateLimitDoc(uid)
   await db().runTransaction(async (transaction) => {
     const snap = await transaction.get(rateRef)
     const now = Date.now()
     const data = snap.exists ? snap.data() : null
-    const windowExpired = !data?.windowStart || now - data.windowStart.toMillis() > EMAIL_VERIFICATION_RATE_LIMIT_WINDOW_MS
+    const lastSentMs = data?.lastSentAt ? data.lastSentAt.toMillis() : 0
+    if (lastSentMs && now - lastSentMs < EMAIL_VERIFICATION_RESEND_COOLDOWN_MS) {
+      const retryAfterSeconds = Math.ceil((EMAIL_VERIFICATION_RESEND_COOLDOWN_MS - (now - lastSentMs)) / 1000)
+      throw new HttpsError('resource-exhausted', `Please wait ${retryAfterSeconds} seconds before requesting another email.`, { reason: 'cooldown', retryAfterSeconds })
+    }
 
+    const windowExpired = !data?.windowStart || now - data.windowStart.toMillis() > EMAIL_VERIFICATION_RATE_LIMIT_WINDOW_MS
     if (windowExpired) {
-      transaction.set(rateRef, { windowStart: admin.firestore.Timestamp.fromMillis(now), count: 1 })
+      transaction.set(rateRef, { windowStart: admin.firestore.Timestamp.fromMillis(now), count: 1, lastSentAt: data?.lastSentAt || null })
       return
     }
 
     if (data.count >= EMAIL_VERIFICATION_RATE_LIMIT_MAX) {
-      throw new HttpsError('resource-exhausted', 'Too many verification emails requested. Please wait a few minutes and try again.')
+      const retryAfterSeconds = Math.max(1, Math.ceil((data.windowStart.toMillis() + EMAIL_VERIFICATION_RATE_LIMIT_WINDOW_MS - now) / 1000))
+      throw new HttpsError('resource-exhausted', 'Too many verification emails requested. Please wait a few minutes and try again.', { reason: 'rate-limited', retryAfterSeconds })
     }
 
     transaction.update(rateRef, { count: admin.firestore.FieldValue.increment(1) })
   })
+  return async function release() {
+    await rateRef.update({ count: admin.firestore.FieldValue.increment(-1) }).catch(() => {})
+  }
 }
 
 /**
@@ -2145,8 +2106,8 @@ async function enforceEmailVerificationRateLimit(uid) {
  * With this ordering, a send failure leaves any previous token exactly
  * as it was — nothing the user already has stops working.
  */
-async function issueEmailVerificationToken(uid, email) {
-  await enforceEmailVerificationRateLimit(uid)
+async function issueEmailVerificationToken(uid, email, recipientName = '') {
+  const release = await enforceEmailVerificationRateLimit(uid)
 
   const crypto = require('crypto')
   const rawToken = crypto.randomBytes(EMAIL_VERIFICATION_TOKEN_BYTES).toString('hex')
@@ -2154,11 +2115,20 @@ async function issueEmailVerificationToken(uid, email) {
   const verifyUrl = `${APP_BASE_URL}/verify-email?token=${rawToken}`
 
   try {
-    await sendVerificationEmail({ to: email, verifyUrl })
+    await sendVerificationEmail({
+      to: email,
+      verifyUrl,
+      expiresInMinutes: Math.round(EMAIL_VERIFICATION_TOKEN_TTL_MS / 60000),
+      recipientName: typeof recipientName === 'string' ? recipientName.trim().split(/\s+/)[0].slice(0, 40) : '',
+      idempotencyKey: `verify-${tokenHash.slice(0, 40)}`
+    })
   } catch (err) {
-    // Do not log verifyUrl/rawToken — only the failure itself.
-    console.error('[issueEmailVerificationToken] send failed', { uid, message: err?.message })
-    throw new HttpsError('unavailable', 'Could not send the verification email. Please try again shortly.')
+    await release()
+    // Do not log verifyUrl/rawToken/address — only the failure itself. ResendError
+    // carries Resend's error type + a redacted message, e.g.
+    // "Resend request failed: 403 validation_error — The <domain> domain is not verified…"
+    console.error('[issueEmailVerificationToken] send failed', { uid, message: err?.message, providerStatus: err?.status ?? null, providerType: err?.type ?? null })
+    throw new HttpsError('unavailable', "We couldn't send the verification email right now. Please try again in a few minutes.", { reason: 'send-failed' })
   }
 
   const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS)
@@ -2184,6 +2154,8 @@ async function issueEmailVerificationToken(uid, email) {
         status: 'active'
       })
       transaction.set(activeRef, { tokenHash, expiresAt })
+      // Successful send: start the resend cooldown.
+      transaction.set(emailVerificationRateLimitDoc(uid), { lastSentAt: admin.firestore.Timestamp.fromMillis(Date.now()) }, { merge: true })
     })
   } catch (err) {
     // The email is already out with a working link at this point — a
@@ -2192,6 +2164,12 @@ async function issueEmailVerificationToken(uid, email) {
     // before this pass, and never silently swallowed.
     console.error('[issueEmailVerificationToken] persist failed after send', { uid, message: err?.message })
     throw new HttpsError('internal', 'The verification email was sent, but something went wrong finishing setup. If the link in your email does not work, please resend.')
+  }
+  return {
+    ok: true,
+    expiresAtMs: expiresAt.toMillis(),
+    expiresInMinutes: Math.round(EMAIL_VERIFICATION_TOKEN_TTL_MS / 60000),
+    resendAvailableInSeconds: Math.round(EMAIL_VERIFICATION_RESEND_COOLDOWN_MS / 1000)
   }
 }
 
@@ -2219,8 +2197,14 @@ async function claimEmailVerificationToken(tokenRef) {
     if (!data.expiresAt || data.expiresAt.toMillis() < Date.now()) {
       throw new HttpsError('failed-precondition', 'This verification link has expired.', { reason: 'expired' })
     }
-    if (data.status === 'verified' || data.status === 'invalidated') {
-      throw new HttpsError('failed-precondition', 'This verification link has already been used.', { reason: 'already-used' })
+    if (data.status === 'verified') {
+      // Idempotent: this exact link already verified this account (a second
+      // click, a refresh, or a mail scanner opening it first). Report success
+      // again — the caller re-checks the account really is verified.
+      return { uid: data.uid, email: data.email, alreadyVerified: true }
+    }
+    if (data.status === 'invalidated') {
+      throw new HttpsError('failed-precondition', 'A newer verification email was sent. Please use the link in the most recent email.', { reason: 'superseded' })
     }
     if (data.status === 'claiming') {
       const claimAgeMs = data.claimedAt ? Date.now() - data.claimedAt.toMillis() : Infinity
@@ -2264,8 +2248,7 @@ exports.createEmailVerification = onCall({ region: 'us-central1', secrets: ['RES
       throw new HttpsError('failed-precondition', 'This account has no email address to verify.')
     }
 
-    await issueEmailVerificationToken(uid, userRecord.email)
-    return { ok: true }
+    return await issueEmailVerificationToken(uid, userRecord.email, userRecord.displayName || '')
   } catch (err) {
     if (err instanceof HttpsError) throw err
     console.error('[createEmailVerification] unexpected error', { uid, message: err?.message, code: err?.code })
@@ -2294,8 +2277,7 @@ exports.resendEmailVerification = onCall({ region: 'us-central1', secrets: ['RES
       throw new HttpsError('failed-precondition', 'This account has no email address to verify.')
     }
 
-    await issueEmailVerificationToken(uid, userRecord.email)
-    return { ok: true }
+    return await issueEmailVerificationToken(uid, userRecord.email, userRecord.displayName || '')
   } catch (err) {
     if (err instanceof HttpsError) throw err
     console.error('[resendEmailVerification] unexpected error', { uid, message: err?.message, code: err?.code })
@@ -2343,6 +2325,16 @@ exports.verifyEmailVerificationToken = onCall({ region: 'us-central1' }, async (
     if (err instanceof HttpsError) throw err
     console.error('[verifyEmailVerificationToken] claim failed', { message: err?.message, code: err?.code })
     throw new HttpsError('internal', 'Something went wrong. Please try again.', { reason: 'server-error' })
+  }
+
+  if (claim.alreadyVerified) {
+    // Status 'verified' is only ever written AFTER updateUser succeeded, but
+    // confirm against Auth anyway rather than trusting the token doc alone.
+    const userRecord = await admin.auth().getUser(claim.uid).catch(() => null)
+    if (userRecord && userRecord.emailVerified && (!claim.email || userRecord.email === claim.email)) {
+      return { ok: true, alreadyVerified: true }
+    }
+    throw new HttpsError('failed-precondition', 'This verification link has already been used.', { reason: 'already-used' })
   }
 
   try {
@@ -2421,7 +2413,7 @@ const NOTIFICATION_CATEGORY = {
   follow: 'follows',
   message_request: 'messages',
   message_request_accepted: 'messages',
-  announcement: 'communities',
+  announcement: 'announcements',
   call: 'calls',
   group_call: 'calls'
 }
@@ -2432,6 +2424,7 @@ const NOTIFICATION_PREFERENCE_DEFAULTS = {
   follows: true,
   messages: true,
   communities: true,
+  announcements: true,
   calls: true
 }
 
@@ -2776,3 +2769,80 @@ exports.createGroupCallPushNotifications = onDocumentCreated(
     )
   }
 )
+
+// ---------------------------------------------------------------------
+// Secure Radar proximity — PREPARED, not deployed. See radar.js and
+// SECURITY_ROLLOUT.md (repo root) for the rollout order. The client
+// only calls this when built with VITE_SECURE_RADAR=true.
+// ---------------------------------------------------------------------
+const { makeRadarNearbyHandler } = require('./radar.js')
+
+exports.radarNearby = onCall({ region: 'us-central1' }, (request) =>
+  makeRadarNearbyHandler({ db: db(), FieldValue: admin.firestore.FieldValue, HttpsError })(request)
+)
+
+// ---------------------------------------------------------------------
+// TURN credentials — PREPARED, not deployed. Mints short-lived TURN
+// credentials from Cloudflare Realtime TURN so no permanent TURN secret
+// ever ships in the app. Requires (set before deploying):
+//   firebase functions:secrets:set CLOUDFLARE_TURN_KEY_ID
+//   firebase functions:secrets:set CLOUDFLARE_TURN_API_TOKEN
+// The client only calls this when built with VITE_TURN_CREDENTIALS=function.
+// ---------------------------------------------------------------------
+const { makeTurnCredentialsHandler } = require('./turn.js')
+
+// Per-user rate limited (turn.js: 10 requests per user per hour).
+exports.getTurnCredentials = onCall(
+  { region: 'us-central1', secrets: ['CLOUDFLARE_TURN_KEY_ID', 'CLOUDFLARE_TURN_API_TOKEN'] },
+  (request) =>
+    makeTurnCredentialsHandler({
+      db: db(),
+      HttpsError,
+      fetchImpl: fetch,
+      getSecrets: () => ({ keyId: process.env.CLOUDFLARE_TURN_KEY_ID, token: process.env.CLOUDFLARE_TURN_API_TOKEN })
+    })(request)
+)
+
+// ---------------------------------------------------------------------
+// Admin Control Center — read-only endpoints (adminControl.js). Each one
+// requires a valid admin session (requireValidAdminSession) and never
+// writes. PREPARED, not deployed.
+// ---------------------------------------------------------------------
+const { makeAdminControlHandlers } = require('./adminControl.js')
+const adminControl = () => makeAdminControlHandlers({ db, admin, requireValidAdminSession, HttpsError })
+
+exports.adminGetDashboard = onCall({ region: 'us-central1', timeoutSeconds: 120 }, (request) => adminControl().getDashboard(request))
+exports.adminSearchUsers = onCall({ region: 'us-central1' }, (request) => adminControl().searchUsers(request))
+exports.adminGetUserDetail = onCall({ region: 'us-central1' }, (request) => adminControl().getUserDetail(request))
+exports.adminGetReportContext = onCall({ region: 'us-central1' }, (request) => adminControl().getReportContext(request))
+exports.adminGetSystemHealth = onCall({ region: 'us-central1' }, (request) => adminControl().getSystemHealth(request))
+
+// ===================================================================
+// ADMIN DEVICE AUTHORIZATION (adminDevice.js) — enrollment, device
+// management and a public capability probe.
+// ===================================================================
+exports.adminGetCapabilities = onCall({ region: 'us-central1' }, () => deviceAuth().getCapabilities())
+exports.adminEnrollDeviceStart = onCall({ region: 'us-central1' }, (request) => deviceAuth().enrollStart(request))
+exports.adminEnrollDeviceFinish = onCall({ region: 'us-central1' }, (request) => deviceAuth().enrollFinish(request))
+exports.adminListDevices = onCall({ region: 'us-central1' }, (request) => deviceAuth().listDevices(request))
+exports.adminRevokeDevice = onCall({ region: 'us-central1' }, (request) => deviceAuth().revokeDevice(request))
+exports.adminCreateEnrollmentCode = onCall({ region: 'us-central1' }, (request) => deviceAuth().createEnrollmentCode(request))
+
+// ===================================================================
+// CAMPINITY NOTICE BOARD (notices.js) — admin-published, audience-targeted
+// notices shown on each user's own Profile. Device-signed admin session
+// required on every endpoint.
+// ===================================================================
+let noticeHandlers = null
+function notices() {
+  if (!noticeHandlers) {
+    const { makeNoticeHandlers } = require('./notices.js')
+    noticeHandlers = makeNoticeHandlers({ db, admin, requireValidAdminSession, HttpsError, logAdminAction, bucket })
+  }
+  return noticeHandlers
+}
+exports.adminListNotices = onCall({ region: 'us-central1' }, (request) => notices().listNotices(request))
+exports.adminSaveNotice = onCall({ region: 'us-central1' }, (request) => notices().saveNotice(request))
+exports.adminSetNoticeState = onCall({ region: 'us-central1' }, (request) => notices().setNoticeState(request))
+exports.adminDeleteNotice = onCall({ region: 'us-central1' }, (request) => notices().deleteNotice(request))
+exports.adminUploadNoticeImage = onCall({ region: 'us-central1' }, (request) => notices().uploadNoticeImage(request))
