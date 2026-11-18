@@ -1,0 +1,15 @@
+{
+  "name": "campinity-tests",
+  "private": true,
+  "type": "module",
+  "description": "UI tests for the Campinity web app. Kept separate from the app's own package.json so test tooling never ships with or affects the app build. Run: npm install && npm test (from this folder).",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "10.4.0",
+    "@testing-library/react": "16.1.0",
+    "jsdom": "25.0.1",
+    "vitest": "2.1.9"
+  }
+}
