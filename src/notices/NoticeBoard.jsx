@@ -21,7 +21,14 @@ function useNotices(uid, collegeId) {
       const [notices, reads] = await Promise.all([fetchMyNotices({ uid, collegeId }), fetchNoticeReads(uid).catch(() => ({}))])
       setState({ loading: false, error: '', notices, reads })
     } catch (err) {
-      setState((s) => ({ ...s, loading: false, error: err?.code === 'unavailable' ? 'offline' : 'error' }))
+      // 'unavailable' = no connection -> offer retry. permission-denied /
+      // failed-precondition (missing index) / not-found = the Notice Board
+      // backend isn't available in this environment -> behave like an empty
+      // board instead of showing students an error they can't act on.
+      const code = err?.code || ''
+      const kind = code === 'unavailable' ? 'offline' : ['permission-denied', 'failed-precondition', 'not-found', 'unimplemented'].includes(code) ? 'disabled' : 'error'
+      if (kind !== 'offline') console.warn('[NoticeBoard] notices unavailable:', code || err?.message)
+      setState((s) => ({ ...s, loading: false, notices: [], error: kind === 'disabled' ? '' : kind }))
     }
   }, [uid, collegeId])
   useEffect(() => {
