@@ -20,6 +20,7 @@ import { getUserIdByUsername, ensureUsernameReservation } from './usernameServic
 import { awardXP } from '../gamification/xpService.js'
 import { createFollowNotification } from './notificationService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { profileName } from '../identity/identity.js'
 
 const COLLECTION = 'users'
 
@@ -77,6 +78,13 @@ async function healProfile(uid, data) {
     if (result?.ok) updates.usernameReserved = true
   }
 
+  // Self-heal: profiles created by onboarding have `fullName` but no
+  // `displayName`, which every screen and the admin tools read. Owner-only
+  // write (this function returns early for anyone else).
+  if (data && !(typeof data.displayName === 'string' && data.displayName.trim()) && profileName(data)) {
+    updates.displayName = profileName(data)
+  }
+
   const computed = buildSearchIndexFields(data || {})
   for (const [key, value] of Object.entries(computed)) {
     if (data?.[key] !== value) updates[key] = value
@@ -107,7 +115,10 @@ async function healProfile(uid, data) {
  */
 export function mapProfileDoc(data) {
   return {
-    displayName: data.displayName ?? data.fullName ?? '',
+    // displayName > fullName (onboarding writes fullName) — see identity.js
+    displayName: profileName(data),
+    // Needed to apply the suspended-account display policy.
+    moderationStatus: data.moderationStatus ?? 'active',
     username: data.username ?? '',
     bio: data.bio ?? '',
     // Real, pre-existing gap found while wiring the post-onboarding
@@ -165,7 +176,7 @@ export async function getUserProfile(uid) {
 export async function getUserProfiles(uids) {
   const uniqueUids = [...new Set((uids || []).filter(Boolean))]
   const entries = await Promise.all(
-    uniqueUids.map(async (uid) => [uid, await getUserProfile(uid).catch(() => null)])
+    uniqueUids.map(async (uid) => [uid, await getUserProfile(uid).catch(() => ({ status: 'unavailable' }))])
   )
   return new Map(entries)
 }

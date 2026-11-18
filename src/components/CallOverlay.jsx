@@ -8,6 +8,7 @@ import { applySinkId, useAudioOutputDevices } from '../hooks/useAudioOutputDevic
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSystemBarsOverride } from '../theme/systemBars.js'
 import { useBackToClose } from '../navigation/overlayBackStack.js'
+import { displayNameOf } from '../identity/identity.js'
 
 function formatDuration(totalSeconds) {
   const m = Math.floor(totalSeconds / 60)
@@ -135,7 +136,7 @@ export default function CallOverlay({ call }) {
 
   if (callState === 'idle') return null
 
-  const displayName = otherProfile?.displayName || 'Student'
+  const displayName = displayNameOf(otherProfile)
   const isVideo = type === 'video'
   const isOutgoing = callState === 'calling'
   const isConnecting = callState === 'connecting'

@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { applySinkId, useAudioOutputDevices } from '../hooks/useAudioOutputDevices.js'
 import { useSystemBarsOverride } from '../theme/systemBars.js'
 import { useBackToClose } from '../navigation/overlayBackStack.js'
+import { displayNameOf } from '../identity/identity.js'
 
 /**
  * ROOT-CAUSE FIX — group VOICE calls had no remote audio at all, and a
@@ -47,7 +48,7 @@ function ParticipantTile({ uid, stream, participant, profile, isVideo, isLocal, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLocal])
 
-  const displayName = profile?.displayName || (isLocal ? 'You' : 'Student')
+  const displayName = displayNameOf(profile) || (isLocal ? 'You' : '')
   const mirrored = isLocal && facingMode === 'user'
   const showVideo = isVideo && !cameraOff
 

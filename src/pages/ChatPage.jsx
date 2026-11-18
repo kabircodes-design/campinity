@@ -52,6 +52,7 @@ import { useChat } from '../hooks/useChat.js'
 import { useMessages } from '../hooks/useMessages.js'
 import { useCallActions } from '../context/CallContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { displayNameOf } from '../identity/identity.js'
 
 function dayLabelFor(timestamp) {
   if (!timestamp?.toDate) return ''
@@ -327,7 +328,7 @@ export default function ChatPage() {
   }, [messages])
 
   const loading = chatLoading || (messagesLoading && messages.length === 0)
-  const displayName = otherProfile?.displayName || 'Student'
+  const displayName = displayNameOf(otherProfile)
   const isGroup = chat?.type === 'group'
   const currentUid = auth.currentUser?.uid
   const initials = getInitials(profile?.displayName || '')

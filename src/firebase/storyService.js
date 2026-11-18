@@ -6,6 +6,7 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { awardXP, getUserProgress, hasReachedDailyCap } from '../gamification/xpService.js'
 import { checkAndAwardBadges } from '../gamification/badgeService.js'
 import { DAILY_CAPS } from '../gamification/config.js'
+import { displayNameOf } from '../identity/identity.js'
 
 const COLLECTION = 'stories'
 const STORY_LIFETIME_MS = 24 * 60 * 60 * 1000
@@ -214,10 +215,10 @@ export async function getStoryViewers(storyId) {
   const views = snap.docs.map((d) => d.data())
   const enriched = await Promise.all(
     views.map(async (view) => {
-      const profile = await getUserProfile(view.viewerUid).catch(() => null)
+      const profile = await getUserProfile(view.viewerUid).catch(() => ({ status: 'unavailable' }))
       return {
         ...view,
-        displayName: profile?.displayName || 'Student',
+        displayName: displayNameOf(profile),
         username: profile?.username || '',
         avatar: profile ? getProfileIdentityImage(profile) : ''
       }

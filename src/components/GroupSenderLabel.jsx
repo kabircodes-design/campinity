@@ -1,4 +1,5 @@
 import { useAuthorProfile } from '../hooks/useAuthorEnrichment.js'
+import { resolveIdentity } from '../identity/identity.js'
 
 /**
  * Sender name above the first bubble of a run of received messages in a
@@ -7,7 +8,9 @@ import { useAuthorProfile } from '../hooks/useAuthorEnrichment.js'
  */
 export default function GroupSenderLabel({ uid }) {
   const profile = useAuthorProfile(uid)
-  const name = profile?.displayName?.trim()
+  // Loading/failed lookups render nothing (no misleading "Student");
+  // deleted/suspended senders show "Student" (identity policy).
+  const name = resolveIdentity(profile).name
   if (!name) return null
   return <p className="ml-1 -mb-1.5 text-[12px] font-semibold text-gray-500 truncate max-w-[70%]">{name}</p>
 }

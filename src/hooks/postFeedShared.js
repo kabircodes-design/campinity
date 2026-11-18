@@ -2,6 +2,7 @@ import { getDocs, onSnapshot } from 'firebase/firestore'
 import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
 import { enrichWithAuthors } from './useAuthorEnrichment.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { resolveIdentity } from '../identity/identity.js'
 
 /**
  * The ONE shared post-rendering pipeline — Following and For You both
@@ -46,8 +47,13 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
  */
 export function mapPostForCard(raw, currentUid, liveProfile) {
   const useAnonymous = raw.isAnonymous
-  const displayName = useAnonymous ? 'Anonymous' : liveProfile?.displayName || 'Student'
-  const username = useAnonymous ? '' : liveProfile?.username || ''
+  // Live identity, falling back to the name stored on the post while the
+  // profile is loading or the lookup failed. "Student" only for deleted or
+  // suspended authors (src/identity/identity.js).
+  const identity = useAnonymous ? null : resolveIdentity(liveProfile, { name: raw.displayName || raw.author?.displayName, username: raw.username || raw.author?.username })
+  const displayName = useAnonymous ? 'Anonymous' : identity.name
+  const username = useAnonymous ? '' : identity.username
+  const hideIdentity = useAnonymous || identity.hidden
   const avatarSeed = useAnonymous ? 'anonymous' : raw.userId
 
   return {
@@ -60,8 +66,8 @@ export function mapPostForCard(raw, currentUid, liveProfile) {
     expiresAtMs: raw.expiresAt?.toMillis ? raw.expiresAt.toMillis() : null,
     name: displayName,
     username,
-    verified: useAnonymous ? false : Boolean(liveProfile?.verifiedCampus),
-    avatarUrl: useAnonymous ? '' : getProfileIdentityImage(liveProfile) || '',
+    verified: hideIdentity ? false : Boolean(liveProfile?.verifiedCampus),
+    avatarUrl: hideIdentity ? '' : getProfileIdentityImage(liveProfile) || '',
     initials: getInitials(displayName),
     avatarColor: getAvatarColor(avatarSeed),
     department: undefined,

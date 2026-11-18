@@ -8,6 +8,7 @@ import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postServ
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { subscribeToMessageRequests, acceptMessageRequest, deleteMessageRequest } from '../firebase/chatService.js'
+import { displayNameOf } from '../identity/identity.js'
 
 /**
  * New — the actual missing piece confirmed by direct audit last pass:
@@ -119,7 +120,7 @@ export default function RequestsPage() {
             <div>
               {requests.map((req) => {
                 const profile = profiles[req.otherUid]
-                const displayName = profile?.displayName || 'Student'
+                const displayName = displayNameOf(profile)
                 const isBusy = actionBusyId === req.id
 
                 return (

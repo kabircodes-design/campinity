@@ -3,6 +3,7 @@ import { getDownloadURL, ref, uploadBytes, uploadBytesResumable } from 'firebase
 import { db, storage } from './firebase.js'
 import { normalizeHashtag } from '../utils/hashtags.js'
 import { enrichWithAuthors } from '../hooks/useAuthorEnrichment.js'
+import { resolveIdentity } from '../identity/identity.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 const COLLECTION = 'posts'
@@ -142,10 +143,10 @@ export async function enrichMappedPosts(posts) {
         ? post
         : {
             ...post,
-            name: profile?.displayName || post.name,
-            username: profile?.username || post.username,
-            avatarUrl: getProfileIdentityImage(profile) || '',
-            initials: getInitials(profile?.displayName || post.name)
+            ...(() => {
+              const id = resolveIdentity(profile, { name: post.name, username: post.username })
+              return { name: id.name, username: id.username, avatarUrl: id.hidden ? '' : getProfileIdentityImage(profile) || '', verified: id.hidden ? false : post.verified, initials: getInitials(id.name) }
+            })()
           }
   )
 }

@@ -8,6 +8,7 @@ import { getBlockedUsers, unblockUser } from '../firebase/blockService.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
+import { displayNameOf } from '../identity/identity.js'
 
 /**
  * The real Blocked Users page — App.jsx's /settings/blocked-users route
@@ -42,7 +43,7 @@ export default function BlockedUsersPage() {
       .then(async (entries) => {
         setBlocked(entries)
         const results = await Promise.all(
-          entries.map((entry) => getUserProfile(entry.blockedUid).catch(() => null))
+          entries.map((entry) => getUserProfile(entry.blockedUid).catch(() => ({ status: 'unavailable' })))
         )
         const map = {}
         entries.forEach((entry, i) => {
@@ -115,7 +116,7 @@ export default function BlockedUsersPage() {
             <div className="rounded-2xl border border-gray-100 divide-y divide-gray-100 dark:border-white/10 dark:divide-white/10 overflow-hidden">
               {blocked.map((entry) => {
                 const profile = profiles[entry.blockedUid]
-                const displayName = profile?.displayName || 'Student'
+                const displayName = displayNameOf(profile)
                 const isBusy = busyUid === entry.blockedUid
                 return (
                   <div key={entry.blockedUid} className="flex items-center gap-3 px-3.5 py-3">

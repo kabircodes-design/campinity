@@ -4,6 +4,7 @@ import ChatCard from './ChatCard.jsx'
 import EmptyChat from './EmptyChat.jsx'
 import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { displayNameOf } from '../identity/identity.js'
 
 /**
  * Pure presentational extraction from MessagesPage.jsx's existing
@@ -129,7 +130,7 @@ export default function ChatListPanel({
             {showingRequests &&
               requests.map((request) => {
                 const profile = profiles[request.otherUid]
-                const name = profile?.displayName || 'Student'
+                const name = displayNameOf(profile)
                 return (
                   <button
                     key={request.id}

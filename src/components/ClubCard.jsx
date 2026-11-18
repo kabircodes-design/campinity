@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials, formatTimeAgo } from '../firebase/postService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { displayNameOf } from '../identity/identity.js'
 
 /**
  * `chat` comes from chatService.js's subscribeToUserChats():
@@ -17,7 +18,7 @@ import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 export default function ChatCard({ chat, profile }) {
   const navigate = useNavigate()
   const hasUnread = chat.unreadCount > 0
-  const displayName = profile?.displayName || 'Student'
+  const displayName = displayNameOf(profile)
 
   return (
     <button

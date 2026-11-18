@@ -24,6 +24,7 @@ import { getOrCreateChat, getExistingChatStatus } from '../firebase/chatService.
 import { useMyVerification } from '../access/useMyVerification.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
+import { displayNameOf } from '../identity/identity.js'
 
 /**
  * Real implementation — this file's own name ("Placeholder") confirms
@@ -272,9 +273,9 @@ export default function StudentProfilePlaceholder() {
 
   const displayProfile = {
     ...profile,
-    displayName: profile.displayName || 'Student',
+    displayName: displayNameOf(profile),
     college: college?.name || '',
-    initials: getInitials(profile.displayName || 'Student'),
+    initials: getInitials(displayNameOf(profile)),
     colorClass: getAvatarColor(profile.uid),
     postsCount: postCount ?? posts.length,
     followers: profile.followersCount || 0,

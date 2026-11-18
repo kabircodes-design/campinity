@@ -174,6 +174,8 @@ export default function CreateProfilePage() {
       await saveUserProfile(uid, {
         uid,
         fullName: fullName.trim(),
+        // displayName is what every screen (and the admin tools) read.
+        displayName: fullName.trim(),
         username: reservedUsername,
         // Real collegeId (the same Firestore colleges/{id} reference
         // Edit Profile's CollegeSearch already writes) plus a

@@ -33,6 +33,7 @@ import { awardXP, getUserProgress, hasReachedDailyCap } from '../gamification/xp
 import { checkAndAwardBadges } from '../gamification/badgeService.js'
 import { POINTS_REWARDS, REPUTATION_ACTION_REWARDS, DAILY_CAPS } from '../gamification/config.js'
 import { enrichWithAuthors } from '../hooks/useAuthorEnrichment.js'
+import { resolveIdentity } from '../identity/identity.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 
 /**
@@ -54,9 +55,10 @@ async function enrichComments(comments) {
     (comment) => comment.userId,
     (comment, profile) => ({
       ...comment,
-      displayName: profile?.displayName || comment.displayName,
-      username: profile?.username || comment.username,
-      avatar: getProfileIdentityImage(profile) || ''
+      ...(() => {
+        const id = resolveIdentity(profile, { name: comment.displayName, username: comment.username })
+        return { displayName: id.name, username: id.username, avatar: id.hidden ? '' : getProfileIdentityImage(profile) || '' }
+      })()
     })
   )
 }

@@ -7,6 +7,7 @@ import { auth } from '../firebase/firebase.js'
 import { addCloseFriend, getCloseFriendsList, getUserProfile, removeCloseFriend, searchUsersForShare } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
+import { displayNameOf } from '../identity/identity.js'
 
 /**
  * Same page shape as BlockedUsersPage.jsx (list + per-row action +
@@ -41,7 +42,7 @@ export default function CloseFriendsPage() {
     getCloseFriendsList(currentUid)
       .then(async (uids) => {
         setFriendUids(uids)
-        const results = await Promise.all(uids.map((uid) => getUserProfile(uid).catch(() => null)))
+        const results = await Promise.all(uids.map((uid) => getUserProfile(uid).catch(() => ({ status: 'unavailable' }))))
         const map = {}
         uids.forEach((uid, i) => {
           if (results[i]) map[uid] = results[i]
@@ -180,7 +181,7 @@ export default function CloseFriendsPage() {
             <div className="rounded-2xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
               {friendUids.map((uid) => {
                 const profile = profiles[uid]
-                const displayName = profile?.displayName || 'Student'
+                const displayName = displayNameOf(profile)
                 const isBusy = busyUid === uid
                 return (
                   <div key={uid} className="flex items-center gap-3 px-3.5 py-3">

@@ -11,6 +11,7 @@ import { followUser, unfollowUser } from '../../firebase/profileService.js'
 import { blockUser } from '../../firebase/blockService.js'
 import { getOrCreateChat } from '../../firebase/chatService.js'
 import { isUserMuted, muteUser, unmuteUser } from '../../firebase/muteService.js'
+import { displayNameOf } from '../../identity/identity.js'
 
 const roleLabels = { owner: 'Owner', admin: 'Admin', moderator: 'Moderator' }
 const roleColors = {
@@ -89,7 +90,7 @@ export default function CommunityMemberRow({
     }
   }
 
-  const displayName = profile?.displayName || 'Student'
+  const displayName = displayNameOf(profile)
   const meta = [profile?.year, profile?.course].filter(Boolean).join(' • ')
   const joinedLabel = member.joinedAt?.toDate
     ? member.joinedAt.toDate().toLocaleDateString(undefined, { month: 'short', year: 'numeric' })

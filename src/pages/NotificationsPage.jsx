@@ -13,6 +13,7 @@ import {
   subscribeToNotifications
 } from '../firebase/notificationService.js'
 import { enrichWithAuthors } from '../hooks/useAuthorEnrichment.js'
+import { resolveIdentity } from '../identity/identity.js'
 
 const PAGE_STEP = 20
 
@@ -139,10 +140,10 @@ export default function NotificationsPage() {
         (notification) => notification.actorUid,
         (notification, profile) => ({
           ...notification,
-          actorName: profile.displayName,
-          actorAvatar: getProfileIdentityImage(profile) || '',
-          actorUsername: profile.username,
-          actorVerified: profile.verifiedCampus
+          ...(() => {
+            const id = resolveIdentity(profile, { name: notification.actorName, username: notification.actorUsername })
+            return { actorName: id.name || notification.actorName || 'Someone', actorAvatar: id.hidden ? '' : getProfileIdentityImage(profile) || '', actorUsername: id.username, actorVerified: id.hidden ? false : profile.verifiedCampus }
+          })()
         })
       )
         .then((enriched) => {

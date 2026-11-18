@@ -5,6 +5,7 @@ import { auth, db } from '../../firebase/firebase.js'
 import { HEARTBEAT_INTERVAL_MS, touchPresence } from '../../firebase/presenceService.js'
 import { primeAuthorCache } from '../../hooks/useAuthorEnrichment.js'
 import { syncAccountLocalData } from '../utils/accountLocalData.js'
+import { normalizeUserDoc } from '../../identity/identity.js'
 
 // Safety-net ceiling for profileSettled (see below) — bounds how long a
 // genuinely offline cold start with no cached profile data can hold the
@@ -89,7 +90,9 @@ export function useAuthUser() {
       unsubscribeProfile = onSnapshot(
         doc(db, 'users', firebaseUser.uid),
         (snap) => {
-          const data = snap.exists() ? snap.data() : null
+          // normalizeUserDoc: onboarding stores the name as `fullName`; every
+          // screen reads `displayName` (root cause of the "Student" label).
+          const data = snap.exists() ? normalizeUserDoc(snap.data()) : null
           setProfile(data)
           setLoading(false)
           if (!snap.metadata.fromCache) {

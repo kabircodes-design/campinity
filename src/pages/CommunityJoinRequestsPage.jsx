@@ -10,6 +10,7 @@ import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { acceptRequest, getCommunityById, getMembership, getPendingRequests, rejectRequest } from '../firebase/communityService.js'
 import { createJoinRequestApprovedNotification } from '../firebase/notificationService.js'
+import { displayNameOf } from '../identity/identity.js'
 
 /**
  * Owner/admin only, matching CommunitySettingsPage.jsx's own access
@@ -49,7 +50,7 @@ export default function CommunityJoinRequestsPage() {
       const [community, membership, ownProfile] = await Promise.all([
         getCommunityById(communityId),
         getMembership(communityId, uid),
-        getUserProfile(uid).catch(() => null)
+        getUserProfile(uid).catch(() => ({ status: 'unavailable' }))
       ])
       setMyProfile(ownProfile)
       const isOwnerOrAdmin =
@@ -63,10 +64,10 @@ export default function CommunityJoinRequestsPage() {
       const pending = await getPendingRequests(communityId)
       const enriched = await Promise.all(
         pending.map(async (req) => {
-          const profile = await getUserProfile(req.uid).catch(() => null)
+          const profile = await getUserProfile(req.uid).catch(() => ({ status: 'unavailable' }))
           return {
             ...req,
-            displayName: profile?.displayName || 'Student',
+            displayName: displayNameOf(profile),
             username: profile?.username || '',
             avatar: profile ? getProfileIdentityImage(profile) : '',
             verifiedCampus: profile?.verifiedCampus || false

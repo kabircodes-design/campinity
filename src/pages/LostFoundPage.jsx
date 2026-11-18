@@ -31,6 +31,7 @@ import { getOrCreateChat, sendMessage } from '../firebase/chatService.js'
 import { createLostFoundClaimNotification } from '../firebase/notificationService.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { enrichWithAuthors } from '../hooks/useAuthorEnrichment.js'
+import { resolveIdentity } from '../identity/identity.js'
 import { useMyVerification } from '../access/useMyVerification.js'
 import VerificationGate from '../access/VerificationGate.jsx'
 import { FEATURES } from '../access/permissions.js'
@@ -167,7 +168,10 @@ export default function LostFoundPage() {
         const enriched = await enrichWithAuthors(
           combined,
           (item) => item.createdBy,
-          (item, author) => ({ ...item, posterName: author.displayName, posterAvatar: author.avatar })
+          (item, author) => {
+            const id = resolveIdentity(author, { name: item.posterName })
+            return { ...item, posterName: id.name, posterAvatar: id.hidden ? '' : author.avatar }
+          }
         )
         setItems(enriched)
         setResolvedPreview(recentResolved)

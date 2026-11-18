@@ -4,6 +4,7 @@ import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getUserProfile } from '../firebase/profileService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
+import { displayNameOf } from '../identity/identity.js'
 
 /**
  * Compact, non-blocking incoming-call card — deliberately NOT a
@@ -41,7 +42,7 @@ export default function IncomingCallToast({ call }) {
   if (!incomingCall) return null
 
   const isVideo = incomingCall.type === 'video'
-  const displayName = callerProfile?.displayName || 'Student'
+  const displayName = displayNameOf(callerProfile)
 
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 lg:left-auto lg:right-6 lg:translate-x-0 z-[10000] w-[calc(100%-2rem)] max-w-[360px] animate-[incomingCallIn_0.25s_ease-out]">

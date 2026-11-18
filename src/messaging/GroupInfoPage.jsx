@@ -1,3 +1,4 @@
+import { displayNameOf } from '../identity/identity.js'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Camera, Check, Crown, LogOut, Pencil, Search, ShieldMinus, ShieldPlus, UserMinus, UserPlus, Users, X } from 'lucide-react'
@@ -324,14 +325,14 @@ export default function GroupInfoPage() {
             return (
               <div key={memberUid} className="flex items-center gap-3 px-4 py-2.5">
                 <Avatar
-                  initials={getInitials(profile?.displayName || 'Student')}
+                  initials={getInitials(displayNameOf(profile))}
                   colorClass={getAvatarColor(memberUid)}
                   size="sm"
                   src={getProfileIdentityImage(profile) || undefined}
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">
-                    {profile?.displayName || 'Student'} {isSelf && <span className="text-gray-400">(You)</span>}
+                    {displayNameOf(profile)} {isSelf && <span className="text-gray-400">(You)</span>}
                   </p>
                 </div>
                 {memberIsAdmin && (

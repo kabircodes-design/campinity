@@ -54,6 +54,7 @@ import {
 } from '../firebase/notificationService.js'
 import { usePostingStatus } from '../context/PostingStatusContext.jsx'
 import { getMutedUsers } from '../firebase/muteService.js'
+import { displayNameOf } from '../identity/identity.js'
 
 const typeLabels = {
   official_club: 'Official Club',
@@ -1259,7 +1260,7 @@ export default function CommunityDetailPage() {
 
 function PersonChip({ uid, profile, plain }) {
   const navigate = useNavigate()
-  const displayName = profile?.displayName || 'Student'
+  const displayName = displayNameOf(profile)
   const goToProfile = () => {
     if (profile?.username) navigate(`/student/${profile.username}`)
   }

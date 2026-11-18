@@ -10,6 +10,7 @@ import { getUserProfiles } from '../firebase/profileService.js'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import { getMutedUsers, unmuteUser } from '../firebase/muteService.js'
+import { displayNameOf } from '../identity/identity.js'
 
 /**
  * "Content & Activity" — Saved reuses the existing /saved route
@@ -91,7 +92,7 @@ export default function ActivitySettingsPage() {
             <div className="mx-4 rounded-2xl border border-gray-100 divide-y divide-gray-100 dark:border-white/10 dark:divide-white/10 overflow-hidden">
               {mutedUsers.map((m) => {
                 const profile = profiles.get(m.mutedUid)
-                const displayName = profile?.displayName || 'Student'
+                const displayName = displayNameOf(profile)
                 return (
                   <div key={m.mutedUid} className="flex items-center gap-3 px-4 py-3.5">
                     <Avatar

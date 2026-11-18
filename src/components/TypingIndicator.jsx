@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { subscribeToTypingState } from '../firebase/chatService.js'
 import { getProfilesByUids } from '../hooks/useAuthorEnrichment.js'
+import { resolveIdentity } from '../identity/identity.js'
 import { getProfileIdentityImage } from '../avatar/profileIdentity.js'
 import Avatar from './Avatar.jsx'
 import { getAvatarColor, getInitials } from '../firebase/postService.js'
@@ -61,8 +62,8 @@ export default function TypingIndicator({ chatId, currentUid, otherDisplayName, 
     const profile = typingProfiles.get(uid)
     return {
       uid,
-      displayName: profile?.displayName || 'Someone',
-      photoUrl: profile ? getProfileIdentityImage(profile) : null
+      displayName: resolveIdentity(profile).name || 'Someone',
+      photoUrl: profile && profile.status === 'active' ? getProfileIdentityImage(profile) : null
     }
   })
 

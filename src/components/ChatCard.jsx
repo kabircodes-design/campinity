@@ -9,6 +9,8 @@ import { usePresence } from '../hooks/usePresence.js'
 import { deleteChat, markChatRead, markChatUnread, toggleMuteChat } from '../firebase/chatService.js'
 import ChatActionSheet from './ChatActionSheet.jsx'
 import { useAuthorProfile } from '../hooks/useAuthorEnrichment.js'
+import { resolveIdentity } from '../identity/identity.js'
+import { displayNameOf } from '../identity/identity.js'
 
 const LONG_PRESS_MS = 500
 
@@ -40,7 +42,7 @@ export default function ChatCard({ chat, profile }) {
   const suppressClickRef = useRef(false)
 
   const isGroup = chat.type === 'group'
-  const displayName = isGroup ? chat.groupName || 'Group' : profile?.displayName || 'Student'
+  const displayName = isGroup ? chat.groupName || 'Group' : displayNameOf(profile)
   const subtitle = isGroup ? `${chat.participants?.length || 0} members` : null
   const isPinned = (chat.pinnedBy || []).includes(uid)
   const isMuted = (chat.mutedBy || []).includes(uid)
@@ -67,7 +69,7 @@ export default function ChatCard({ chat, profile }) {
   // app now uses — not a new lookup system.
   const lastSenderIsMe = chat.lastSenderId === uid
   const lastSenderProfile = useAuthorProfile(isGroup && chat.lastSenderId && !lastSenderIsMe ? chat.lastSenderId : null)
-  const groupPreviewPrefix = isGroup && chat.lastMessage ? (lastSenderIsMe ? 'You: ' : lastSenderProfile ? `${lastSenderProfile.displayName?.split(' ')[0] || 'Someone'}: ` : '') : ''
+  const groupPreviewPrefix = isGroup && chat.lastMessage ? (lastSenderIsMe ? 'You: ' : lastSenderProfile ? `${resolveIdentity(lastSenderProfile).name.split(' ')[0] || 'Someone'}: ` : '') : ''
 
   const openSheet = () => setSheetOpen(true)
 
